@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getLaboratories, createLaboratory } from '../controllers/laboratory.controller.js';
+import { getLaboratories, createLaboratory, updateLaboratory, deleteLaboratory } from '../controllers/laboratory.controller.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
 
@@ -9,5 +9,7 @@ router.use(authenticate);
 
 router.get('/', getLaboratories);
 router.post('/', authorize('admin', 'lab_admin', 'doca_officer'), createLaboratory);
+router.patch('/:id', authorize('admin', 'lab_admin'), updateLaboratory);
+router.delete('/:id', authorize('admin', 'lab_admin'), deleteLaboratory);
 
 export default router;

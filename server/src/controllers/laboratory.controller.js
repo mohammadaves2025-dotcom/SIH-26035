@@ -30,3 +30,19 @@ export const createLaboratory = asyncHandler(async (req, res) => {
     data: lab,
   });
 });
+
+export const updateLaboratory = asyncHandler(async (req, res) => {
+  const lab = await Laboratory.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  if (!lab) {
+    throw new AppError(404, 'NOT_FOUND', 'Laboratory not found');
+  }
+  res.status(200).json({ success: true, data: lab });
+});
+
+export const deleteLaboratory = asyncHandler(async (req, res) => {
+  const lab = await Laboratory.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
+  if (!lab) {
+    throw new AppError(404, 'NOT_FOUND', 'Laboratory not found');
+  }
+  res.status(200).json({ success: true, message: 'Laboratory deactivated successfully' });
+});

@@ -13,10 +13,12 @@ import exportRoutes from './export.routes.js';
 import demoRoutes from './demo.routes.js';
 import laboratoryRoutes from './laboratory.routes.js';
 import testTypeRoutes from './testType.routes.js';
+import userRoutes from './user.routes.js';
 
 const router = Router();
 
 router.use('/auth', authRoutes);
+router.use('/users', userRoutes);
 router.use('/manufacturers', manufacturerRoutes);
 router.use('/instrument-models', instrumentModelRoutes);
 router.use('/rule-configs', ruleConfigRoutes);

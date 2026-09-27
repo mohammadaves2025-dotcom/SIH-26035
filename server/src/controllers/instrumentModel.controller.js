@@ -97,3 +97,29 @@ export const getInstrumentModelById = asyncHandler(async (req, res) => {
     data: model,
   });
 });
+
+export const updateInstrumentModel = asyncHandler(async (req, res) => {
+  const model = await InstrumentModel.findById(req.params.id);
+  if (!model) {
+    throw new AppError(404, 'NOT_FOUND', 'Instrument model not found');
+  }
+
+  const { modelName, accuracyClass, maxCapacity, e, minCapacity } = req.body;
+  if (modelName) model.modelName = modelName;
+  if (accuracyClass) model.accuracyClass = accuracyClass;
+  if (maxCapacity) model.maxCapacity = maxCapacity;
+  if (e) model.e = e;
+  if (minCapacity) model.minCapacity = minCapacity;
+  if (maxCapacity || e) model.n = model.maxCapacity / model.e;
+
+  await model.save();
+  res.status(200).json({ success: true, data: model });
+});
+
+export const deleteInstrumentModel = asyncHandler(async (req, res) => {
+  const model = await InstrumentModel.findByIdAndDelete(req.params.id);
+  if (!model) {
+    throw new AppError(404, 'NOT_FOUND', 'Instrument model not found');
+  }
+  res.status(200).json({ success: true, message: 'Instrument model deleted successfully' });
+});

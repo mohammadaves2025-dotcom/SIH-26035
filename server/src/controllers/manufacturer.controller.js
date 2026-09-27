@@ -37,3 +37,19 @@ export const getManufacturers = asyncHandler(async (req, res) => {
     },
   });
 });
+
+export const updateManufacturer = asyncHandler(async (req, res) => {
+  const manufacturer = await Manufacturer.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  if (!manufacturer) {
+    throw new AppError(404, 'NOT_FOUND', 'Manufacturer not found');
+  }
+  res.status(200).json({ success: true, data: manufacturer });
+});
+
+export const deleteManufacturer = asyncHandler(async (req, res) => {
+  const manufacturer = await Manufacturer.findByIdAndDelete(req.params.id);
+  if (!manufacturer) {
+    throw new AppError(404, 'NOT_FOUND', 'Manufacturer not found');
+  }
+  res.status(200).json({ success: true, message: 'Manufacturer deleted successfully' });
+});

@@ -31,10 +31,13 @@ export const listReports = asyncHandler(async (req, res) => {
     ];
   }
 
+  // Auto-inject labId filter for lab_technician and lab_admin roles
+  const effectiveLabId = (req.user.role === 'lab_technician' || req.user.role === 'lab_admin') ? req.user.labId : labId;
+
   // Handle session/model/manufacturer filters via pre-querying matching TestSession IDs
-  if (labId || manufacturerId || accuracyClass) {
+  if (effectiveLabId || manufacturerId || accuracyClass) {
     const sessionQuery = {};
-    if (labId) sessionQuery.labId = labId;
+    if (effectiveLabId) sessionQuery.labId = effectiveLabId;
     if (accuracyClass) sessionQuery.accuracyClass = accuracyClass;
 
     if (manufacturerId) {
@@ -120,10 +123,19 @@ export const getReportById = asyncHandler(async (req, res) => {
 
 export const downloadReportFile = asyncHandler(async (req, res) => {
   const { id, format } = req.params; // format: 'pdf' or 'docx'
-  let report = await Report.findById(id);
+  let report = await Report.findById(id).populate('testSessionId');
 
   if (!report) {
     throw new AppError(404, 'NOT_FOUND', 'Report not found');
+  }
+
+  if (
+    (req.user.role === 'lab_technician' || req.user.role === 'lab_admin') &&
+    req.user.labId &&
+    report.testSessionId &&
+    report.testSessionId.labId !== req.user.labId
+  ) {
+    throw new AppError(403, 'FORBIDDEN', 'Access denied to download report belonging to another laboratory');
   }
 
   let filePath = format === 'docx' ? report.docxPath : report.pdfPath;
@@ -133,7 +145,7 @@ export const downloadReportFile = asyncHandler(async (req, res) => {
     // Generate fresh report file if not present on disk
     try {
       const generated = await generateReport({
-        testSessionId: report.testSessionId,
+        testSessionId: report.testSessionId._id || report.testSessionId,
         userId: req.user.sub,
       });
       filePath = format === 'docx' ? generated.docxPath : generated.pdfPath;
