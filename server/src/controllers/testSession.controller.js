@@ -273,6 +273,14 @@ export const getTestSessionById = asyncHandler(async (req, res) => {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
 
+  if (
+    (req.user.role === 'lab_technician' || req.user.role === 'lab_admin') &&
+    req.user.labId &&
+    session.labId !== req.user.labId
+  ) {
+    throw new AppError(403, 'FORBIDDEN', 'Access denied to session belonging to another laboratory');
+  }
+
   const observations = await Observation.find({ testSessionId: session._id });
 
   res.status(200).json({

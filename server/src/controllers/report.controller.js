@@ -11,10 +11,18 @@ import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const listReports = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 20, search } = req.query;
+  const { page = 1, limit = 20, search, status, labId, manufacturerId, accuracyClass, startDate, endDate } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
 
   let query = {};
+  if (status) query.status = status;
+
+  if (startDate || endDate) {
+    query.signedAt = {};
+    if (startDate) query.signedAt.$gte = new Date(startDate);
+    if (endDate) query.signedAt.$lte = new Date(endDate);
+  }
+
   if (search) {
     query.$or = [
       { reportNumber: { $regex: search, $options: 'i' } },
@@ -23,9 +31,30 @@ export const listReports = asyncHandler(async (req, res) => {
     ];
   }
 
+  // Handle session/model/manufacturer filters via pre-querying matching TestSession IDs
+  if (labId || manufacturerId || accuracyClass) {
+    const sessionQuery = {};
+    if (labId) sessionQuery.labId = labId;
+    if (accuracyClass) sessionQuery.accuracyClass = accuracyClass;
+
+    if (manufacturerId) {
+      const models = await InstrumentModel.find({ manufacturerId }).select('_id');
+      sessionQuery.instrumentModelId = { $in: models.map((m) => m._id) };
+    }
+
+    const matchingSessions = await TestSession.find(sessionQuery).select('_id');
+    query.testSessionId = { $in: matchingSessions.map((s) => s._id) };
+  }
+
   const [reports, total] = await Promise.all([
     Report.find(query)
-      .populate('testSessionId')
+      .populate({
+        path: 'testSessionId',
+        populate: {
+          path: 'instrumentModelId',
+          populate: { path: 'manufacturerId' },
+        },
+      })
       .populate('signedBy', 'name email')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -72,6 +101,15 @@ export const getReportById = asyncHandler(async (req, res) => {
 
   if (!report) {
     throw new AppError(404, 'NOT_FOUND', 'Report not found');
+  }
+
+  if (
+    (req.user.role === 'lab_technician' || req.user.role === 'lab_admin') &&
+    req.user.labId &&
+    report.testSessionId &&
+    report.testSessionId.labId !== req.user.labId
+  ) {
+    throw new AppError(403, 'FORBIDDEN', 'Access denied to report belonging to another laboratory');
   }
 
   res.status(200).json({

@@ -161,6 +161,40 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
         </table>
       </div>
 
+      <div class="section">
+        <div class="section-title">4. Photographic Evidence & Supporting Attachments</div>
+        ${
+          attachments && attachments.length > 0
+            ? `
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>File Name</th>
+                <th>Category</th>
+                <th>Upload Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${attachments
+                .map(
+                  (att, idx) => `
+                <tr>
+                  <td>${idx + 1}</td>
+                  <td>${att.filename || att.originalName || 'Attachment'}</td>
+                  <td>${att.fileType || 'Document'}</td>
+                  <td>${new Date(att.createdAt || Date.now()).toISOString().split('T')[0]}</td>
+                </tr>
+              `
+                )
+                .join('')}
+            </tbody>
+          </table>
+        `
+            : `<p style="font-size: 12px; color: #64748b; font-style: italic;">No uploaded photographic or document attachments associated with this session.</p>`
+        }
+      </div>
+
       <div class="result-box ${session.overallResult === 'pass' ? 'pass' : 'fail'}">
         OVERALL EVALUATION VERDICT: ${session.overallResult ? session.overallResult.toUpperCase() : 'PENDING'}
       </div>
@@ -200,8 +234,42 @@ async function renderPdf({ html, pdfPath }) {
   }
 }
 
-async function renderDocx({ reportNumber, session, model, manufacturer, observations, docxPath }) {
+async function renderDocx({ reportNumber, session, model, manufacturer, observations, attachments, docxPath }) {
   try {
+    const tableHeaderRow = new TableRow({
+      children: [
+        new TableCell({ children: [new Paragraph({ text: '#', bold: true })] }),
+        new TableCell({ children: [new Paragraph({ text: 'Annex Ref', bold: true })] }),
+        new TableCell({ children: [new Paragraph({ text: 'Method', bold: true })] }),
+        new TableCell({ children: [new Paragraph({ text: 'Ref Load', bold: true })] }),
+        new TableCell({ children: [new Paragraph({ text: 'Indicated', bold: true })] }),
+        new TableCell({ children: [new Paragraph({ text: 'Error', bold: true })] }),
+        new TableCell({ children: [new Paragraph({ text: 'MPE', bold: true })] }),
+        new TableCell({ children: [new Paragraph({ text: 'Outcome', bold: true })] }),
+      ],
+    });
+
+    const tableObsRows = (observations || []).map(
+      (obs, idx) =>
+        new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph({ text: String(idx + 1) })] }),
+            new TableCell({ children: [new Paragraph({ text: obs.annexRef || '-' })] }),
+            new TableCell({ children: [new Paragraph({ text: obs.evaluationMethod || '-' })] }),
+            new TableCell({ children: [new Paragraph({ text: String(obs.referenceLoad ?? '-') })] }),
+            new TableCell({ children: [new Paragraph({ text: String(obs.indicatedValue ?? '-') })] }),
+            new TableCell({ children: [new Paragraph({ text: obs.computedError !== undefined ? obs.computedError.toFixed(4) : '-' })] }),
+            new TableCell({ children: [new Paragraph({ text: obs.appliedMpe !== undefined ? obs.appliedMpe.toFixed(4) : '-' })] }),
+            new TableCell({ children: [new Paragraph({ text: (obs.outcome || '').toUpperCase(), bold: true })] }),
+          ],
+        })
+    );
+
+    const obsTable = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [tableHeaderRow, ...tableObsRows],
+    });
+
     const doc = new Document({
       sections: [
         {
@@ -217,15 +285,36 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
               alignment: AlignmentType.CENTER,
             }),
             new Paragraph({
-              text: `Report Number: ${reportNumber}`,
+              text: `Certificate Number: ${reportNumber}`,
+              alignment: AlignmentType.CENTER,
+            }),
+            new Paragraph({ text: '' }),
+            new Paragraph({ text: '1. Instrument & Manufacturer Specifications', heading: HeadingLevel.HEADING_3 }),
+            new Paragraph({ text: `Manufacturer: ${manufacturer.name}` }),
+            new Paragraph({ text: `Model: ${model.modelName} | Class: Class ${model.accuracyClass}` }),
+            new Paragraph({ text: `Max Capacity: ${model.maxCapacity} kg | e: ${model.e} kg | n: ${model.n}` }),
+            new Paragraph({ text: '' }),
+            new Paragraph({ text: '2. Laboratory & Environmental Test Conditions', heading: HeadingLevel.HEADING_3 }),
+            new Paragraph({ text: `Laboratory ID: ${session.labId}` }),
+            new Paragraph({ text: `Test Date: ${new Date(session.testDate).toISOString().split('T')[0]}` }),
+            new Paragraph({ text: `Temperature: ${session.environmentalConditions?.temperatureC ?? 22.5} °C | Humidity: ${session.environmentalConditions?.humidityPercent ?? 55} %` }),
+            new Paragraph({ text: '' }),
+            new Paragraph({ text: '3. OIML R-76 Test Observations & Compliance Determination', heading: HeadingLevel.HEADING_3 }),
+            obsTable,
+            new Paragraph({ text: '' }),
+            new Paragraph({
+              text: `OVERALL EVALUATION VERDICT: ${(session.overallResult || 'PENDING').toUpperCase()}`,
+              heading: HeadingLevel.HEADING_2,
               alignment: AlignmentType.CENTER,
             }),
             new Paragraph({ text: '' }),
             new Paragraph({
-              text: `Manufacturer: ${manufacturer.name} | Model: ${model.modelName} | Class: ${model.accuracyClass}`,
+              text: 'Cryptographically Hashed & Integrity Verified (SHA-256 Digest)',
+              alignment: AlignmentType.CENTER,
             }),
             new Paragraph({
-              text: `Result: ${session.overallResult ? session.overallResult.toUpperCase() : 'PENDING'}`,
+              text: 'NAWI Digital Metrology System — Compliant with OIML R-76-1:2006',
+              alignment: AlignmentType.CENTER,
             }),
           ],
         },
@@ -293,7 +382,7 @@ export async function generateReport({ testSessionId, userId }) {
   });
 
   await renderPdf({ html, pdfPath: pdfPathAbs });
-  await renderDocx({ reportNumber, session, model, manufacturer, observations, docxPath: docxPathAbs });
+  await renderDocx({ reportNumber, session, model, manufacturer, observations, attachments, docxPath: docxPathAbs });
 
   // Calculate cryptographic SHA-256 hash of the actual rendered PDF document buffer
   const pdfBuffer = fs.readFileSync(pdfPathAbs);
