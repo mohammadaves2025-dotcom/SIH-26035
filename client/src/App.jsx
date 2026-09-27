@@ -38,8 +38,10 @@ const queryClient = new QueryClient({
 
 function RoleGuard({ allowedRoles, children }) {
   const { user } = useAuthStore();
-  const role = user?.role || 'admin';
-  if (role !== 'admin' && allowedRoles && !allowedRoles.includes(role)) {
+  if (!user || !user.role) {
+    return <Navigate to="/login" replace />;
+  }
+  if (user.role !== 'admin' && allowedRoles && !allowedRoles.includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
   }
   return children;
@@ -88,7 +90,7 @@ export default function App() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/test-sessions" element={<TestSessionsPage />} />
-            <Route path="/test-sessions/new" element={<RoleGuard allowedRoles={['admin', 'lab_technician', 'lab_admin', 'manufacturer']}><NewTestSessionPage /></RoleGuard>} />
+            <Route path="/test-sessions/new" element={<RoleGuard allowedRoles={['admin', 'lab_technician', 'lab_admin']}><NewTestSessionPage /></RoleGuard>} />
             <Route path="/test-sessions/:id" element={<TestSessionDetailPage />} />
             <Route path="/instrument-models" element={<InstrumentModelsPage />} />
             <Route path="/instrument-models/:id" element={<InstrumentModelDetailPage />} />

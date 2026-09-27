@@ -166,7 +166,7 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
       </div>
 
       <div class="footer">
-        <p>Digitally signed & PKI verified on ${new Date(signedAt).toISOString()}</p>
+        <p>Cryptographically Hashed & Integrity Verified (SHA-256 Digest) on ${new Date(signedAt).toISOString()}</p>
         <p>NAWI Digital Metrology System — Compliant with OIML R-76-1:2006 & Legal Metrology Rules 2011</p>
       </div>
     </body>
@@ -194,7 +194,7 @@ async function renderPdf({ html, pdfPath }) {
     });
   } catch (error) {
     console.error('Puppeteer PDF generation error:', error);
-    fs.writeFileSync(pdfPath, `PDF Fallback rendering for report: ${html.slice(0, 500)}`);
+    throw new AppError(500, 'PDF_RENDER_FAILED', 'PDF document rendering failed: ' + error.message);
   } finally {
     if (browser) await browser.close();
   }
@@ -236,7 +236,7 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
     fs.writeFileSync(docxPath, buffer);
   } catch (err) {
     console.error('DOCX generation error:', err);
-    fs.writeFileSync(docxPath, Buffer.from(`DOCX Fallback: Report ${reportNumber}`));
+    throw new AppError(500, 'DOCX_RENDER_FAILED', 'DOCX document rendering failed: ' + err.message);
   }
 }
 
@@ -250,23 +250,30 @@ export async function generateReport({ testSessionId, userId }) {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
 
-  if (session.status !== 'passed' && session.status !== 'failed' && session.status !== 'published') {
+  if (session.status !== 'passed' && session.overallResult !== 'pass') {
     throw new AppError(
       409,
       'INVALID_STATE',
-      'Cannot generate report for a session that has not completed evaluation'
+      'Cannot generate compliance certificate for a test session that has not passed evaluation'
     );
   }
 
-  let report = await Report.findOne({ testSessionId: session._id });
+  const existingReport = await Report.findOne({ testSessionId: session._id, status: { $ne: 'revoked' } });
+  if (existingReport) {
+    throw new AppError(
+      409,
+      'REPORT_EXISTS',
+      `Official certificate ${existingReport.reportNumber} has already been issued and signed for this session`
+    );
+  }
 
   const observations = await Observation.find({ testSessionId: session._id });
   const attachments = await Attachment.find({ testSessionId: session._id });
   const model = session.instrumentModelId;
   const manufacturer = model.manufacturerId;
 
-  const reportNumber = report ? report.reportNumber : await getNextReportNumber();
-  const signedAt = report ? report.signedAt : new Date();
+  const reportNumber = await getNextReportNumber();
+  const signedAt = new Date();
 
   const pdfFilename = `${reportNumber}.pdf`;
   const docxFilename = `${reportNumber}.docx`;
@@ -288,35 +295,30 @@ export async function generateReport({ testSessionId, userId }) {
   await renderPdf({ html, pdfPath: pdfPathAbs });
   await renderDocx({ reportNumber, session, model, manufacturer, observations, docxPath: docxPathAbs });
 
-  const contentHash = sha256(html);
+  // Calculate cryptographic SHA-256 hash of the actual rendered PDF document buffer
+  const pdfBuffer = fs.readFileSync(pdfPathAbs);
+  const contentHash = sha256(pdfBuffer);
 
-  if (!report) {
-    report = await Report.create({
-      testSessionId: session._id,
-      reportNumber,
-      contentHash,
-      pdfPath: pdfPathRel.replace(/\\/g, '/'),
-      docxPath: docxPathRel.replace(/\\/g, '/'),
-      status: 'signed',
-      signedBy: userId,
-      signedAt,
-    });
+  const report = await Report.create({
+    testSessionId: session._id,
+    reportNumber,
+    contentHash,
+    pdfPath: pdfPathRel.replace(/\\/g, '/'),
+    docxPath: docxPathRel.replace(/\\/g, '/'),
+    status: 'signed',
+    signedBy: userId,
+    signedAt,
+  });
 
-    session.status = 'published';
-    await session.save();
+  session.status = 'published';
+  await session.save();
 
-    await appendAuditLog({
-      entityType: 'Report',
-      entityId: report._id,
-      action: 'generate_report',
-      userId,
-    });
-  } else {
-    report.contentHash = contentHash;
-    report.pdfPath = pdfPathRel.replace(/\\/g, '/');
-    report.docxPath = docxPathRel.replace(/\\/g, '/');
-    await report.save();
-  }
+  await appendAuditLog({
+    entityType: 'Report',
+    entityId: report._id,
+    action: 'generate_report',
+    userId,
+  });
 
   return report;
 }

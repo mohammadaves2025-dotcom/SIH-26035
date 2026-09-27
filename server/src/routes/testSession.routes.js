@@ -20,7 +20,7 @@ router.use(authenticate);
 
 router.post(
   '/',
-  authorize('admin', 'lab_technician', 'lab_admin', 'manufacturer'),
+  authorize('admin', 'lab_technician', 'lab_admin'),
   validate(createTestSessionSchema),
   createTestSession
 );
@@ -34,7 +34,7 @@ router.post(
 
 router.post(
   '/:id/submit',
-  authorize('admin', 'lab_technician', 'lab_admin', 'manufacturer'),
+  authorize('admin', 'lab_technician', 'lab_admin'),
   submitTestSession
 );
 

@@ -4,6 +4,8 @@ import { TestSession } from '../models/TestSession.js';
 import { Observation } from '../models/Observation.js';
 import { Report } from '../models/Report.js';
 import { AuditLog } from '../models/AuditLog.js';
+import { authenticate } from '../middleware/authenticate.js';
+import { authorize } from '../middleware/authorize.js';
 
 const router = Router();
 
@@ -22,7 +24,7 @@ router.get('/status', async (req, res, next) => {
   }
 });
 
-router.post('/seed', async (req, res, next) => {
+router.post('/seed', authenticate, authorize('admin'), async (req, res, next) => {
   try {
     const result = await seedDemoData();
     res.json({
@@ -35,7 +37,7 @@ router.post('/seed', async (req, res, next) => {
   }
 });
 
-router.post('/clear', async (req, res, next) => {
+router.post('/clear', authenticate, authorize('admin'), async (req, res, next) => {
   try {
     await Promise.all([
       TestSession.deleteMany({}),
