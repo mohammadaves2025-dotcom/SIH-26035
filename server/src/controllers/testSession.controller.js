@@ -19,20 +19,10 @@ export const createTestSession = asyncHandler(async (req, res) => {
   } = req.body;
 
   const isLabBoundUser = ['lab_technician', 'lab_admin'].includes(req.user.role);
-  const labId = (isLabBoundUser && req.user.labId) ? req.user.labId : (req.body.labId || 'LAB-DELHI-01');
-  let laboratory = await Laboratory.findOne({ labId });
-  if (!laboratory) {
-    laboratory = await Laboratory.create({
-      code: labId,
-      labId,
-      name: `Laboratory ${labId}`,
-      labName: `Laboratory ${labId}`,
-      accreditationNo: 'NABL-2026-TEMP',
-      location: 'National Metrology Center',
-      contactEmail: 'lab@metrology.gov.in',
-      isActive: true,
-    });
-  }
+  const labId = isLabBoundUser ? req.user.labId : req.body.labId;
+  if (!labId) throw new AppError(400, 'VALIDATION_ERROR', 'A registered laboratory is required');
+  const laboratory = await Laboratory.findOne({ labId, isActive: true });
+  if (!laboratory) throw new AppError(422, 'INVALID_LABORATORY', 'The selected laboratory is not registered or is inactive');
 
   const model = await InstrumentModel.findById(instrumentModelId).populate('manufacturerId');
   if (!model || !model.manufacturerId) {
@@ -89,6 +79,10 @@ export const addObservations = asyncHandler(async (req, res) => {
   const rawObservations = Array.isArray(req.body.observations)
     ? req.body.observations
     : [req.body];
+  const unselected = rawObservations.find((obs) => !(session.selectedAnnexes || []).includes(obs.annexRef));
+  if (unselected) {
+    throw new AppError(422, 'UNSELECTED_PROCEDURE', `${unselected.annexRef} was not selected for this test session`);
+  }
 
   const docsToInsert = rawObservations.map((obs) => ({
     testSessionId: session._id,
@@ -97,10 +91,6 @@ export const addObservations = asyncHandler(async (req, res) => {
 
   const inserted = await Observation.insertMany(docsToInsert);
 
-  // Sync session.selectedAnnexes with observation annexes
-  const annexes = new Set([...(session.selectedAnnexes || []), ...docsToInsert.map((o) => o.annexRef)]);
-  session.selectedAnnexes = Array.from(annexes);
-  await session.save();
   for (const observation of inserted) {
     await appendAuditLog({ entityType: 'Observation', entityId: observation._id, action: 'create', userId: req.user.sub });
   }
@@ -147,9 +137,12 @@ export const submitTestSession = asyncHandler(async (req, res) => {
   if (!model || !model.accuracyClass) {
     model = await InstrumentModel.findById(session.instrumentModelId);
   }
-  const accuracyClass = session.accuracyClass || model?.accuracyClass || 'III';
-  const maxCapacity = session.maxCapacity || model?.maxCapacity || 1500;
-  const scaleInterval = session.scaleInterval || model?.e || 0.5;
+  const accuracyClass = session.accuracyClass || model?.accuracyClass;
+  const maxCapacity = session.maxCapacity ?? model?.maxCapacity;
+  const scaleInterval = session.scaleInterval ?? model?.e;
+  if (!accuracyClass || !Number.isFinite(maxCapacity) || !Number.isFinite(scaleInterval) || scaleInterval <= 0) {
+    throw new AppError(422, 'INVALID_INSTRUMENT_PARAMETERS', 'A complete registered instrument specification is required to evaluate this session');
+  }
 
   const instrumentModel = {
     accuracyClass,
@@ -275,7 +268,7 @@ export const getTestSessions = asyncHandler(async (req, res) => {
   if (req.query.instrumentModelId) query.instrumentModelId = req.query.instrumentModelId;
 
   // Auto-filter by role for lab tech & manufacturer
-  if (['lab_technician', 'lab_admin'].includes(req.user.role)) query.labId = req.user.labId || null;
+  if (['lab_technician', 'lab_admin', 'reviewer'].includes(req.user.role)) query.labId = req.user.labId || null;
   if (req.user.role === 'manufacturer') {
     const manufacturer = await getManufacturerForUser(req.user.sub);
     query.instrumentModelId = { $in: await manufacturerModelIds(manufacturer?._id) };

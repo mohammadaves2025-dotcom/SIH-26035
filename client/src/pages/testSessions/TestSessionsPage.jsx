@@ -4,12 +4,15 @@ import { getTestSessions } from '../../services/testSession.service.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import { Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../../store/useAuthStore.js';
 
 export default function TestSessionsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  const canCreate = ['admin', 'lab_technician', 'lab_admin'].includes(user?.role);
   const limit = 15;
 
   const { data, isLoading } = useQuery({
@@ -42,9 +45,9 @@ export default function TestSessionsPage() {
           <h1>Test Sessions</h1>
           <p className="page-header-subtitle">OIML R-76 type evaluation test sessions</p>
         </div>
-        <button className="gov-btn gov-btn-accent" onClick={() => navigate('/test-sessions/new')}>
+        {canCreate && <button className="gov-btn gov-btn-accent" onClick={() => navigate('/test-sessions/new')}>
           <Plus size={16} /> New Session
-        </button>
+        </button>}
       </div>
 
       {/* Filters */}
@@ -67,9 +70,10 @@ export default function TestSessionsPage() {
           >
             <option value="">All Statuses</option>
             <option value="draft">Draft</option>
-            <option value="submitted">Submitted</option>
+            <option value="under_review">Under review</option>
             <option value="passed">Passed</option>
             <option value="failed">Failed</option>
+            <option value="report_generated">Report generated</option>
             <option value="published">Published</option>
           </select>
         </div>

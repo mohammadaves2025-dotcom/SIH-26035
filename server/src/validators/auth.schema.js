@@ -8,7 +8,11 @@ export const registerSchema = z.object({
   role: z.enum(['lab_technician', 'reviewer', 'manufacturer'], {
     errorMap: () => ({ message: 'Role must be lab_technician, reviewer, or manufacturer' }),
   }),
-  labId: z.string().optional().nullable(),
+  labId: z.string().trim().min(1).optional().nullable(),
+}).superRefine((data, ctx) => {
+  if (['lab_technician', 'reviewer'].includes(data.role) && !data.labId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'A laboratory assignment is required for this role', path: ['labId'] });
+  }
 });
 
 export const loginSchema = z.object({

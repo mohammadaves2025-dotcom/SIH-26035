@@ -63,7 +63,7 @@ async function getNextReportNumber() {
   return `NAWI-${year}-${seqStr}`;
 }
 
-function generateHtmlTemplate({ reportNumber, session, model, manufacturer, observations, attachments, signedAt }) {
+function generateHtmlTemplate({ reportNumber, session, model, manufacturer, observations, attachments, generatedAt }) {
   const verificationUrl = process.env.PUBLIC_APP_URL
     ? `${process.env.PUBLIC_APP_URL.replace(/\/$/, '')}/verify?q=${encodeURIComponent(reportNumber)}`
     : null;
@@ -212,7 +212,7 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
       </div>
 
       <div class="footer">
-        <p>SHA-256 integrity digest with server HMAC recorded at ${escapeHtml(new Date(signedAt).toISOString())}</p>
+        <p>SHA-256 integrity digest with server HMAC recorded at ${escapeHtml(new Date(generatedAt).toISOString())}</p>
         <p>Report integrity tag is not a PKI-based digital signature. Applicable rule editions are listed per calculated observation.</p>
       </div>
     </body>
@@ -365,14 +365,15 @@ export async function generateReport({ testSessionId, userId }) {
     );
   }
 
-  const existingReport = await Report.findOne({ testSessionId: session._id, status: { $ne: 'revoked' } });
-  if (existingReport) {
+  const latestReport = await Report.findOne({ testSessionId: session._id }).sort({ revisionNumber: -1 });
+  if (latestReport && latestReport.status !== 'revoked') {
     throw new AppError(
       409,
       'REPORT_EXISTS',
-      `Report ${existingReport.reportNumber} has already been issued for this session`
+      `Report ${latestReport.reportNumber} already exists; revoke it before generating a replacement`
     );
   }
+  const revisionNumber = (latestReport?.revisionNumber || 0) + 1;
 
   const observations = await Observation.find({ testSessionId: session._id }).populate('ruleConfigId');
   const attachments = await Attachment.find({ testSessionId: session._id });
@@ -388,7 +389,7 @@ export async function generateReport({ testSessionId, userId }) {
   const manufacturer = { name: session.manufacturerName || registeredModel.manufacturerId.name };
 
   const reportNumber = await getNextReportNumber();
-  const signedAt = new Date();
+  const generatedAt = new Date();
 
   const pdfFilename = `${reportNumber}.pdf`;
   const docxFilename = `${reportNumber}.docx`;
@@ -404,7 +405,7 @@ export async function generateReport({ testSessionId, userId }) {
     manufacturer,
     observations,
     attachments,
-    signedAt,
+    generatedAt,
   });
 
   await renderPdf({ html, pdfPath: pdfPathAbs });
@@ -413,27 +414,29 @@ export async function generateReport({ testSessionId, userId }) {
   // Record integrity digests and server HMAC tags. These are not PKI digital signatures.
   const pdfBuffer = fs.readFileSync(pdfPathAbs);
   const contentHash = sha256(pdfBuffer);
-  const digitalSignature = signData(contentHash);
+  const hmacTag = signData(contentHash);
   const docxBuffer = fs.readFileSync(docxPathAbs);
   const docxContentHash = sha256(docxBuffer);
-  const docxDigitalSignature = signData(docxContentHash);
+  const docxHmacTag = signData(docxContentHash);
 
   const report = await Report.create({
     testSessionId: session._id,
+    revisionNumber,
+    supersedesReportId: latestReport?._id || null,
     reportNumber,
     contentHash,
     docxContentHash,
-    digitalSignature,
-    docxDigitalSignature,
+    hmacTag,
+    docxHmacTag,
     signatureAlgorithm: 'HMAC-SHA256',
     pdfPath: pdfPathRel.replace(/\\/g, '/'),
     docxPath: docxPathRel.replace(/\\/g, '/'),
-    status: 'signed',
-    signedBy: userId,
-    signedAt,
+    status: 'integrity_tagged',
+    generatedBy: userId,
+    generatedAt,
   });
 
-  session.status = 'published';
+  session.status = 'report_generated';
   await session.save();
 
   await appendAuditLog({

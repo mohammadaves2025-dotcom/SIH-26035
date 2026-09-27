@@ -3,7 +3,7 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export const ACCURACY_CLASSES = ['I', 'II', 'III', 'IIII'];
 
-export const SESSION_STATUSES = ['draft', 'submitted', 'passed', 'failed', 'published'];
+export const SESSION_STATUSES = ['draft', 'under_review', 'passed', 'failed', 'report_generated', 'published', 'revoked', 'archived'];
 
 export const ANNEX_REFS = [
   { value: 'A1_administrative',        label: 'A.1 — Administrative / Documentary Check',  method: 'manual_checklist' },

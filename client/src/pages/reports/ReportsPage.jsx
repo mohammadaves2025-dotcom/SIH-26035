@@ -4,11 +4,14 @@ import { revokeReport } from '../../services/report.service.js';
 import apiClient from '../../services/apiClient.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
+import { useAuthStore } from '../../store/useAuthStore.js';
 import { FileCheck, Download, AlertTriangle, ShieldCheck, Search } from 'lucide-react';
 
 export default function ReportsPage() {
   const queryClient = useQueryClient();
   const addToast = useNotificationStore((s) => s.addToast);
+  const role = useAuthStore((s) => s.user?.role);
+  const canRevoke = ['admin', 'reviewer'].includes(role);
   const [revokeId, setRevokeId] = useState(null);
   const [reason, setReason] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,7 +41,8 @@ export default function ReportsPage() {
       <div className="page-header">
         <div>
           <h1><FileCheck size={22} style={{ marginRight: 8, verticalAlign: -3 }} />Test Reports</h1>
-          <p className="page-header-subtitle">Generated official OIML R-76 evaluation certificates</p>
+          <p className="page-header-subtitle">Generated test reports for reviewed OIML R-76 evaluations</p>
+          <p className="text-muted" style={{ fontSize: 12 }}>These files carry SHA-256 and server HMAC integrity tags. They are not PKI-signed approvals or certificates.</p>
         </div>
       </div>
 
@@ -70,7 +74,8 @@ export default function ReportsPage() {
               <tr>
                 <th>Report Number</th>
                 <th>Session ID</th>
-                <th>Overall Verdict</th>
+                <th>Evaluation Verdict</th>
+                <th>Report State</th>
                 <th>Hash Digest</th>
                 <th>Generated</th>
                 <th>Actions</th>
@@ -78,16 +83,17 @@ export default function ReportsPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40 }}>Loading…</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40 }}>Loading…</td></tr>
               ) : (data || []).length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--gov-text-muted)' }}>No reports generated yet</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--gov-text-muted)' }}>No reports generated yet</td></tr>
               ) : (
                 (data || []).map((rep) => (
                   <tr key={rep._id}>
                     <td><strong className="text-mono">{rep.reportNumber || rep._id?.slice(-8)}</strong></td>
                     <td className="text-mono">{rep.testSessionId?._id?.slice(-8) || rep.testSessionId || '—'}</td>
-                    <td><StatusBadge status={rep.overallVerdict || rep.status} /></td>
-                    <td><code className="text-mono" style={{ fontSize: 11 }}>{rep.contentHash?.slice(0, 12) || 'e3b0c442...'}…</code></td>
+                    <td><StatusBadge status={rep.testSessionId?.overallResult || 'unknown'} /></td>
+                    <td><StatusBadge status={rep.status} /></td>
+                    <td><code className="text-mono" style={{ fontSize: 11 }}>{rep.contentHash ? `${rep.contentHash.slice(0, 12)}…` : '—'}</code></td>
                     <td>{rep.createdAt ? new Date(rep.createdAt).toLocaleDateString('en-IN') : '—'}</td>
                     <td>
                       <div className="flex-gap-8">
@@ -97,7 +103,7 @@ export default function ReportsPage() {
                         <button onClick={() => handleDownload(rep._id, 'docx')} className="gov-btn gov-btn-outline" style={{ padding: '4px 8px', fontSize: 12 }}>
                           <Download size={12} /> DOCX
                         </button>
-                        {rep.status !== 'revoked' && (
+                        {canRevoke && rep.status !== 'revoked' && (
                           <button className="gov-btn gov-btn-danger" style={{ padding: '4px 8px', fontSize: 12 }} onClick={() => setRevokeId(rep._id)}>
                             <AlertTriangle size={12} /> Revoke
                           </button>

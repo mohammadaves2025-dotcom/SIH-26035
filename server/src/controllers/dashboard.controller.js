@@ -10,8 +10,10 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   let sessionFilter = {};
   let modelFilter = {};
 
-  if ((role === 'lab_technician' || role === 'lab_admin') && labId) {
-    sessionFilter = { labId };
+  if (['lab_technician', 'lab_admin'].includes(role)) {
+    sessionFilter = { labId: labId || null };
+  } else if (role === 'reviewer') {
+    sessionFilter = { labId: labId || null };
   } else if (role === 'manufacturer') {
     const mfg = await Manufacturer.findOne({ contactEmail: email });
     if (mfg) {
@@ -19,13 +21,16 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       const modelIds = models.map((m) => m._id);
       sessionFilter = { instrumentModelId: { $in: modelIds } };
       modelFilter = { manufacturerId: mfg._id };
+    } else {
+      sessionFilter = { instrumentModelId: { $in: [] } };
+      modelFilter = { manufacturerId: null };
     }
   }
 
   const sessions = await TestSession.find(sessionFilter).populate('instrumentModelId', 'accuracyClass modelName');
   const sessionIds = sessions.map((s) => s._id);
 
-  const reportFilter = sessionIds.length > 0 ? { testSessionId: { $in: sessionIds } } : {};
+  const reportFilter = { testSessionId: { $in: sessionIds } };
 
   const [totalSessions, passedCount, failedCount, totalReports, totalInstruments, totalManufacturers] = await Promise.all([
     TestSession.countDocuments(sessionFilter),
@@ -33,10 +38,10 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     TestSession.countDocuments({ ...sessionFilter, overallResult: 'fail' }),
     Report.countDocuments(reportFilter),
     InstrumentModel.countDocuments(modelFilter),
-    Manufacturer.countDocuments(),
+    ['admin', 'doca_officer'].includes(role) ? Manufacturer.countDocuments() : Promise.resolve(0),
   ]);
 
-  const statusBreakdown = { draft: 0, submitted: 0, under_review: 0, passed: 0, failed: 0, published: 0 };
+  const statusBreakdown = { draft: 0, submitted: 0, under_review: 0, passed: 0, failed: 0, report_generated: 0, published: 0 };
   const byAccuracyClass = { I: 0, II: 0, III: 0, IIII: 0 };
   const sessionsByLab = {};
 

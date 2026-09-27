@@ -6,6 +6,8 @@ import app from '../src/app.js';
 import { seedRuleConfigs } from '../src/seed/seedRuleConfigs.js';
 import { seedUsers } from '../src/seed/seedUsers.js';
 import { Laboratory } from '../src/models/Laboratory.js';
+import { User } from '../src/models/User.js';
+import { RuleConfig } from '../src/models/RuleConfig.js';
 
 describe('End-to-End Metrology System Lifecycle', () => {
   let adminToken;
@@ -24,6 +26,26 @@ describe('End-to-End Metrology System Lifecycle', () => {
       { labId: 'LAB-DELHI-01', labName: 'Test Metrology Laboratory', accreditationNo: 'TEST-ACCREDITATION', location: 'Test Facility', isActive: true },
       { upsert: true, new: true }
     );
+    const [ruleAuthor, ruleApprover] = await Promise.all([
+      User.findOne({ email: 'admin@nawi.gov.in' }),
+      User.findOne({ email: 'reviewer@doca.gov.in' }),
+    ]);
+    await RuleConfig.create({
+      oimlEdition: 'TEST FIXTURE — NOT FOR REGULATORY USE',
+      accuracyClass: 'III',
+      effectiveDate: new Date('2006-01-01'),
+      bands: [
+        { uptoMultipleOfE: 500, mpeFactor: 0.5 },
+        { uptoMultipleOfE: 2000, mpeFactor: 1 },
+        { uptoMultipleOfE: 10000, mpeFactor: 1.5 },
+      ],
+      status: 'active',
+      sourceReference: 'Synthetic E2E fixture; not an authoritative rule source',
+      validationNote: 'Test-only values for known-answer API lifecycle coverage',
+      createdBy: ruleAuthor._id,
+      approvedBy: ruleApprover._id,
+      approvedAt: new Date(),
+    });
 
     // Login as Admin
     const adminRes = await request(app).post('/api/auth/login').send({
@@ -151,7 +173,7 @@ describe('End-to-End Metrology System Lifecycle', () => {
     const report = reportRes.body.data;
     expect(report.reportNumber).toMatch(/^NAWI-\d{4}-\d{6}$/);
     expect(report.contentHash).toHaveLength(64);
-    expect(report.status).toBe('signed');
+    expect(report.status).toBe('integrity_tagged');
 
     // Verify PDF & DOCX files created on disk
     expect(fs.existsSync(path.join(process.cwd(), report.pdfPath))).toBe(true);
@@ -162,7 +184,7 @@ describe('End-to-End Metrology System Lifecycle', () => {
     expect(verifyRes.status).toBe(200);
     expect(verifyRes.body.data.reportNumber).toBe(report.reportNumber);
     expect(verifyRes.body.data.overallResult).toBe('pass');
-    expect(verifyRes.body.data.status).toBe('signed');
+    expect(verifyRes.body.data.status).toBe('integrity_tagged');
 
     // Verification by SHA256 hash
     const verifyHashRes = await request(app).get(`/api/verify/${report.contentHash}`);

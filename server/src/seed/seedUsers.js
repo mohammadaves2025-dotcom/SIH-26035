@@ -71,7 +71,7 @@ export async function seedUsers() {
       email: 'reviewer@doca.gov.in',
       passwordHash,
       role: 'reviewer',
-      labId: null,
+      labId: 'LAB-DELHI-01',
     },
     {
       name: 'Lab Admin (NPL)',

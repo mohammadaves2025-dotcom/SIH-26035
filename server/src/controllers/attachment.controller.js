@@ -27,6 +27,11 @@ const storage = multer.diskStorage({
 export const multerUpload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (_req, file, cb) => {
+    const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']);
+    if (!allowed.has(file.mimetype)) return cb(new AppError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Only JPEG, PNG, WebP, PDF, DOCX, and text files are accepted'));
+    cb(null, true);
+  },
 });
 
 export const uploadAttachment = asyncHandler(async (req, res) => {
@@ -91,4 +96,19 @@ export const getAttachments = asyncHandler(async (req, res) => {
     success: true,
     data: attachments,
   });
+});
+
+export const downloadAttachment = asyncHandler(async (req, res) => {
+  const attachment = await Attachment.findById(req.params.attachmentId);
+  if (!attachment) throw new AppError(404, 'NOT_FOUND', 'Attachment not found');
+  const session = await TestSession.findById(attachment.testSessionId);
+  if (!session) throw new AppError(404, 'NOT_FOUND', 'Test session not found');
+  await assertSessionAccess(req, session);
+
+  const absolutePath = path.resolve(process.cwd(), attachment.filePath);
+  const allowedRoot = path.resolve(uploadDir);
+  if (!absolutePath.startsWith(`${allowedRoot}${path.sep}`) || !fs.existsSync(absolutePath)) {
+    throw new AppError(404, 'NOT_FOUND', 'Attachment file is unavailable');
+  }
+  res.download(absolutePath, path.basename(attachment.originalFilename || absolutePath));
 });

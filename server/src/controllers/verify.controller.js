@@ -32,7 +32,7 @@ export const verifyReport = asyncHandler(async (req, res) => {
   const actualPdfHash = pdfExists ? sha256(fs.readFileSync(pdfPath)) : null;
   const isIntegrityVerified = Boolean(
     actualPdfHash && actualPdfHash === report.contentHash &&
-    verifySignature(actualPdfHash, report.digitalSignature)
+    verifySignature(actualPdfHash, report.hmacTag)
   );
 
   res.status(200).json({
@@ -40,11 +40,11 @@ export const verifyReport = asyncHandler(async (req, res) => {
     data: {
       reportNumber: report.reportNumber,
       status: report.status,
-      signedAt: report.signedAt,
+      generatedAt: report.generatedAt,
       contentHash: report.contentHash,
       signatureAlgorithm: report.signatureAlgorithm || 'HMAC-SHA256',
       isIntegrityVerified,
-      signatureType: 'server HMAC integrity tag; not a PKI digital signature',
+      signatureType: 'server HMAC integrity tag; report is not PKI-signed',
       instrumentModelName: model?.modelName || 'Unknown',
       accuracyClass: model?.accuracyClass || 'Unknown',
       overallResult: session?.overallResult || 'Unknown',

@@ -8,7 +8,7 @@ export const createRuleConfigSchema = z
     bands: z
       .array(
         z.object({
-          uptoMultipleOfE: z.number().finite().int().positive(),
+          uptoMultipleOfE: z.number().finite().int().positive().max(Number.MAX_SAFE_INTEGER),
           mpeFactor: z.number().finite().positive(),
         })
       )

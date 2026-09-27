@@ -1,9 +1,14 @@
 import { AppError } from '../utils/AppError.js';
 
-function decimalPlaces(value) {
-  const [, fraction = '', exponentPart] = String(value).toLowerCase().split(/[e]/);
-  const exponent = exponentPart ? Number(exponentPart) : 0;
-  return Math.max(0, fraction.length - exponent);
+const DECIMAL_SCALE = 1_000_000_000n;
+const DECIMAL_SCALE_NUMBER = Number(DECIMAL_SCALE);
+
+function toScaledInteger(value, label) {
+  const scaled = value * DECIMAL_SCALE_NUMBER;
+  if (!Number.isSafeInteger(Math.round(scaled)) || Math.abs(scaled - Math.round(scaled)) > 1e-6) {
+    throw new AppError(422, 'VALUE_PRECISION_EXCEEDED', `${label} exceeds the supported range or nine decimal places`);
+  }
+  return BigInt(Math.round(scaled));
 }
 
 export function evaluateObservation(observation, instrumentModel, ruleConfig) {
@@ -40,19 +45,22 @@ export function evaluateObservation(observation, instrumentModel, ruleConfig) {
       !Number.isFinite(instrumentModel.maxCapacity) || instrumentModel.maxCapacity <= 0) {
     throw new AppError(422, 'INVALID_INSTRUMENT_PARAMETERS', 'Instrument capacity and verification interval must be positive');
   }
-  if (observation.referenceLoad > instrumentModel.maxCapacity) {
+  const referenceLoadScaled = toScaledInteger(observation.referenceLoad, 'referenceLoad');
+  const indicatedValueScaled = toScaledInteger(observation.indicatedValue, 'indicatedValue');
+  const eScaled = toScaledInteger(instrumentModel.e, 'verification interval');
+  const maxCapacityScaled = toScaledInteger(instrumentModel.maxCapacity, 'maximum capacity');
+  if (referenceLoadScaled > maxCapacityScaled) {
     throw new AppError(422, 'LOAD_OUT_OF_RANGE', 'Reference load exceeds the instrument maximum capacity');
   }
 
-  const zeroCorr = observation.zeroCorrection || 0;
-  const loadInE = observation.referenceLoad / instrumentModel.e;
+  const zeroCorrectionScaled = toScaledInteger(observation.zeroCorrection || 0, 'zeroCorrection');
 
   // Sort bands by upper limit ascending
   const sortedBands = ruleConfig.bands
     .slice()
     .sort((a, b) => a.uptoMultipleOfE - b.uptoMultipleOfE);
 
-  const band = sortedBands.find((b) => loadInE <= b.uptoMultipleOfE);
+  const band = sortedBands.find((b) => maxCapacityScaled <= BigInt(b.uptoMultipleOfE) * eScaled);
 
   if (!band) {
     throw new AppError(
@@ -62,9 +70,12 @@ export function evaluateObservation(observation, instrumentModel, ruleConfig) {
     );
   }
 
-  const appliedMpe = band.mpeFactor * instrumentModel.e;
-  const computedError = observation.indicatedValue - observation.referenceLoad - zeroCorr;
-  const outcome = Math.abs(computedError) <= appliedMpe + 1e-9 ? 'pass' : 'fail';
+  const factorScaled = toScaledInteger(band.mpeFactor, 'MPE factor');
+  const errorScaled = indicatedValueScaled - referenceLoadScaled - zeroCorrectionScaled;
+  const withinMpe = (errorScaled < 0n ? -errorScaled : errorScaled) * DECIMAL_SCALE <= factorScaled * eScaled;
+  const appliedMpe = Number(factorScaled * eScaled) / (DECIMAL_SCALE_NUMBER * DECIMAL_SCALE_NUMBER);
+  const computedError = Number(errorScaled) / DECIMAL_SCALE_NUMBER;
+  const outcome = withinMpe ? 'pass' : 'fail';
 
   return {
     computedError,

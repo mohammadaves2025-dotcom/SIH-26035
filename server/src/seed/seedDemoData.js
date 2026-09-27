@@ -195,7 +195,7 @@ export async function seedDemoData() {
   const passwordHash = await bcrypt.hash('Password123!', env.BCRYPT_SALT_ROUNDS || 10);
   const initialUsers = [
     { name: 'System Admin', email: 'admin@nawi.gov.in', passwordHash, role: 'admin', labId: null },
-    { name: 'Shri V. K. Gupta (Reviewing Officer)', email: 'reviewer@doca.gov.in', passwordHash, role: 'reviewer', labId: null },
+    { name: 'Shri V. K. Gupta (Reviewing Officer)', email: 'reviewer@doca.gov.in', passwordHash, role: 'reviewer', labId: 'LAB-DELHI-01' },
     { name: 'Dr. Rajesh Kumar (NPL Metrologist)', email: 'tech@npl.res.in', passwordHash, role: 'lab_technician', labId: 'LAB-DELHI-01', laboratoryRef: laboratories[0]._id },
     { name: 'Smt. Anita Roy (Lab Administrator)', email: 'labadmin@npl.res.in', passwordHash, role: 'lab_admin', labId: 'LAB-DELHI-01', laboratoryRef: laboratories[0]._id },
     { name: 'Controller of Legal Metrology', email: 'doca.controller@doca.gov.in', passwordHash, role: 'doca_officer', labId: null },
@@ -401,9 +401,9 @@ export async function seedDemoData() {
     contentHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
     pdfPath: 'uploads/reports/NAWI-2026-000001.pdf',
     docxPath: 'uploads/reports/NAWI-2026-000001.docx',
-    status: 'signed',
-    signedBy: reviewer._id,
-    signedAt: new Date('2026-09-16'),
+    status: 'integrity_tagged',
+    generatedBy: reviewer._id,
+    generatedAt: new Date('2026-09-16'),
   });
 
   // 10. Audit Logs

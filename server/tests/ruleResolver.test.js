@@ -1,6 +1,16 @@
 import { setupTestDB, teardownTestDB } from './testHelper.js';
 import { RuleConfig } from '../src/models/RuleConfig.js';
 import { resolveRuleConfig } from '../src/services/ruleResolver.service.js';
+import mongoose from 'mongoose';
+
+const reviewFields = () => ({
+  status: 'active',
+  sourceReference: 'Unit-test fixture only',
+  validationNote: 'Synthetic known-answer rule used only by the resolver tests',
+  createdBy: new mongoose.Types.ObjectId(),
+  approvedBy: new mongoose.Types.ObjectId(),
+  approvedAt: new Date(),
+});
 
 describe('Rule Resolver Service', () => {
   beforeAll(async () => {
@@ -17,6 +27,7 @@ describe('Rule Resolver Service', () => {
 
   test('resolveRuleConfig picks the version effective at testDate, not the newest', async () => {
     const v2006 = await RuleConfig.create({
+      ...reviewFields(),
       oimlEdition: 'R76-1:2006',
       accuracyClass: 'III',
       effectiveDate: new Date('2006-01-01'),
@@ -24,6 +35,7 @@ describe('Rule Resolver Service', () => {
     });
 
     const v2020 = await RuleConfig.create({
+      ...reviewFields(),
       oimlEdition: 'R76-1:2020-Update',
       accuracyClass: 'III',
       effectiveDate: new Date('2020-01-01'),
@@ -43,6 +55,7 @@ describe('Rule Resolver Service', () => {
 
   test('throws AppError if no rule configuration is effective on or before testDate', async () => {
     await RuleConfig.create({
+      ...reviewFields(),
       oimlEdition: 'R76-1:2006',
       accuracyClass: 'III',
       effectiveDate: new Date('2006-01-01'),

@@ -1,6 +1,10 @@
 import { AuditLog } from '../models/AuditLog.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sha256 } from '../utils/hash.js';
+import { TestSession } from '../models/TestSession.js';
+import { Observation } from '../models/Observation.js';
+import { Attachment } from '../models/Attachment.js';
+import { Report } from '../models/Report.js';
 
 export const getAuditLogs = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page || '1', 10);
@@ -10,6 +14,22 @@ export const getAuditLogs = asyncHandler(async (req, res) => {
   const query = {};
   if (req.query.entityType) query.entityType = req.query.entityType;
   if (req.query.entityId) query.entityId = req.query.entityId;
+
+  if (req.user.role === 'lab_admin') {
+    const sessions = await TestSession.find({ labId: req.user.labId || null }).select('_id');
+    const sessionIds = sessions.map((session) => session._id);
+    const [observationIds, attachmentIds, reportIds] = await Promise.all([
+      Observation.find({ testSessionId: { $in: sessionIds } }).distinct('_id'),
+      Attachment.find({ testSessionId: { $in: sessionIds } }).distinct('_id'),
+      Report.find({ testSessionId: { $in: sessionIds } }).distinct('_id'),
+    ]);
+    query.$or = [
+      { entityType: 'TestSession', entityId: { $in: sessionIds } },
+      { entityType: 'Observation', entityId: { $in: observationIds } },
+      { entityType: 'Attachment', entityId: { $in: attachmentIds } },
+      { entityType: 'Report', entityId: { $in: reportIds } },
+    ];
+  }
 
   const [logs, total] = await Promise.all([
     AuditLog.find(query)

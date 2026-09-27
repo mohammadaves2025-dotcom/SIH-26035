@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   uploadAttachment,
   getAttachments,
+  downloadAttachment,
   multerUpload,
 } from '../controllers/attachment.controller.js';
 import { authenticate } from '../middleware/authenticate.js';
@@ -19,5 +20,6 @@ router.post(
 );
 
 router.get('/:id/attachments', getAttachments);
+router.get('/attachments/:attachmentId/file', downloadAttachment);
 
 export default router;

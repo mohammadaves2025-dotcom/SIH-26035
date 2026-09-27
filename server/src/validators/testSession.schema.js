@@ -1,25 +1,21 @@
 import { z } from 'zod';
+import { ANNEX_REFS } from '../models/Observation.js';
 
 export const createTestSessionSchema = z
   .object({
     instrumentModelId: z.string().min(1, 'instrumentModelId is required'),
-    serialNumber: z.string().optional(),
-    accuracyClass: z.string().optional(),
-    maxCapacity: z.number().optional(),
-    minCapacity: z.number().optional(),
-    scaleInterval: z.number().optional(),
-    selectedAnnexes: z.array(z.string()).optional(),
-    testDate: z.string().or(z.date()).optional().transform((val) => (val ? new Date(val) : new Date())),
-    labId: z.string().optional(),
+    serialNumber: z.string().trim().min(1, 'serialNumber is required'),
+    selectedAnnexes: z.array(z.enum(ANNEX_REFS)).min(1, 'Select at least one test procedure'),
+    testDate: z.string().date('testDate must be a valid calendar date').transform((val) => new Date(`${val}T00:00:00.000Z`)),
+    labId: z.string().trim().min(1).optional(),
     environmentalConditions: z
       .object({
-        temperatureC: z.number().optional(),
-        humidityPercent: z.number().optional(),
-        inclinationDeg: z.number().optional(),
+        temperatureC: z.number().finite(),
+        humidityPercent: z.number().finite().min(0).max(100),
+        inclinationDeg: z.number().finite(),
         atmosphericPressurehPa: z.number().optional(),
-        notes: z.string().optional(),
-      })
-      .optional(),
+        notes: z.string().trim().min(1),
+      }),
   })
   .superRefine((data, ctx) => {
     if (data.testDate && data.testDate > new Date(Date.now() + 86400000)) {

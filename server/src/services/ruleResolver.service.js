@@ -6,7 +6,12 @@ export async function resolveRuleConfig(accuracyClass, testDate) {
   const config = await RuleConfig.findOne({
     accuracyClass,
     effectiveDate: { $lte: dateObj },
-    status: { $ne: 'archived' },
+    status: 'active',
+    sourceReference: { $type: 'string', $ne: '' },
+    validationNote: { $type: 'string', $ne: '' },
+    createdBy: { $ne: null },
+    approvedBy: { $ne: null },
+    approvedAt: { $ne: null },
   }).sort({ effectiveDate: -1, createdAt: -1 });
 
   if (!config) {

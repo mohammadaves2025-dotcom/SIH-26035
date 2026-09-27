@@ -17,7 +17,7 @@ const NAV_ITEMS = [
   { to: '/laboratories',     label: 'Laboratories',       icon: Building2,       roles: ['admin', 'lab_admin', 'doca_officer'] },
   { to: '/test-types',        label: 'Test Procedures',    icon: ListChecks,      roles: ALL_ROLES },
   { to: '/rule-configs',      label: 'OIML Rule Configs',  icon: BookOpen,        roles: ['admin', 'metrology_expert', 'lab_admin', 'doca_officer', 'reviewer', 'auditor'] },
-  { to: '/reports',           label: 'Reports & Certs',    icon: FileCheck,       roles: ['admin', 'reviewer', 'lab_admin', 'doca_officer', 'auditor'] },
+  { to: '/reports',           label: 'Test Reports',       icon: FileCheck,       roles: ['admin', 'reviewer', 'lab_admin', 'doca_officer', 'auditor', 'manufacturer'] },
   { to: '/audit-log',         label: 'Audit Trail',        icon: ScrollText,      roles: ['admin', 'reviewer', 'lab_admin', 'doca_officer', 'auditor'] },
   { to: '/export',            label: 'e-Gov Export',       icon: Download,        roles: ['admin', 'lab_admin', 'doca_officer'] },
   { to: '/verify',            label: 'Public Verification',icon: ShieldCheck,     roles: ALL_ROLES },

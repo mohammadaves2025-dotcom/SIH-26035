@@ -34,7 +34,14 @@ export const createLaboratory = asyncHandler(async (req, res) => {
 });
 
 export const updateLaboratory = asyncHandler(async (req, res) => {
-  const lab = await Laboratory.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  const query = req.user.role === 'lab_admin'
+    ? { _id: req.params.id, labId: req.user.labId || null }
+    : { _id: req.params.id };
+  const updates = {};
+  for (const field of ['labName', 'accreditationNo', 'location', 'contactEmail']) {
+    if (req.body[field] !== undefined) updates[field] = req.body[field];
+  }
+  const lab = await Laboratory.findOneAndUpdate(query, updates, { new: true, runValidators: true });
   if (!lab) {
     throw new AppError(404, 'NOT_FOUND', 'Laboratory not found');
   }
@@ -43,7 +50,10 @@ export const updateLaboratory = asyncHandler(async (req, res) => {
 });
 
 export const deleteLaboratory = asyncHandler(async (req, res) => {
-  const lab = await Laboratory.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
+  const query = req.user.role === 'lab_admin'
+    ? { _id: req.params.id, labId: req.user.labId || null }
+    : { _id: req.params.id };
+  const lab = await Laboratory.findOneAndUpdate(query, { isActive: false }, { new: true });
   if (!lab) {
     throw new AppError(404, 'NOT_FOUND', 'Laboratory not found');
   }

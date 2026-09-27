@@ -1,4 +1,5 @@
 import { Report } from '../models/Report.js';
+import { TestSession } from '../models/TestSession.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const exportLegalMetrologyData = asyncHandler(async (req, res) => {
@@ -8,10 +9,16 @@ export const exportLegalMetrologyData = asyncHandler(async (req, res) => {
   const from = req.query.from ? new Date(req.query.from) : defaultFrom;
   const to = req.query.to ? new Date(req.query.to) : now;
 
-  const reports = await Report.find({
-    status: 'signed',
-    signedAt: { $gte: from, $lte: to },
-  }).populate({
+  const query = {
+    status: 'integrity_tagged',
+    generatedAt: { $gte: from, $lte: to },
+  };
+  if (req.user.role === 'lab_admin') {
+    const sessionIds = await TestSession.find({ labId: req.user.labId || null }).distinct('_id');
+    query.testSessionId = { $in: sessionIds };
+  }
+
+  const reports = await Report.find(query).populate({
     path: 'testSessionId',
     populate: {
       path: 'instrumentModelId',
@@ -30,7 +37,7 @@ export const exportLegalMetrologyData = asyncHandler(async (req, res) => {
       manufacturerName: manufacturer?.name || 'Unknown',
       accuracyClass: model?.accuracyClass || 'Unknown',
       overallResult: session?.overallResult || 'Unknown',
-      signedAt: report.signedAt,
+      generatedAt: report.generatedAt,
     };
   });
 

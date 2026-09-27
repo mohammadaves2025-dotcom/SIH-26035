@@ -34,22 +34,9 @@ export default function DashboardPage() {
 
   const statusData = stats?.statusBreakdown
     ? Object.entries(stats.statusBreakdown).map(([name, value]) => ({ name, value }))
-    : [
-        { name: 'Draft', value: 2 },
-        { name: 'Submitted', value: 1 },
-        { name: 'Passed', value: 4 },
-        { name: 'Failed', value: 1 },
-        { name: 'Published', value: 2 },
-      ];
+    : [];
 
-  const monthlyData = stats?.monthlyTrend || [
-    { month: 'Jan', count: 4 },
-    { month: 'Feb', count: 6 },
-    { month: 'Mar', count: 8 },
-    { month: 'Apr', count: 5 },
-    { month: 'May', count: 9 },
-    { month: 'Jun', count: 7 },
-  ];
+  const monthlyData = stats?.monthlyTrend || [];
 
   // Role 1: MANUFACTURER REPRESENTATIVE DASHBOARD
   if (role === 'manufacturer') {
@@ -67,17 +54,17 @@ export default function DashboardPage() {
           <div className="metric-card">
             <div className="metric-card-top"><div className="metric-card-icon" style={{ background: 'var(--gov-navy-imperial)' }}><Scale size={20} color="#fff" /></div></div>
             <div className="metric-card-label">Registered Models</div>
-            <div className="metric-card-value">{isLoading ? '...' : (stats?.totalInstruments ?? 1)}</div>
+            <div className="metric-card-value">{isLoading ? '...' : (stats?.totalInstruments ?? '—')}</div>
           </div>
           <div className="metric-card">
             <div className="metric-card-top"><div className="metric-card-icon" style={{ background: 'var(--gov-saffron)' }}><FlaskConical size={20} color="#fff" /></div></div>
             <div className="metric-card-label">Submitted Test Sessions</div>
-            <div className="metric-card-value">{isLoading ? '...' : (stats?.totalSessions ?? 2)}</div>
+            <div className="metric-card-value">{isLoading ? '...' : (stats?.totalSessions ?? '—')}</div>
           </div>
           <div className="metric-card">
             <div className="metric-card-top"><div className="metric-card-icon" style={{ background: 'var(--gov-green)' }}><FileCheck size={20} color="#fff" /></div></div>
-            <div className="metric-card-label">Issued Type Certificates</div>
-            <div className="metric-card-value">{isLoading ? '...' : (stats?.totalReports ?? 1)}</div>
+            <div className="metric-card-label">Available Test Reports</div>
+            <div className="metric-card-value">{isLoading ? '...' : (stats?.totalReports ?? '—')}</div>
           </div>
         </div>
 
@@ -101,7 +88,7 @@ export default function DashboardPage() {
 
           <div className="gov-card chart-card">
             <div className="gov-card-header">
-              <h4><CheckCircle2 size={16} style={{ marginRight: 8 }} />Certificate Statuses</h4>
+              <h4><CheckCircle2 size={16} style={{ marginRight: 8 }} />Test Session Statuses</h4>
             </div>
             <div className="gov-card-body" style={{ height: 300 }}>
               <ResponsiveContainer>
@@ -122,7 +109,7 @@ export default function DashboardPage() {
           <div className="gov-card-body quick-actions-grid">
             <a href="/test-sessions" className="quick-action-card"><FlaskConical size={22} /><span>My Submissions</span></a>
             <a href="/instrument-models" className="quick-action-card"><Scale size={22} /><span>View Models</span></a>
-            <a href="/reports" className="quick-action-card"><FileCheck size={22} /><span>View Certificates</span></a>
+            <a href="/reports" className="quick-action-card"><FileCheck size={22} /><span>View Test Reports</span></a>
           </div>
         </div>
       </div>
@@ -145,17 +132,17 @@ export default function DashboardPage() {
           <div className="metric-card">
             <div className="metric-card-top"><div className="metric-card-icon" style={{ background: 'var(--gov-navy-imperial)' }}><FlaskConical size={20} color="#fff" /></div></div>
             <div className="metric-card-label">My Lab Sessions</div>
-            <div className="metric-card-value">{isLoading ? '...' : (stats?.totalSessions ?? 3)}</div>
+            <div className="metric-card-value">{isLoading ? '...' : (stats?.totalSessions ?? '—')}</div>
           </div>
           <div className="metric-card">
             <div className="metric-card-top"><div className="metric-card-icon" style={{ background: 'var(--gov-saffron)' }}><Clock size={20} color="#fff" /></div></div>
             <div className="metric-card-label">Pending Observations</div>
-            <div className="metric-card-value">{isLoading ? '...' : (stats?.statusBreakdown?.draft ?? 1)}</div>
+            <div className="metric-card-value">{isLoading ? '...' : (stats?.statusBreakdown?.draft ?? '—')}</div>
           </div>
           <div className="metric-card">
             <div className="metric-card-top"><div className="metric-card-icon" style={{ background: 'var(--gov-green)' }}><FileCheck size={20} color="#fff" /></div></div>
-            <div className="metric-card-label">Submitted for Review</div>
-            <div className="metric-card-value">{isLoading ? '...' : (stats?.statusBreakdown?.submitted ?? 2)}</div>
+            <div className="metric-card-label">Under Review</div>
+            <div className="metric-card-value">{isLoading ? '...' : (stats?.statusBreakdown?.under_review ?? '—')}</div>
           </div>
         </div>
 

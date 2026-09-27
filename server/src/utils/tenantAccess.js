@@ -16,7 +16,7 @@ export async function manufacturerModelIds(manufacturerId) {
 }
 
 export async function assertSessionAccess(req, session) {
-  if (['lab_technician', 'lab_admin'].includes(req.user.role)) {
+  if (['lab_technician', 'lab_admin', 'reviewer'].includes(req.user.role)) {
     if (!req.user.labId || session.labId !== req.user.labId) {
       throw new AppError(403, 'FORBIDDEN', 'Access denied to a session outside your laboratory');
     }
@@ -33,7 +33,7 @@ export async function assertSessionAccess(req, session) {
 
 export async function sessionScopeForUser(user, requestedLabId) {
   const query = {};
-  if (['lab_technician', 'lab_admin'].includes(user.role)) {
+  if (['lab_technician', 'lab_admin', 'reviewer'].includes(user.role)) {
     query.labId = user.labId || null;
   } else if (requestedLabId) {
     query.labId = requestedLabId;

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getTestSessionById, addObservations, submitSession, approveSession, rejectSession } from '../../services/testSession.service.js';
 import { generateReport } from '../../services/report.service.js';
-import { getAttachments, uploadAttachment } from '../../services/attachment.service.js';
+import { getAttachments, uploadAttachment, downloadAttachment } from '../../services/attachment.service.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { ANNEX_REFS } from '../../config/constants.js';
@@ -103,6 +103,17 @@ export default function TestSessionDetailPage() {
   const attachments = Array.isArray(attachmentsData) ? attachmentsData : [];
   const userRole = user?.role;
   const isReviewerOrAdmin = ['admin', 'reviewer'].includes(userRole);
+  const canEditDraft = ['admin', 'lab_technician', 'lab_admin'].includes(userRole);
+
+  const handleAttachmentDownload = async (attachment) => {
+    const blob = await downloadAttachment(attachment._id);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = attachment.originalFilename || 'attachment';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleAddObs = () => {
     if (obsForm.evaluationMethod === 'manual_checklist') {
@@ -168,7 +179,7 @@ export default function TestSessionDetailPage() {
 
       {/* Action Buttons */}
       <div className="flex-gap-8 mb-24" style={{ flexWrap: 'wrap' }}>
-        {session.status === 'draft' && (
+        {session.status === 'draft' && canEditDraft && (
           <>
             <button className="gov-btn gov-btn-primary" onClick={() => setShowObsForm(!showObsForm)}>
               <Plus size={14} /> Add Observation
@@ -186,7 +197,7 @@ export default function TestSessionDetailPage() {
       </div>
 
       {/* Observation Form Modal/Panel */}
-      {showObsForm && (
+      {showObsForm && canEditDraft && (
         <div className="gov-card mb-24" style={{ border: '2px solid var(--gov-blue-primary)' }}>
           <div className="gov-card-header"><h4>Record Metrological Observation</h4></div>
           <div className="gov-card-body">
@@ -357,7 +368,7 @@ export default function TestSessionDetailPage() {
           </div>
         </div>
         <div className="gov-card-body">
-          <form onSubmit={handleFileUpload} className="flex-gap-8 mb-16" style={{ alignItems: 'center' }}>
+          {canEditDraft && ['draft', 'submitted'].includes(session.status) && <form onSubmit={handleFileUpload} className="flex-gap-8 mb-16" style={{ alignItems: 'center' }}>
             <input
               type="file"
               className="gov-input"
@@ -367,7 +378,7 @@ export default function TestSessionDetailPage() {
             <button className="gov-btn gov-btn-primary" type="submit" disabled={!selectedFile || uploadMutation.isPending}>
               <Upload size={14} /> {uploadMutation.isPending ? 'Uploading...' : 'Upload Attachment'}
             </button>
-          </form>
+          </form>}
 
           {attachments.length === 0 ? (
             <p style={{ fontSize: 13, color: 'var(--gov-text-muted)' }}>No photos or calibration documents attached yet.</p>
@@ -375,11 +386,9 @@ export default function TestSessionDetailPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
               {attachments.map((att) => (
                 <div key={att._id} style={{ padding: 10, border: '1px solid var(--gov-border-subtle)', borderRadius: 'var(--gov-radius)', background: '#fff' }}>
-                  <div className="text-mono" style={{ fontSize: 12, fontWeight: 600, truncate: true }}>{att.originalName || att.filename || 'Attachment'}</div>
-                  <div className="text-muted" style={{ fontSize: 11 }}>{att.mimeType || 'Document'}</div>
-                  {att.filePath && (
-                    <a href={`/${att.filePath.replace(/^\/+/, '')}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--gov-navy-imperial)', fontWeight: 500 }}>View File</a>
-                  )}
+                  <div className="text-mono" style={{ fontSize: 12, fontWeight: 600, truncate: true }}>{att.originalFilename || 'Attachment'}</div>
+                  <div className="text-muted" style={{ fontSize: 11 }}>{att.fileType || 'Document'}</div>
+                  <button type="button" onClick={() => handleAttachmentDownload(att)} style={{ fontSize: 12, color: 'var(--gov-navy-imperial)', fontWeight: 500 }}>Download file</button>
                 </div>
               ))}
             </div>

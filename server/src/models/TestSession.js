@@ -30,7 +30,7 @@ const testSessionSchema = new mongoose.Schema(
     testDate: { type: Date, required: true },
     status: {
       type: String,
-      enum: ['draft', 'submitted', 'under_review', 'passed', 'failed', 'published', 'revoked', 'archived'],
+      enum: ['draft', 'submitted', 'under_review', 'passed', 'failed', 'report_generated', 'published', 'revoked', 'archived'],
       default: 'draft',
     },
     overallResult: {

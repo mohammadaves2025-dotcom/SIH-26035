@@ -25,7 +25,7 @@ const ruleConfigSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: ['draft', 'active', 'archived'],
-      default: 'active',
+      default: 'draft',
     },
     bands: { type: [bandSchema], required: true },
   },

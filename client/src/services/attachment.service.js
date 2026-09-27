@@ -7,3 +7,6 @@ export const uploadAttachment = (sessionId, formData) =>
 
 export const getAttachments = (sessionId) =>
   apiClient.get(`/test-sessions/${sessionId}/attachments`);
+
+export const downloadAttachment = (attachmentId) =>
+  apiClient.get(`/test-sessions/attachments/${attachmentId}/file`, { responseType: 'blob' });

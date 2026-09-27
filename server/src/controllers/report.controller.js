@@ -4,11 +4,11 @@ import { Report } from '../models/Report.js';
 import { TestSession } from '../models/TestSession.js';
 import { InstrumentModel } from '../models/InstrumentModel.js';
 import { generateReport } from '../services/reportGenerator.service.js';
-import { appendAuditLog } from '../services/auditLogger.service.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { assertSessionAccess, getManufacturerForUser, manufacturerModelIds } from '../utils/tenantAccess.js';
 import { sha256, verifySignature } from '../utils/hash.js';
+import { appendAuditLog } from '../services/auditLogger.service.js';
 
 export const listReports = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, search, status, labId, manufacturerId, accuracyClass, startDate, endDate } = req.query;
@@ -18,21 +18,21 @@ export const listReports = asyncHandler(async (req, res) => {
   if (status) query.status = status;
 
   if (startDate || endDate) {
-    query.signedAt = {};
-    if (startDate) query.signedAt.$gte = new Date(startDate);
-    if (endDate) query.signedAt.$lte = new Date(endDate);
+    query.generatedAt = {};
+    if (startDate) query.generatedAt.$gte = new Date(startDate);
+    if (endDate) query.generatedAt.$lte = new Date(endDate);
   }
 
   if (search) {
     query.$or = [
       { reportNumber: { $regex: search, $options: 'i' } },
       { contentHash: { $regex: search, $options: 'i' } },
-      { documentHash: { $regex: search, $options: 'i' } },
+      { docxContentHash: { $regex: search, $options: 'i' } },
     ];
   }
 
   const sessionQuery = {};
-  const labScoped = ['lab_technician', 'lab_admin'].includes(req.user.role);
+  const labScoped = ['lab_technician', 'lab_admin', 'reviewer'].includes(req.user.role);
   if (labScoped) sessionQuery.labId = req.user.labId || null;
   else if (labId) sessionQuery.labId = labId;
   if (accuracyClass) sessionQuery.accuracyClass = accuracyClass;
@@ -57,7 +57,7 @@ export const listReports = asyncHandler(async (req, res) => {
           populate: { path: 'manufacturerId' },
         },
       })
-      .populate('signedBy', 'name email')
+      .populate('generatedBy', 'name email')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(Number(limit)),
@@ -102,7 +102,7 @@ export const getReportById = asyncHandler(async (req, res) => {
         populate: { path: 'manufacturerId' },
       },
     })
-    .populate('signedBy', 'name email role');
+    .populate('generatedBy', 'name email role');
 
   if (!report) {
     throw new AppError(404, 'NOT_FOUND', 'Report not found');
@@ -138,7 +138,7 @@ export const downloadReportFile = asyncHandler(async (req, res) => {
 
   const fileHash = sha256(fs.readFileSync(absolutePath));
   const expectedHash = format === 'pdf' ? report.contentHash : report.docxContentHash;
-  const expectedSignature = format === 'pdf' ? report.digitalSignature : report.docxDigitalSignature;
+  const expectedSignature = format === 'pdf' ? report.hmacTag : report.docxHmacTag;
   if (!expectedHash || fileHash !== expectedHash || !verifySignature(fileHash, expectedSignature)) {
     throw new AppError(409, 'REPORT_INTEGRITY_FAILED', 'Report integrity verification failed');
   }
@@ -152,10 +152,11 @@ export const revokeReport = asyncHandler(async (req, res) => {
     throw new AppError(400, 'VALIDATION_ERROR', 'A valid revocation reason is required');
   }
 
-  const report = await Report.findById(req.params.id);
+  const report = await Report.findById(req.params.id).populate('testSessionId');
   if (!report) {
     throw new AppError(404, 'NOT_FOUND', 'Report not found');
   }
+  await assertSessionAccess(req, report.testSessionId);
 
   if (report.status === 'revoked') {
     throw new AppError(409, 'INVALID_STATE', 'Report is already revoked');
@@ -163,6 +164,12 @@ export const revokeReport = asyncHandler(async (req, res) => {
 
   report.status = 'revoked';
   await report.save();
+
+  const session = await TestSession.findById(report.testSessionId);
+  if (session?.status === 'report_generated') {
+    session.status = session.overallResult === 'pass' ? 'passed' : 'failed';
+    await session.save();
+  }
 
   await appendAuditLog({
     entityType: 'Report',

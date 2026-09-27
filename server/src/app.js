@@ -3,7 +3,6 @@ import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
-import path from 'path';
 import { env } from './config/env.js';
 import routes from './routes/index.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
@@ -34,9 +33,6 @@ const globalLimiter = rateLimit({
 });
 
 app.use(globalLimiter);
-
-// Serve static uploaded files if needed for demo access
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Mount API routes
 app.use('/api', routes);

@@ -18,7 +18,7 @@ export async function registerUser({ name, email, password, role, labId }) {
     email,
     passwordHash,
     role,
-    labId: role === 'lab_technician' ? labId : null,
+    labId: ['lab_technician', 'reviewer'].includes(role) ? labId : null,
   });
 
   return {
@@ -35,6 +35,7 @@ export async function loginUser({ email, password }) {
   if (!user) {
     throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email or password');
   }
+  if (!user.active) throw new AppError(401, 'ACCOUNT_DISABLED', 'This account is disabled');
 
   const isMatch = await bcrypt.compare(password, user.passwordHash);
   if (!isMatch) {

@@ -10,6 +10,7 @@
     "seed": "node src/seed/seedAll.js",
     "seed:rules": "node src/seed/seedRuleConfigs.js",
     "seed:users": "node src/seed/seedUsers.js",
+    "migrate:report-revisions": "node src/scripts/migrateReportRevisionIndex.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit"
   },
   "dependencies": {

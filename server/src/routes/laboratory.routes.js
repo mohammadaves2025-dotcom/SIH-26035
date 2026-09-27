@@ -8,7 +8,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', getLaboratories);
-router.post('/', authorize('admin', 'lab_admin', 'doca_officer'), createLaboratory);
+router.post('/', authorize('admin', 'doca_officer'), createLaboratory);
 router.patch('/:id', authorize('admin', 'lab_admin'), updateLaboratory);
 router.delete('/:id', authorize('admin', 'lab_admin'), deleteLaboratory);
 
