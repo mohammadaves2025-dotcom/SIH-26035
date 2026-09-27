@@ -19,7 +19,7 @@ import { InstrumentModel } from '../models/InstrumentModel.js';
 import { Manufacturer } from '../models/Manufacturer.js';
 import { Attachment } from '../models/Attachment.js';
 import { Report, Counter } from '../models/Report.js';
-import { sha256 } from '../utils/hash.js';
+import { sha256, signData } from '../utils/hash.js';
 import { appendAuditLog } from './auditLogger.service.js';
 import { AppError } from '../utils/AppError.js';
 
@@ -384,14 +384,17 @@ export async function generateReport({ testSessionId, userId }) {
   await renderPdf({ html, pdfPath: pdfPathAbs });
   await renderDocx({ reportNumber, session, model, manufacturer, observations, attachments, docxPath: docxPathAbs });
 
-  // Calculate cryptographic SHA-256 hash of the actual rendered PDF document buffer
+  // Calculate cryptographic SHA-256 hash and HMAC digital signature of the actual rendered PDF document buffer
   const pdfBuffer = fs.readFileSync(pdfPathAbs);
   const contentHash = sha256(pdfBuffer);
+  const digitalSignature = signData(contentHash);
 
   const report = await Report.create({
     testSessionId: session._id,
     reportNumber,
     contentHash,
+    digitalSignature,
+    signatureAlgorithm: 'HMAC-SHA256',
     pdfPath: pdfPathRel.replace(/\\/g, '/'),
     docxPath: docxPathRel.replace(/\\/g, '/'),
     status: 'signed',

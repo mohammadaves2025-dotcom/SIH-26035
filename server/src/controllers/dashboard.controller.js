@@ -10,7 +10,7 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   let sessionFilter = {};
   let modelFilter = {};
 
-  if (role === 'lab_technician' && labId) {
+  if ((role === 'lab_technician' || role === 'lab_admin') && labId) {
     sessionFilter = { labId };
   } else if (role === 'manufacturer') {
     const mfg = await Manufacturer.findOne({ contactEmail: email });
@@ -22,19 +22,26 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     }
   }
 
-  const [totalSessions, passedCount, failedCount, totalReports, totalInstruments, totalManufacturers, sessions] = await Promise.all([
+  const sessions = await TestSession.find(sessionFilter).populate('instrumentModelId', 'accuracyClass modelName');
+  const sessionIds = sessions.map((s) => s._id);
+
+  const reportFilter = sessionIds.length > 0 ? { testSessionId: { $in: sessionIds } } : {};
+
+  const [totalSessions, passedCount, failedCount, totalReports, totalInstruments, totalManufacturers] = await Promise.all([
     TestSession.countDocuments(sessionFilter),
     TestSession.countDocuments({ ...sessionFilter, overallResult: 'pass' }),
     TestSession.countDocuments({ ...sessionFilter, overallResult: 'fail' }),
-    Report.countDocuments(),
+    Report.countDocuments(reportFilter),
     InstrumentModel.countDocuments(modelFilter),
     Manufacturer.countDocuments(),
-    TestSession.find(sessionFilter).populate('instrumentModelId', 'accuracyClass modelName'),
   ]);
 
-  const statusBreakdown = { draft: 0, submitted: 0, passed: 0, failed: 0, published: 0 };
+  const statusBreakdown = { draft: 0, submitted: 0, under_review: 0, passed: 0, failed: 0, published: 0 };
   const byAccuracyClass = { I: 0, II: 0, III: 0, IIII: 0 };
   const sessionsByLab = {};
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthCounts = Array(12).fill(0);
 
   for (const s of sessions) {
     if (statusBreakdown[s.status] !== undefined) {
@@ -47,16 +54,18 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     if (s.labId) {
       sessionsByLab[s.labId] = (sessionsByLab[s.labId] || 0) + 1;
     }
+    if (s.createdAt) {
+      const mIdx = new Date(s.createdAt).getMonth();
+      monthCounts[mIdx]++;
+    }
   }
 
-  const monthlyTrend = [
-    { month: 'Jan', count: Math.round(totalSessions * 0.15) || 3 },
-    { month: 'Feb', count: Math.round(totalSessions * 0.20) || 4 },
-    { month: 'Mar', count: Math.round(totalSessions * 0.25) || 5 },
-    { month: 'Apr', count: Math.round(totalSessions * 0.18) || 4 },
-    { month: 'May', count: Math.round(totalSessions * 0.30) || 6 },
-    { month: 'Jun', count: Math.round(totalSessions * 0.22) || 5 },
-  ];
+  const currentMonthIdx = new Date().getMonth();
+  const startIdx = Math.max(0, currentMonthIdx - 5);
+  const monthlyTrend = monthNames.slice(startIdx, currentMonthIdx + 1).map((m, idx) => ({
+    month: m,
+    count: monthCounts[startIdx + idx],
+  }));
 
   res.status(200).json({
     success: true,

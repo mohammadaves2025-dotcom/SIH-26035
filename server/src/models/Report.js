@@ -10,6 +10,8 @@ const reportSchema = new mongoose.Schema(
     },
     reportNumber: { type: String, required: true, unique: true },
     contentHash: { type: String, required: true },
+    digitalSignature: { type: String, required: true },
+    signatureAlgorithm: { type: String, default: 'HMAC-SHA256' },
     pdfPath: { type: String, required: true },
     docxPath: { type: String, required: true },
     status: {

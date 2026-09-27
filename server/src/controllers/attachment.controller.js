@@ -33,7 +33,11 @@ export const uploadAttachment = asyncHandler(async (req, res) => {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
 
-  if (req.user.role === 'lab_technician' && session.labId !== req.user.labId) {
+  if (
+    (req.user.role === 'lab_technician' || req.user.role === 'lab_admin') &&
+    req.user.labId &&
+    session.labId !== req.user.labId
+  ) {
     throw new AppError(403, 'FORBIDDEN', 'Cannot attach files to another lab\'s session');
   }
 
@@ -80,7 +84,11 @@ export const getAttachments = asyncHandler(async (req, res) => {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
 
-  if (req.user.role === 'lab_technician' && session.labId !== req.user.labId) {
+  if (
+    (req.user.role === 'lab_technician' || req.user.role === 'lab_admin') &&
+    req.user.labId &&
+    session.labId !== req.user.labId
+  ) {
     throw new AppError(403, 'FORBIDDEN', 'Cannot access attachments for another lab\'s session');
   }
 

@@ -200,13 +200,20 @@ export const rejectTestSession = asyncHandler(async (req, res) => {
     );
   }
 
+  const { reason, reviewerNotes } = req.body;
+  const rejectionReason = reason || reviewerNotes;
+  if (!rejectionReason || typeof rejectionReason !== 'string' || !rejectionReason.trim()) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'A non-empty rejection reason or reviewer note is required when rejecting a session');
+  }
+
   session.status = 'draft';
+  session.reviewerNotes = rejectionReason.trim();
   await session.save();
 
   await appendAuditLog({
     entityType: 'TestSession',
     entityId: session._id,
-    action: 'reject',
+    action: `reject: ${rejectionReason.trim()}`,
     userId: req.user.sub,
   });
 
