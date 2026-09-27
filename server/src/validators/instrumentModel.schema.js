@@ -20,6 +20,9 @@ export const createInstrumentModelSchema = z
   })
   .superRefine((data, ctx) => {
     const n = data.maxCapacity / data.e;
+    if (Math.abs(n - Math.round(n)) > 1e-9) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Max capacity must be an integer multiple of verification interval e', path: ['maxCapacity'] });
+    }
     const bounds = CLASS_BOUNDS[data.accuracyClass];
     if (!bounds) return;
 

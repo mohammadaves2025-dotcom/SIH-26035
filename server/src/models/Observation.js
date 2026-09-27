@@ -35,6 +35,7 @@ const observationSchema = new mongoose.Schema(
     // mpe_band fields
     referenceLoad: { type: Number },
     indicatedValue: { type: Number },
+    zeroCorrection: { type: Number, default: 0 },
     computedError: { type: Number },
     appliedMpe: { type: Number },
     ruleConfigId: { type: mongoose.Schema.Types.ObjectId, ref: 'RuleConfig' },

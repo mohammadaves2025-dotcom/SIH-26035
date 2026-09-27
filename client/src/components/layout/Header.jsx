@@ -10,6 +10,7 @@ import './Header.css';
 
 const ROLE_LABELS = {
   admin: 'System Administrator',
+  metrology_expert: 'Metrology Domain Expert',
   lab_technician: 'Lab Technician',
   reviewer: 'Reviewing Officer',
   lab_admin: 'Laboratory Administrator',

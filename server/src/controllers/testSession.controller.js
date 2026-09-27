@@ -1,50 +1,61 @@
 import { TestSession } from '../models/TestSession.js';
 import { Observation } from '../models/Observation.js';
 import { InstrumentModel } from '../models/InstrumentModel.js';
-import { Manufacturer } from '../models/Manufacturer.js';
-import { User } from '../models/User.js';
+import { Laboratory } from '../models/Laboratory.js';
 import { resolveRuleConfig } from '../services/ruleResolver.service.js';
 import { evaluateObservation, evaluateSession } from '../services/complianceEngine.service.js';
 import { appendAuditLog } from '../services/auditLogger.service.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { assertSessionAccess, getManufacturerForUser, manufacturerModelIds } from '../utils/tenantAccess.js';
 
 export const createTestSession = asyncHandler(async (req, res) => {
   const {
     instrumentModelId,
     serialNumber,
-    accuracyClass,
-    maxCapacity,
-    minCapacity,
-    scaleInterval,
     testDate,
     environmentalConditions,
+    selectedAnnexes,
   } = req.body;
 
-  const labId = (req.user.role === 'admin' || req.user.role === 'reviewer') ? (req.body.labId || 'LAB-DELHI-01') : (req.user.labId || 'LAB-DELHI-01');
+  const isLabBoundUser = ['lab_technician', 'lab_admin'].includes(req.user.role);
+  const labId = (isLabBoundUser && req.user.labId) ? req.user.labId : (req.body.labId || 'LAB-DELHI-01');
+  let laboratory = await Laboratory.findOne({ labId });
+  if (!laboratory) {
+    laboratory = await Laboratory.create({
+      code: labId,
+      labId,
+      name: `Laboratory ${labId}`,
+      labName: `Laboratory ${labId}`,
+      accreditationNo: 'NABL-2026-TEMP',
+      location: 'National Metrology Center',
+      contactEmail: 'lab@metrology.gov.in',
+      isActive: true,
+    });
+  }
 
-  const model = await InstrumentModel.findById(instrumentModelId);
-  if (!model) {
+  const model = await InstrumentModel.findById(instrumentModelId).populate('manufacturerId');
+  if (!model || !model.manufacturerId) {
     throw new AppError(404, 'NOT_FOUND', 'Instrument model not found');
   }
 
   const session = await TestSession.create({
     instrumentModelId,
-    serialNumber: serialNumber || 'SN-2026-001',
-    accuracyClass: accuracyClass || model.accuracyClass,
-    maxCapacity: maxCapacity || model.maxCapacity,
-    minCapacity: minCapacity || model.minCapacity,
-    scaleInterval: scaleInterval || model.e,
+    manufacturerName: model.manufacturerId.name,
+    modelName: model.modelName,
+    serialNumber,
+    accuracyClass: model.accuracyClass,
+    maxCapacity: model.maxCapacity,
+    minCapacity: model.minCapacity,
+    scaleInterval: model.e,
+    selectedAnnexes,
     labId,
+    laboratoryRef: laboratory._id,
+    laboratoryName: laboratory.labName,
     createdBy: req.user.sub,
-    testDate: testDate ? new Date(testDate) : new Date(),
+    testDate,
     status: 'draft',
-    environmentalConditions: environmentalConditions || {
-      temperatureC: 22.5,
-      humidityPercent: 55,
-      inclinationDeg: 0.0,
-      notes: 'Cleanroom climate controlled testing chamber',
-    },
+    environmentalConditions,
   });
 
   await appendAuditLog({
@@ -73,6 +84,7 @@ export const addObservations = asyncHandler(async (req, res) => {
       'Cannot add observations to a session that is already submitted or processed'
     );
   }
+  await assertSessionAccess(req, session);
 
   const rawObservations = Array.isArray(req.body.observations)
     ? req.body.observations
@@ -80,15 +92,18 @@ export const addObservations = asyncHandler(async (req, res) => {
 
   const docsToInsert = rawObservations.map((obs) => ({
     testSessionId: session._id,
-    annexRef: obs.annexRef || 'A4_accuracy',
-    evaluationMethod: obs.evaluationMethod || (obs.referenceLoad != null ? 'mpe_band' : 'manual_checklist'),
-    referenceLoad: obs.referenceLoad != null ? obs.referenceLoad : obs.testPointLoad,
-    indicatedValue: obs.indicatedValue != null ? obs.indicatedValue : (Array.isArray(obs.readings) ? obs.readings[0] : obs.readings),
-    checklistPassed: obs.checklistPassed != null ? obs.checklistPassed : true,
-    reviewerNotes: obs.reviewerNotes || 'Standard check passed',
+    ...obs,
   }));
 
   const inserted = await Observation.insertMany(docsToInsert);
+
+  // Sync session.selectedAnnexes with observation annexes
+  const annexes = new Set([...(session.selectedAnnexes || []), ...docsToInsert.map((o) => o.annexRef)]);
+  session.selectedAnnexes = Array.from(annexes);
+  await session.save();
+  for (const observation of inserted) {
+    await appendAuditLog({ entityType: 'Observation', entityId: observation._id, action: 'create', userId: req.user.sub });
+  }
 
   res.status(201).json({
     success: true,
@@ -109,6 +124,7 @@ export const submitTestSession = asyncHandler(async (req, res) => {
       `Session status is '${session.status}'. Only 'draft' sessions can be submitted`
     );
   }
+  await assertSessionAccess(req, session);
 
   const observations = await Observation.find({ testSessionId: session._id });
   if (observations.length === 0) {
@@ -119,8 +135,28 @@ export const submitTestSession = asyncHandler(async (req, res) => {
     );
   }
 
-  const instrumentModel = session.instrumentModelId;
-  const ruleConfig = await resolveRuleConfig(instrumentModel.accuracyClass, session.testDate);
+  const selected = new Set(session.selectedAnnexes || []);
+  const observed = new Set(observations.map((observation) => observation.annexRef));
+  const missingAnnexes = [...selected].filter((annex) => !observed.has(annex));
+  const unexpectedAnnexes = [...observed].filter((annex) => !selected.has(annex));
+  if (missingAnnexes.length || unexpectedAnnexes.length) {
+    throw new AppError(422, 'INCOMPLETE_TEST_COVERAGE', `Missing selected procedures: ${missingAnnexes.join(', ') || 'none'}; unselected procedures with observations: ${unexpectedAnnexes.join(', ') || 'none'}`);
+  }
+
+  let model = session.instrumentModelId;
+  if (!model || !model.accuracyClass) {
+    model = await InstrumentModel.findById(session.instrumentModelId);
+  }
+  const accuracyClass = session.accuracyClass || model?.accuracyClass || 'III';
+  const maxCapacity = session.maxCapacity || model?.maxCapacity || 1500;
+  const scaleInterval = session.scaleInterval || model?.e || 0.5;
+
+  const instrumentModel = {
+    accuracyClass,
+    maxCapacity,
+    e: scaleInterval,
+  };
+  const ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
 
   for (const obs of observations) {
     const evalResult = evaluateObservation(obs, instrumentModel, ruleConfig);
@@ -131,6 +167,7 @@ export const submitTestSession = asyncHandler(async (req, res) => {
       obs.ruleConfigId = evalResult.ruleConfigId;
     }
     await obs.save();
+    await appendAuditLog({ entityType: 'Observation', entityId: obs._id, action: `evaluate:${ruleConfig._id}:${evalResult.outcome}`, userId: req.user.sub });
   }
 
   const overall = evaluateSession(observations);
@@ -160,12 +197,13 @@ export const approveTestSession = asyncHandler(async (req, res) => {
   if (!session) {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
+  await assertSessionAccess(req, session);
 
-  if (!['under_review', 'submitted', 'evaluated'].includes(session.status)) {
+  if (session.status !== 'under_review' || !['pass', 'fail'].includes(session.overallResult)) {
     throw new AppError(
       409,
       'INVALID_STATE',
-      `Session status is '${session.status}'. Only sessions in 'under_review' state can be approved`
+      `Session status is '${session.status}' with result '${session.overallResult}'. Only evaluated sessions under review can be approved`
     );
   }
 
@@ -191,8 +229,9 @@ export const rejectTestSession = asyncHandler(async (req, res) => {
   if (!session) {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
+  await assertSessionAccess(req, session);
 
-  if (!['under_review', 'submitted', 'evaluated'].includes(session.status)) {
+  if (session.status !== 'under_review' || !['pass', 'fail'].includes(session.overallResult)) {
     throw new AppError(
       409,
       'INVALID_STATE',
@@ -236,15 +275,10 @@ export const getTestSessions = asyncHandler(async (req, res) => {
   if (req.query.instrumentModelId) query.instrumentModelId = req.query.instrumentModelId;
 
   // Auto-filter by role for lab tech & manufacturer
-  if (req.user.role === 'lab_technician' && req.user.labId) {
-    query.labId = req.user.labId;
-  } else if (req.user.role === 'manufacturer') {
-    const user = await User.findById(req.user.sub);
-    const mfg = await Manufacturer.findOne({ contactEmail: user?.email });
-    if (mfg) {
-      const models = await InstrumentModel.find({ manufacturerId: mfg._id }).select('_id');
-      query.instrumentModelId = { $in: models.map((m) => m._id) };
-    }
+  if (['lab_technician', 'lab_admin'].includes(req.user.role)) query.labId = req.user.labId || null;
+  if (req.user.role === 'manufacturer') {
+    const manufacturer = await getManufacturerForUser(req.user.sub);
+    query.instrumentModelId = { $in: await manufacturerModelIds(manufacturer?._id) };
   }
 
   const [sessions, total] = await Promise.all([
@@ -280,13 +314,7 @@ export const getTestSessionById = asyncHandler(async (req, res) => {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
 
-  if (
-    (req.user.role === 'lab_technician' || req.user.role === 'lab_admin') &&
-    req.user.labId &&
-    session.labId !== req.user.labId
-  ) {
-    throw new AppError(403, 'FORBIDDEN', 'Access denied to session belonging to another laboratory');
-  }
+  await assertSessionAccess(req, session);
 
   const observations = await Observation.find({ testSessionId: session._id });
 

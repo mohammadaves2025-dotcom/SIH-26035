@@ -1,7 +1,7 @@
+import fs from 'fs';
+import path from 'path';
 import { Report } from '../models/Report.js';
-import { TestSession } from '../models/TestSession.js';
-import { InstrumentModel } from '../models/InstrumentModel.js';
-import { verifySignature } from '../utils/hash.js';
+import { verifySignature, sha256 } from '../utils/hash.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -27,7 +27,13 @@ export const verifyReport = asyncHandler(async (req, res) => {
   const session = report.testSessionId;
   const model = session?.instrumentModelId;
 
-  const isSignatureValid = report.digitalSignature ? verifySignature(report.contentHash, report.digitalSignature) : false;
+  const pdfPath = path.resolve(process.cwd(), report.pdfPath);
+  const pdfExists = fs.existsSync(pdfPath);
+  const actualPdfHash = pdfExists ? sha256(fs.readFileSync(pdfPath)) : null;
+  const isIntegrityVerified = Boolean(
+    actualPdfHash && actualPdfHash === report.contentHash &&
+    verifySignature(actualPdfHash, report.digitalSignature)
+  );
 
   res.status(200).json({
     success: true,
@@ -36,9 +42,9 @@ export const verifyReport = asyncHandler(async (req, res) => {
       status: report.status,
       signedAt: report.signedAt,
       contentHash: report.contentHash,
-      digitalSignature: report.digitalSignature,
       signatureAlgorithm: report.signatureAlgorithm || 'HMAC-SHA256',
-      isSignatureValid,
+      isIntegrityVerified,
+      signatureType: 'server HMAC integrity tag; not a PKI digital signature',
       instrumentModelName: model?.modelName || 'Unknown',
       accuracyClass: model?.accuracyClass || 'Unknown',
       overallResult: session?.overallResult || 'Unknown',

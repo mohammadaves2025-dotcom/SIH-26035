@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import './Sidebar.css';
 
-const ALL_ROLES = ['admin', 'reviewer', 'lab_technician', 'lab_admin', 'doca_officer', 'manufacturer', 'auditor'];
+const ALL_ROLES = ['admin', 'metrology_expert', 'reviewer', 'lab_technician', 'lab_admin', 'doca_officer', 'manufacturer', 'auditor'];
 
 const NAV_ITEMS = [
   { to: '/dashboard',         label: 'Dashboard',          icon: LayoutDashboard, roles: ALL_ROLES },
@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { to: '/manufacturers',     label: 'Manufacturers',      icon: Factory,         roles: ['admin', 'reviewer', 'lab_admin', 'doca_officer'] },
   { to: '/laboratories',     label: 'Laboratories',       icon: Building2,       roles: ['admin', 'lab_admin', 'doca_officer'] },
   { to: '/test-types',        label: 'Test Procedures',    icon: ListChecks,      roles: ALL_ROLES },
-  { to: '/rule-configs',      label: 'OIML Rule Configs',  icon: BookOpen,        roles: ['admin', 'lab_admin', 'doca_officer'] },
+  { to: '/rule-configs',      label: 'OIML Rule Configs',  icon: BookOpen,        roles: ['admin', 'metrology_expert', 'lab_admin', 'doca_officer', 'reviewer', 'auditor'] },
   { to: '/reports',           label: 'Reports & Certs',    icon: FileCheck,       roles: ['admin', 'reviewer', 'lab_admin', 'doca_officer', 'auditor'] },
   { to: '/audit-log',         label: 'Audit Trail',        icon: ScrollText,      roles: ['admin', 'reviewer', 'lab_admin', 'doca_officer', 'auditor'] },
   { to: '/export',            label: 'e-Gov Export',       icon: Download,        roles: ['admin', 'lab_admin', 'doca_officer'] },

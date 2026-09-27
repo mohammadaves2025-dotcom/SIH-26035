@@ -17,6 +17,11 @@ const ruleConfigSchema = new mongoose.Schema(
       required: true,
     },
     effectiveDate: { type: Date, required: true },
+    sourceReference: { type: String, trim: true, default: null },
+    validationNote: { type: String, trim: true, default: null },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    approvedAt: { type: Date, default: null },
     status: {
       type: String,
       enum: ['draft', 'active', 'archived'],
@@ -28,5 +33,9 @@ const ruleConfigSchema = new mongoose.Schema(
 );
 
 ruleConfigSchema.index({ accuracyClass: 1, effectiveDate: -1 });
+ruleConfigSchema.index(
+  { accuracyClass: 1, effectiveDate: 1 },
+  { unique: true, partialFilterExpression: { status: 'active' } }
+);
 
 export const RuleConfig = mongoose.model('RuleConfig', ruleConfigSchema);

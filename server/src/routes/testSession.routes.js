@@ -40,13 +40,13 @@ router.post(
 
 router.post(
   '/:id/approve',
-  authorize('admin', 'reviewer', 'lab_admin', 'doca_officer'),
+  authorize('admin', 'reviewer'),
   approveTestSession
 );
 
 router.post(
   '/:id/reject',
-  authorize('admin', 'reviewer', 'lab_admin', 'doca_officer'),
+  authorize('admin', 'reviewer'),
   rejectTestSession
 );
 

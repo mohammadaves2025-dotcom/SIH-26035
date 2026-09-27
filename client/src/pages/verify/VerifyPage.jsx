@@ -40,7 +40,7 @@ export default function VerifyPage() {
       <div className="page-header">
         <div>
           <h1><ShieldCheck size={22} style={{ marginRight: 8, verticalAlign: -3 }} />Public Verification Portal</h1>
-          <p className="page-header-subtitle">Verify the authenticity of any NAWI OIML R-76 test certificate</p>
+          <p className="page-header-subtitle">Check a report record and the integrity of its stored PDF</p>
         </div>
       </div>
 
@@ -48,7 +48,7 @@ export default function VerifyPage() {
       <div className="gov-card mb-24">
         <div className="gov-card-body">
           <div className="gov-form-group">
-            <label className="gov-label">Enter Report Number or SHA-256 Document Hash</label>
+            <label className="gov-label">Enter report number or SHA-256 PDF hash</label>
             <div className="flex-gap-8">
               <input
                 className="gov-input"
@@ -82,11 +82,11 @@ export default function VerifyPage() {
       {/* Verification Result */}
       {result && (
         <div className="gov-card">
-          <div className="gov-card-header" style={{ background: result.status === 'revoked' ? 'var(--gov-red-light)' : 'var(--gov-green-light)' }}>
+          <div className="gov-card-header" style={{ background: result.status === 'revoked' || !result.isIntegrityVerified ? 'var(--gov-red-light)' : 'var(--gov-green-light)' }}>
             <div className="flex-gap-8">
-              <CheckCircle2 size={20} color={result.status === 'revoked' ? 'var(--gov-red)' : 'var(--gov-green)'} />
-              <h3 style={{ color: result.status === 'revoked' ? 'var(--gov-red)' : 'var(--gov-green)' }}>
-                {result.status === 'revoked' ? 'Certificate REVOKED' : 'Authentic Government Certificate'}
+              <CheckCircle2 size={20} color={result.status === 'revoked' || !result.isIntegrityVerified ? 'var(--gov-red)' : 'var(--gov-green)'} />
+              <h3 style={{ color: result.status === 'revoked' || !result.isIntegrityVerified ? 'var(--gov-red)' : 'var(--gov-green)' }}>
+                {result.status === 'revoked' ? 'Report REVOKED' : result.isIntegrityVerified ? 'Report record and PDF integrity verified' : 'Report record found; PDF integrity not verified'}
               </h3>
             </div>
             <StatusBadge status={result.overallVerdict || result.status} />
@@ -95,15 +95,16 @@ export default function VerifyPage() {
           <div className="gov-card-body">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 14 }}>
               <div><span className="text-muted" style={{ fontSize: 12 }}>Report Number</span><br /><strong className="text-mono">{result.reportNumber || result._id}</strong></div>
-              <div><span className="text-muted" style={{ fontSize: 12 }}>Issuer</span><br /><strong>Department of Consumer Affairs, GoI</strong></div>
+              <div><span className="text-muted" style={{ fontSize: 12 }}>PDF integrity</span><br /><strong>{result.isIntegrityVerified ? 'Verified' : 'Could not verify stored PDF'}</strong></div>
               <div><span className="text-muted" style={{ fontSize: 12 }}>Accuracy Class</span><br /><strong>Class {result.accuracyClass || result.testSessionId?.accuracyClass || '—'}</strong></div>
               <div><span className="text-muted" style={{ fontSize: 12 }}>Serial Number</span><br /><strong className="text-mono">{result.serialNumber || result.testSessionId?.serialNumber || '—'}</strong></div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <span className="text-muted" style={{ fontSize: 12 }}>SHA-256 Document Hash</span><br />
                 <code className="text-mono" style={{ fontSize: 12, wordBreak: 'break-all', background: 'var(--gov-bg-page)', padding: '6px 10px', borderRadius: 4, display: 'block', marginTop: 4 }}>
-                  {result.documentHash || result.contentHash || result.hash || 'Verified cryptographic signature match'}
+                  {result.contentHash || 'No stored PDF hash'}
                 </code>
               </div>
+              <p style={{ gridColumn: '1 / -1' }}>The stored HMAC is an integrity check and does not provide a PKI-based digital signature or independent legal signer verification.</p>
             </div>
           </div>
         </div>

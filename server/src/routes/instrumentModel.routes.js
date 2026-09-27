@@ -17,7 +17,7 @@ router.use(authenticate);
 
 router.post(
   '/',
-  authorize('admin', 'lab_technician', 'lab_admin', 'doca_officer', 'manufacturer'),
+  authorize('admin', 'lab_admin', 'doca_officer', 'manufacturer'),
   validate(createInstrumentModelSchema),
   createInstrumentModel
 );

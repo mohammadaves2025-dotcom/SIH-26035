@@ -99,7 +99,7 @@ export default function TestSessionsPage() {
                   <tr key={s._id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/test-sessions/${s._id}`)}>
                     <td className="text-mono">{s._id?.slice(-8) || '—'}</td>
                     <td>{s.instrumentModelId?.modelName || s.instrumentModel?.modelName || '—'}</td>
-                    <td className="text-mono">{s.serialNumber || 'SN-2026-001'}</td>
+                    <td className="text-mono">{s.serialNumber || '—'}</td>
                     <td>Class {s.accuracyClass || s.instrumentModelId?.accuracyClass || 'III'}</td>
                     <td><StatusBadge status={s.status} /></td>
                     <td>{s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-IN') : '—'}</td>

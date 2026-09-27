@@ -32,6 +32,9 @@ export const updateUser = asyncHandler(async (req, res) => {
   }
 
   const { name, role, labId, active } = req.body;
+  if (role && req.user.role !== 'admin') {
+    throw new AppError(403, 'FORBIDDEN', 'Only a system administrator may change a user role');
+  }
   if (name) userToUpdate.name = name;
   if (role) userToUpdate.role = role;
   if (labId) userToUpdate.labId = labId;

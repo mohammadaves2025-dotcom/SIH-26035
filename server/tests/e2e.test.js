@@ -5,6 +5,7 @@ import { setupTestDB, teardownTestDB } from './testHelper.js';
 import app from '../src/app.js';
 import { seedRuleConfigs } from '../src/seed/seedRuleConfigs.js';
 import { seedUsers } from '../src/seed/seedUsers.js';
+import { Laboratory } from '../src/models/Laboratory.js';
 
 describe('End-to-End Metrology System Lifecycle', () => {
   let adminToken;
@@ -18,6 +19,11 @@ describe('End-to-End Metrology System Lifecycle', () => {
     await seedRuleConfigs();
     const seeded = await seedUsers();
     instrumentModelId = seeded.instrumentModel._id.toString();
+    await Laboratory.findOneAndUpdate(
+      { labId: 'LAB-DELHI-01' },
+      { labId: 'LAB-DELHI-01', labName: 'Test Metrology Laboratory', accreditationNo: 'TEST-ACCREDITATION', location: 'Test Facility', isActive: true },
+      { upsert: true, new: true }
+    );
 
     // Login as Admin
     const adminRes = await request(app).post('/api/auth/login').send({
@@ -59,6 +65,8 @@ describe('End-to-End Metrology System Lifecycle', () => {
       .set('Authorization', `Bearer ${techToken}`)
       .send({
         instrumentModelId,
+        serialNumber: 'TEST-SCALE-001',
+        selectedAnnexes: ['A1_administrative', 'A4_accuracy'],
         testDate: '2026-09-25',
         environmentalConditions: {
           temperatureC: 22.5,

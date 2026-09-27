@@ -97,7 +97,7 @@ export default function App() {
             <Route path="/manufacturers" element={<RoleGuard allowedRoles={['admin', 'reviewer', 'lab_admin', 'doca_officer']}><ManufacturersPage /></RoleGuard>} />
             <Route path="/laboratories" element={<RoleGuard allowedRoles={['admin', 'lab_admin', 'doca_officer']}><LaboratoriesPage /></RoleGuard>} />
             <Route path="/test-types" element={<TestTypesPage />} />
-            <Route path="/rule-configs" element={<RoleGuard allowedRoles={['admin', 'lab_admin', 'doca_officer', 'reviewer', 'auditor']}><RuleConfigsPage /></RoleGuard>} />
+            <Route path="/rule-configs" element={<RoleGuard allowedRoles={['admin', 'metrology_expert', 'lab_admin', 'doca_officer', 'reviewer', 'auditor']}><RuleConfigsPage /></RoleGuard>} />
             <Route path="/reports" element={<RoleGuard allowedRoles={['admin', 'reviewer', 'lab_admin', 'doca_officer', 'auditor']}><ReportsPage /></RoleGuard>} />
             <Route path="/audit-log" element={<RoleGuard allowedRoles={['admin', 'reviewer', 'lab_admin', 'doca_officer', 'auditor']}><AuditLogPage /></RoleGuard>} />
             <Route path="/export" element={<RoleGuard allowedRoles={['admin', 'lab_admin', 'doca_officer', 'auditor']}><ExportPage /></RoleGuard>} />

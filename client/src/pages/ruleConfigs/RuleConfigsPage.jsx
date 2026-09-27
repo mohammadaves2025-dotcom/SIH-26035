@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getRuleConfigs, createRuleConfig } from '../../services/ruleConfig.service.js';
+import { activateRuleConfig, getRuleConfigs, createRuleConfig } from '../../services/ruleConfig.service.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
+import { useAuthStore } from '../../store/useAuthStore.js';
 import { ACCURACY_CLASSES } from '../../config/constants.js';
 import { BookOpen, Plus, X } from 'lucide-react';
 
 export default function RuleConfigsPage() {
   const queryClient = useQueryClient();
   const addToast = useNotificationStore((s) => s.addToast);
+  const user = useAuthStore((s) => s.user);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
     accuracyClass: 'III',
@@ -30,8 +32,16 @@ export default function RuleConfigsPage() {
     mutationFn: createRuleConfig,
     onSuccess: () => {
       queryClient.invalidateQueries(['rule-configs']);
-      addToast({ type: 'success', message: 'OIML Rule configuration registered' });
+      addToast({ type: 'success', message: 'Rule configuration saved as draft for expert review' });
       setShowModal(false);
+    },
+  });
+
+  const activateMut = useMutation({
+    mutationFn: ({ id, sourceReference, validationNote }) => activateRuleConfig(id, { sourceReference, validationNote }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['rule-configs']);
+      addToast({ type: 'success', message: 'Rule configuration activated with expert review recorded' });
     },
   });
 
@@ -59,11 +69,11 @@ export default function RuleConfigsPage() {
       <div className="page-header">
         <div>
           <h1><BookOpen size={22} style={{ marginRight: 8, verticalAlign: -3 }} />OIML Rule Configurations</h1>
-          <p className="page-header-subtitle">Versioned metrological tolerance thresholds & MPE bands (FR-15)</p>
+          <p className="page-header-subtitle">Draft rule sets require a separate metrology expert review before they can be used.</p>
         </div>
-        <button className="gov-btn gov-btn-accent" onClick={() => setShowModal(true)}>
-          <Plus size={16} /> New Rule Version
-        </button>
+        {user?.role === 'admin' && <button className="gov-btn gov-btn-accent" onClick={() => setShowModal(true)}>
+          <Plus size={16} /> New Rule Draft
+        </button>}
       </div>
 
       <div className="gov-card">
@@ -75,7 +85,7 @@ export default function RuleConfigsPage() {
                 <th>OIML Edition</th>
                 <th>Effective Date</th>
                 <th>Tolerance Bands (upto m, MPE factor)</th>
-                <th>Status</th>
+                <th>Status / source</th>
               </tr>
             </thead>
             <tbody>
@@ -92,7 +102,19 @@ export default function RuleConfigsPage() {
                     <td className="text-mono">
                       {(r.bands || []).map((b) => `≤${b.uptoMultipleOfE}e (${b.mpeFactor}x)`).join(' | ') || 'Standard OIML Bands'}
                     </td>
-                    <td><span className="gov-badge gov-badge-passed">Active</span></td>
+                    <td>
+                      <span className={`gov-badge ${r.status === 'active' ? 'gov-badge-passed' : 'gov-badge-info'}`}>{r.status || 'draft'}</span>
+                      {r.status === 'active' && <div style={{ fontSize: 11, marginTop: 4 }}>{r.sourceReference || 'Source not recorded'}{r.approvedAt ? ` · reviewed ${new Date(r.approvedAt).toLocaleDateString()}` : ''}</div>}
+                      {user?.role === 'metrology_expert' && r.status === 'draft' && r.createdBy && (
+                        <button className="gov-btn gov-btn-outline" style={{ marginTop: 6 }} onClick={() => {
+                          const sourceReference = window.prompt('Enter the authoritative OIML edition / domestic clarification reference reviewed');
+                          if (!sourceReference?.trim()) return;
+                          const validationNote = window.prompt('Record the domain review and known-answer validation performed');
+                          if (!validationNote?.trim()) return;
+                          activateMut.mutate({ id: r._id, sourceReference: sourceReference.trim(), validationNote: validationNote.trim() });
+                        }} disabled={activateMut.isPending}>Review and activate</button>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
@@ -127,6 +149,7 @@ export default function RuleConfigsPage() {
               </div>
 
               <h4 style={{ marginTop: 16, marginBottom: 10 }}>MPE Tolerance Bands (n = m/e)</h4>
+              <p>Enter values transcribed from the governing OIML edition and applicable domestic clarifications. Example values in the project blueprint are indicative only; saved rules remain drafts until a separate metrology expert records review evidence.</p>
               {form.bands.map((band, idx) => (
                 <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 8 }}>
                   <div className="gov-form-group">
@@ -143,7 +166,7 @@ export default function RuleConfigsPage() {
             <div className="modal-footer">
               <button className="gov-btn gov-btn-outline" onClick={() => setShowModal(false)}>Cancel</button>
               <button className="gov-btn gov-btn-primary" onClick={handleCreate} disabled={createMut.isPending}>
-                {createMut.isPending ? 'Saving...' : 'Activate Rule Version'}
+                {createMut.isPending ? 'Saving...' : 'Save rule draft'}
               </button>
             </div>
           </div>

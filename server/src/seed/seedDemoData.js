@@ -215,6 +215,9 @@ export async function seedDemoData() {
   // 8. Seed Test Sessions
   const session1 = await TestSession.create({
     instrumentModelId: models[0]._id,
+    manufacturerName: manufacturers[0].name,
+    modelName: models[0].modelName,
+    selectedAnnexes: ['A1_administrative', 'A2_construction', 'A4_accuracy', 'A4_eccentricity'],
     serialNumber: 'SN-2026-001',
     accuracyClass: 'III',
     maxCapacity: 1500,
@@ -222,6 +225,7 @@ export async function seedDemoData() {
     scaleInterval: 0.5,
     labId: 'LAB-DELHI-01',
     laboratoryRef: laboratories[0]._id,
+    laboratoryName: laboratories[0].labName,
     createdBy: techDelhi._id,
     testDate: new Date('2026-09-15'),
     status: 'published',
@@ -288,6 +292,9 @@ export async function seedDemoData() {
 
   const session2 = await TestSession.create({
     instrumentModelId: models[3]._id,
+    manufacturerName: manufacturers[2].name,
+    modelName: models[3].modelName,
+    selectedAnnexes: ['A4_eccentricity'],
     serialNumber: 'SN-2026-002',
     accuracyClass: 'III',
     maxCapacity: 30,
@@ -295,6 +302,7 @@ export async function seedDemoData() {
     scaleInterval: 5,
     labId: 'LAB-BLR-03',
     laboratoryRef: laboratories[2]._id,
+    laboratoryName: laboratories[2].labName,
     createdBy: techDelhi._id,
     testDate: new Date('2026-09-20'),
     status: 'failed',
@@ -323,6 +331,9 @@ export async function seedDemoData() {
 
   const session3 = await TestSession.create({
     instrumentModelId: models[1]._id,
+    manufacturerName: manufacturers[1].name,
+    modelName: models[1].modelName,
+    selectedAnnexes: ['A4_accuracy'],
     serialNumber: 'SN-2026-003',
     accuracyClass: 'I',
     maxCapacity: 220,
@@ -330,6 +341,7 @@ export async function seedDemoData() {
     scaleInterval: 0.001,
     labId: 'LAB-DELHI-01',
     laboratoryRef: laboratories[0]._id,
+    laboratoryName: laboratories[0].labName,
     createdBy: techDelhi._id,
     testDate: new Date('2026-09-24'),
     status: 'submitted',
@@ -358,6 +370,9 @@ export async function seedDemoData() {
 
   await TestSession.create({
     instrumentModelId: models[2]._id,
+    manufacturerName: manufacturers[2].name,
+    modelName: models[2].modelName,
+    selectedAnnexes: ['A4_accuracy'],
     serialNumber: 'SN-2026-004',
     accuracyClass: 'II',
     maxCapacity: 15,
@@ -365,6 +380,7 @@ export async function seedDemoData() {
     scaleInterval: 0.1,
     labId: 'LAB-AHM-02',
     laboratoryRef: laboratories[1]._id,
+    laboratoryName: laboratories[1].labName,
     createdBy: techDelhi._id,
     testDate: new Date('2026-09-26'),
     status: 'draft',
@@ -372,6 +388,7 @@ export async function seedDemoData() {
     environmentalConditions: {
       temperatureC: 23.0,
       humidityPercent: 50,
+      inclinationDeg: 0,
       notes: 'Evaluation in progress.',
     },
   });

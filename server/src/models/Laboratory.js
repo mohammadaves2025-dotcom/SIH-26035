@@ -7,6 +7,7 @@ const laboratorySchema = new mongoose.Schema(
     accreditationNo: { type: String, required: true, trim: true },
     location: { type: String, required: true, trim: true },
     contactEmail: { type: String, trim: true },
+    isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

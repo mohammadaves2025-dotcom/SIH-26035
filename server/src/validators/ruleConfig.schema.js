@@ -8,8 +8,8 @@ export const createRuleConfigSchema = z
     bands: z
       .array(
         z.object({
-          uptoMultipleOfE: z.number().positive(),
-          mpeFactor: z.number().positive(),
+          uptoMultipleOfE: z.number().finite().int().positive(),
+          mpeFactor: z.number().finite().positive(),
         })
       )
       .min(1, 'At least one band must be defined'),
@@ -25,3 +25,8 @@ export const createRuleConfigSchema = z
       }
     }
   });
+
+export const activateRuleConfigSchema = z.object({
+  sourceReference: z.string().trim().min(1),
+  validationNote: z.string().trim().min(1),
+});

@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 export const ROLES = [
   'admin',            // Rule / System Administrator
+  'metrology_expert', // Domain expert who validates rule sets
   'reviewer',         // Reviewing / Approving Officer
   'lab_technician',   // Lab Technician
   'lab_admin',        // Laboratory Administrator

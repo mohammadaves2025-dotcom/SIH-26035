@@ -5,6 +5,8 @@ import { Attachment } from '../models/Attachment.js';
 import { TestSession } from '../models/TestSession.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { appendAuditLog } from '../services/auditLogger.service.js';
+import { assertSessionAccess } from '../utils/tenantAccess.js';
 
 const uploadDir = path.join(process.cwd(), 'uploads', 'attachments');
 if (!fs.existsSync(uploadDir)) {
@@ -33,13 +35,7 @@ export const uploadAttachment = asyncHandler(async (req, res) => {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
 
-  if (
-    (req.user.role === 'lab_technician' || req.user.role === 'lab_admin') &&
-    req.user.labId &&
-    session.labId !== req.user.labId
-  ) {
-    throw new AppError(403, 'FORBIDDEN', 'Cannot attach files to another lab\'s session');
-  }
+  await assertSessionAccess(req, session);
 
   if (!['draft', 'submitted'].includes(session.status)) {
     throw new AppError(
@@ -71,6 +67,7 @@ export const uploadAttachment = asyncHandler(async (req, res) => {
     originalFilename: req.file.originalname,
     uploadedBy: req.user.sub,
   });
+  await appendAuditLog({ entityType: 'Attachment', entityId: attachment._id, action: 'upload', userId: req.user.sub });
 
   res.status(201).json({
     success: true,
@@ -84,13 +81,7 @@ export const getAttachments = asyncHandler(async (req, res) => {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
 
-  if (
-    (req.user.role === 'lab_technician' || req.user.role === 'lab_admin') &&
-    req.user.labId &&
-    session.labId !== req.user.labId
-  ) {
-    throw new AppError(403, 'FORBIDDEN', 'Cannot access attachments for another lab\'s session');
-  }
+  await assertSessionAccess(req, session);
 
   const attachments = await Attachment.find({ testSessionId: session._id })
     .populate('uploadedBy', 'name email')

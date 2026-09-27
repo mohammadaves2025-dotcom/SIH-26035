@@ -9,11 +9,7 @@ export const createTestSessionSchema = z
     minCapacity: z.number().optional(),
     scaleInterval: z.number().optional(),
     selectedAnnexes: z.array(z.string()).optional(),
-    testDate: z
-      .string()
-      .or(z.date())
-      .optional()
-      .transform((val) => (val ? new Date(val) : new Date())),
+    testDate: z.string().or(z.date()).optional().transform((val) => (val ? new Date(val) : new Date())),
     labId: z.string().optional(),
     environmentalConditions: z
       .object({

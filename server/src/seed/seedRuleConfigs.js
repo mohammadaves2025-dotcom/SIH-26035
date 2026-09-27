@@ -5,6 +5,12 @@ import { env } from '../config/env.js';
 export const initialRules = [
   {
     oimlEdition: 'R76-1:2006',
+    status: 'draft',
+    sourceReference: null,
+    validationNote: null,
+    createdBy: null,
+    approvedBy: null,
+    approvedAt: null,
     accuracyClass: 'I',
     effectiveDate: new Date('2006-01-01'),
     bands: [
@@ -15,6 +21,12 @@ export const initialRules = [
   },
   {
     oimlEdition: 'R76-1:2006',
+    status: 'draft',
+    sourceReference: null,
+    validationNote: null,
+    createdBy: null,
+    approvedBy: null,
+    approvedAt: null,
     accuracyClass: 'II',
     effectiveDate: new Date('2006-01-01'),
     bands: [
@@ -25,6 +37,12 @@ export const initialRules = [
   },
   {
     oimlEdition: 'R76-1:2006',
+    status: 'draft',
+    sourceReference: null,
+    validationNote: null,
+    createdBy: null,
+    approvedBy: null,
+    approvedAt: null,
     accuracyClass: 'III',
     effectiveDate: new Date('2006-01-01'),
     bands: [
@@ -35,6 +53,12 @@ export const initialRules = [
   },
   {
     oimlEdition: 'R76-1:2006',
+    status: 'draft',
+    sourceReference: null,
+    validationNote: null,
+    createdBy: null,
+    approvedBy: null,
+    approvedAt: null,
     accuracyClass: 'IIII',
     effectiveDate: new Date('2006-01-01'),
     bands: [

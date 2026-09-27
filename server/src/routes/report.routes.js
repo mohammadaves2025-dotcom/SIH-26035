@@ -14,9 +14,9 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', listReports);
-router.post('/:sessionId/generate', authorize('admin', 'reviewer', 'lab_admin', 'doca_officer'), createReport);
+router.post('/:sessionId/generate', authorize('admin', 'reviewer'), createReport);
 router.get('/:id', getReportById);
 router.get('/:id/download/:format', downloadReportFile);
-router.post('/:id/revoke', authorize('admin', 'reviewer', 'lab_admin', 'doca_officer'), revokeReport);
+router.post('/:id/revoke', authorize('admin', 'reviewer'), revokeReport);
 
 export default router;

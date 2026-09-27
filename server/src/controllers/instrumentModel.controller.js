@@ -3,6 +3,9 @@ import { User } from '../models/User.js';
 import { Manufacturer } from '../models/Manufacturer.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { getManufacturerForUser } from '../utils/tenantAccess.js';
+import { appendAuditLog } from '../services/auditLogger.service.js';
+import { TestSession } from '../models/TestSession.js';
 
 export const createInstrumentModel = asyncHandler(async (req, res) => {
   const { manufacturerId, modelName, accuracyClass, maxCapacity, e, minCapacity } = req.body;
@@ -11,8 +14,20 @@ export const createInstrumentModel = asyncHandler(async (req, res) => {
   if (!manufacturer) {
     throw new AppError(404, 'NOT_FOUND', 'Manufacturer not found');
   }
+  if (req.user.role === 'manufacturer') {
+    const ownManufacturer = await getManufacturerForUser(req.user.sub);
+    if (!ownManufacturer || ownManufacturer._id.toString() !== manufacturer._id.toString()) {
+      throw new AppError(403, 'FORBIDDEN', 'Manufacturers may only register their own instrument models');
+    }
+  }
 
+  if (!Number.isFinite(maxCapacity / e) || e <= 0 || maxCapacity <= 0) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'maxCapacity and verification interval must be positive finite values');
+  }
   const n = maxCapacity / e;
+  if (Math.abs(n - Math.round(n)) > 1e-9) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Max capacity must be an integer multiple of verification interval e');
+  }
 
   const instrumentModel = await InstrumentModel.create({
     manufacturerId,
@@ -23,6 +38,7 @@ export const createInstrumentModel = asyncHandler(async (req, res) => {
     minCapacity,
     n,
   });
+  await appendAuditLog({ entityType: 'InstrumentModel', entityId: instrumentModel._id, action: 'create', userId: req.user.sub });
 
   res.status(201).json({
     success: true,
@@ -107,19 +123,32 @@ export const updateInstrumentModel = asyncHandler(async (req, res) => {
   const { modelName, accuracyClass, maxCapacity, e, minCapacity } = req.body;
   if (modelName) model.modelName = modelName;
   if (accuracyClass) model.accuracyClass = accuracyClass;
-  if (maxCapacity) model.maxCapacity = maxCapacity;
-  if (e) model.e = e;
-  if (minCapacity) model.minCapacity = minCapacity;
-  if (maxCapacity || e) model.n = model.maxCapacity / model.e;
+  if (maxCapacity !== undefined) model.maxCapacity = maxCapacity;
+  if (e !== undefined) model.e = e;
+  if (minCapacity !== undefined) model.minCapacity = minCapacity;
+  if (!Number.isFinite(model.maxCapacity / model.e) || model.e <= 0 || model.maxCapacity <= 0) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'maxCapacity and verification interval must be positive finite values');
+  }
+  const computedN = model.maxCapacity / model.e;
+  if (Math.abs(computedN - Math.round(computedN)) > 1e-9) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Max capacity must be an integer multiple of verification interval e');
+  }
+  model.n = Math.round(computedN);
 
   await model.save();
+  await appendAuditLog({ entityType: 'InstrumentModel', entityId: model._id, action: 'update', userId: req.user.sub });
   res.status(200).json({ success: true, data: model });
 });
 
 export const deleteInstrumentModel = asyncHandler(async (req, res) => {
-  const model = await InstrumentModel.findByIdAndDelete(req.params.id);
+  const model = await InstrumentModel.findById(req.params.id);
   if (!model) {
     throw new AppError(404, 'NOT_FOUND', 'Instrument model not found');
   }
+  if (await TestSession.exists({ instrumentModelId: model._id })) {
+    throw new AppError(409, 'MODEL_IN_USE', 'Instrument models with test history cannot be deleted');
+  }
+  await model.deleteOne();
+  await appendAuditLog({ entityType: 'InstrumentModel', entityId: model._id, action: 'delete', userId: req.user.sub });
   res.status(200).json({ success: true, message: 'Instrument model deleted successfully' });
 });

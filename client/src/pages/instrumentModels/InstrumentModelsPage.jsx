@@ -37,10 +37,18 @@ export default function InstrumentModelsPage() {
   });
 
   const handleCreate = () => {
+    if (!form.modelName.trim() || !form.manufacturerId || form.maxCapacity === '' || form.minCapacity === '' || form.scaleInterval === '') {
+      addToast({ type: 'error', message: 'Enter the model identity and all registered capacity and interval values.' });
+      return;
+    }
     const maxCap = Number(form.maxCapacity);
     const intervalE = Number(form.scaleInterval);
-    const minCap = Number(form.minCapacity) || (intervalE * 20);
-    const computedN = intervalE > 0 ? Math.floor(maxCap / intervalE) : 3000;
+    const minCap = Number(form.minCapacity);
+    const computedN = maxCap / intervalE;
+    if (!Number.isFinite(computedN) || maxCap <= 0 || intervalE <= 0 || minCap < 0 || Math.abs(computedN - Math.round(computedN)) > 1e-9) {
+      addToast({ type: 'error', message: 'Capacity and verification interval must be valid, and Max must be an integer multiple of e.' });
+      return;
+    }
 
     createMut.mutate({
       modelName: form.modelName,
@@ -51,7 +59,7 @@ export default function InstrumentModelsPage() {
       scaleInterval: intervalE,
       e: intervalE,
       d: intervalE,
-      n: computedN,
+      n: Math.round(computedN),
     });
   };
 
@@ -132,16 +140,16 @@ export default function InstrumentModelsPage() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                 <div className="gov-form-group">
-                  <label className="gov-label">Max Cap.</label>
-                  <input className="gov-input" type="number" value={form.maxCapacity} onChange={(e) => setForm((f) => ({ ...f, maxCapacity: e.target.value }))} />
+                  <label className="gov-label">Max Capacity (kg)</label>
+                  <input className="gov-input" required type="number" value={form.maxCapacity} onChange={(e) => setForm((f) => ({ ...f, maxCapacity: e.target.value }))} />
                 </div>
                 <div className="gov-form-group">
-                  <label className="gov-label">Min Cap.</label>
-                  <input className="gov-input" type="number" value={form.minCapacity} onChange={(e) => setForm((f) => ({ ...f, minCapacity: e.target.value }))} />
+                  <label className="gov-label">Min Capacity (kg)</label>
+                  <input className="gov-input" required type="number" value={form.minCapacity} onChange={(e) => setForm((f) => ({ ...f, minCapacity: e.target.value }))} />
                 </div>
                 <div className="gov-form-group">
-                  <label className="gov-label">Interval (e)</label>
-                  <input className="gov-input" type="number" value={form.scaleInterval} onChange={(e) => setForm((f) => ({ ...f, scaleInterval: e.target.value }))} />
+                  <label className="gov-label">Verification Interval e (kg)</label>
+                  <input className="gov-input" required type="number" value={form.scaleInterval} onChange={(e) => setForm((f) => ({ ...f, scaleInterval: e.target.value }))} />
                 </div>
               </div>
             </div>

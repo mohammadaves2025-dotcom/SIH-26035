@@ -28,6 +28,12 @@ if (!fs.existsSync(reportsDir)) {
   fs.mkdirSync(reportsDir, { recursive: true });
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[char]);
+}
+
 function getBrowserExecutablePath() {
   const candidatePaths = [
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -58,31 +64,35 @@ async function getNextReportNumber() {
 }
 
 function generateHtmlTemplate({ reportNumber, session, model, manufacturer, observations, attachments, signedAt }) {
+  const verificationUrl = process.env.PUBLIC_APP_URL
+    ? `${process.env.PUBLIC_APP_URL.replace(/\/$/, '')}/verify?q=${encodeURIComponent(reportNumber)}`
+    : null;
   const obsRows = observations
     .map(
       (obs, idx) => `
     <tr>
       <td>${idx + 1}</td>
-      <td>${obs.annexRef}</td>
-      <td>${obs.evaluationMethod}</td>
+      <td>${escapeHtml(obs.annexRef)}</td>
+      <td>${escapeHtml(obs.evaluationMethod)}</td>
       <td>${obs.referenceLoad ?? '-'}</td>
       <td>${obs.indicatedValue ?? '-'}</td>
+      <td>${obs.zeroCorrection ?? '-'}</td>
       <td>${obs.computedError !== undefined ? obs.computedError.toFixed(4) : '-'}</td>
       <td>${obs.appliedMpe !== undefined ? obs.appliedMpe.toFixed(4) : '-'}</td>
+      <td>${escapeHtml(obs.ruleConfigId?.oimlEdition || 'Checklist')}${obs.ruleConfigId?.sourceReference ? ` — ${escapeHtml(obs.ruleConfigId.sourceReference)}` : ''}</td>
       <td><strong style="color: ${obs.outcome === 'pass' ? '#16a34a' : '#dc2626'}">${(obs.outcome || '').toUpperCase()}</strong></td>
+      <td>${escapeHtml(obs.reviewerNotes || '')}</td>
     </tr>
   `
     )
     .join('');
-
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(`http://localhost:5173/verify?q=${reportNumber}`)}`;
 
   return `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8" />
-      <title>Metrology Test Report - ${reportNumber}</title>
+        <title>Metrology Test Report - ${escapeHtml(reportNumber)}</title>
       <style>
         body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; line-height: 1.5; }
         .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px; }
@@ -107,22 +117,21 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
     <body>
       <div class="header">
         <div class="header-title">
-          <h1>Government of India — Dept. of Consumer Affairs</h1>
-          <h2>Legal Metrology Division — OIML R-76 Type Evaluation Certificate</h2>
-          <h3>Certificate Number: ${reportNumber}</h3>
+          <h1>Department of Consumer Affairs — Test Report</h1>
+          <h2>Legal Metrology Division — NAWI Type Evaluation</h2>
+          <h3>Report Number: ${escapeHtml(reportNumber)}</h3>
         </div>
         <div class="qr-box">
-          <img src="${qrCodeUrl}" width="90" height="90" alt="Verification QR Code" />
-          <div>Scan to Verify</div>
+          ${verificationUrl ? `<div><a href="${escapeHtml(verificationUrl)}">Verify report</a></div>` : '<div>Use the public verification portal and report number.</div>'}
         </div>
       </div>
 
       <div class="section">
         <div class="section-title">1. Instrument & Manufacturer Specifications</div>
         <div class="grid">
-          <div class="field"><strong>Manufacturer Name:</strong> ${manufacturer.name}</div>
-          <div class="field"><strong>Model Name:</strong> ${model.modelName}</div>
-          <div class="field"><strong>Accuracy Class:</strong> Class ${model.accuracyClass}</div>
+          <div class="field"><strong>Manufacturer Name:</strong> ${escapeHtml(manufacturer.name)}</div>
+          <div class="field"><strong>Model Name:</strong> ${escapeHtml(model.modelName)}</div>
+          <div class="field"><strong>Accuracy Class:</strong> Class ${escapeHtml(model.accuracyClass)}</div>
           <div class="field"><strong>Max Capacity:</strong> ${model.maxCapacity} kg</div>
           <div class="field"><strong>Verification Scale Interval (e):</strong> ${model.e} kg</div>
           <div class="field"><strong>Scale Intervals (n):</strong> ${model.n}</div>
@@ -132,11 +141,11 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
       <div class="section">
         <div class="section-title">2. Laboratory & Environmental Test Conditions</div>
         <div class="grid">
-          <div class="field"><strong>Laboratory ID:</strong> ${session.labId}</div>
+          <div class="field"><strong>Laboratory:</strong> ${escapeHtml(session.laboratoryName || session.labId)} (${escapeHtml(session.labId)})</div>
           <div class="field"><strong>Test Date:</strong> ${new Date(session.testDate).toISOString().split('T')[0]}</div>
-          <div class="field"><strong>Temperature:</strong> ${session.environmentalConditions?.temperatureC ?? 22.5} °C</div>
-          <div class="field"><strong>Humidity:</strong> ${session.environmentalConditions?.humidityPercent ?? 55} %</div>
-          <div class="field"><strong>Inclination:</strong> ${session.environmentalConditions?.inclinationDeg ?? 0.0} °</div>
+          <div class="field"><strong>Temperature:</strong> ${session.environmentalConditions?.temperatureC ?? 'Not recorded'} °C</div>
+          <div class="field"><strong>Humidity:</strong> ${session.environmentalConditions?.humidityPercent ?? 'Not recorded'} %</div>
+          <div class="field"><strong>Inclination:</strong> ${session.environmentalConditions?.inclinationDeg ?? 'Not recorded'} °</div>
         </div>
       </div>
 
@@ -148,11 +157,14 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
               <th>#</th>
               <th>Annex Ref</th>
               <th>Method</th>
-              <th>Ref Load</th>
-              <th>Indicated</th>
-              <th>Error (E)</th>
-              <th>MPE (±e)</th>
+              <th>Reference load (kg)</th>
+              <th>Indication (kg)</th>
+              <th>Zero correction (kg)</th>
+              <th>Error (kg)</th>
+              <th>MPE</th>
+              <th>Rule edition</th>
               <th>Outcome</th>
+              <th>Evidence / notes</th>
             </tr>
           </thead>
           <tbody>
@@ -181,8 +193,8 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
                   (att, idx) => `
                 <tr>
                   <td>${idx + 1}</td>
-                  <td>${att.filename || att.originalName || 'Attachment'}</td>
-                  <td>${att.fileType || 'Document'}</td>
+                  <td>${escapeHtml(att.filename || att.originalName || 'Attachment')}</td>
+                  <td>${escapeHtml(att.fileType || 'Document')}</td>
                   <td>${new Date(att.createdAt || Date.now()).toISOString().split('T')[0]}</td>
                 </tr>
               `
@@ -200,8 +212,8 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
       </div>
 
       <div class="footer">
-        <p>Cryptographically Hashed & Integrity Verified (SHA-256 Digest) on ${new Date(signedAt).toISOString()}</p>
-        <p>NAWI Digital Metrology System — Compliant with OIML R-76-1:2006 & Legal Metrology Rules 2011</p>
+        <p>SHA-256 integrity digest with server HMAC recorded at ${escapeHtml(new Date(signedAt).toISOString())}</p>
+        <p>Report integrity tag is not a PKI-based digital signature. Applicable rule editions are listed per calculated observation.</p>
       </div>
     </body>
     </html>
@@ -243,9 +255,12 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
         new TableCell({ children: [new Paragraph({ text: 'Method', bold: true })] }),
         new TableCell({ children: [new Paragraph({ text: 'Ref Load', bold: true })] }),
         new TableCell({ children: [new Paragraph({ text: 'Indicated', bold: true })] }),
+        new TableCell({ children: [new Paragraph({ text: 'Zero correction', bold: true })] }),
         new TableCell({ children: [new Paragraph({ text: 'Error', bold: true })] }),
         new TableCell({ children: [new Paragraph({ text: 'MPE', bold: true })] }),
+        new TableCell({ children: [new Paragraph({ text: 'Rule edition', bold: true })] }),
         new TableCell({ children: [new Paragraph({ text: 'Outcome', bold: true })] }),
+        new TableCell({ children: [new Paragraph({ text: 'Evidence / notes', bold: true })] }),
       ],
     });
 
@@ -258,9 +273,12 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
             new TableCell({ children: [new Paragraph({ text: obs.evaluationMethod || '-' })] }),
             new TableCell({ children: [new Paragraph({ text: String(obs.referenceLoad ?? '-') })] }),
             new TableCell({ children: [new Paragraph({ text: String(obs.indicatedValue ?? '-') })] }),
+            new TableCell({ children: [new Paragraph({ text: String(obs.zeroCorrection ?? '-') })] }),
             new TableCell({ children: [new Paragraph({ text: obs.computedError !== undefined ? obs.computedError.toFixed(4) : '-' })] }),
             new TableCell({ children: [new Paragraph({ text: obs.appliedMpe !== undefined ? obs.appliedMpe.toFixed(4) : '-' })] }),
+            new TableCell({ children: [new Paragraph({ text: obs.ruleConfigId ? `${obs.ruleConfigId.oimlEdition} — ${obs.ruleConfigId.sourceReference || 'Source not recorded'}` : 'Checklist' })] }),
             new TableCell({ children: [new Paragraph({ text: (obs.outcome || '').toUpperCase(), bold: true })] }),
+            new TableCell({ children: [new Paragraph({ text: obs.reviewerNotes || '' })] }),
           ],
         })
     );
@@ -280,12 +298,12 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
               alignment: AlignmentType.CENTER,
             }),
             new Paragraph({
-              text: 'Legal Metrology Division — OIML R-76 Type Evaluation Certificate',
+              text: 'Legal Metrology Division — NAWI Type Evaluation Test Report',
               heading: HeadingLevel.HEADING_2,
               alignment: AlignmentType.CENTER,
             }),
             new Paragraph({
-              text: `Certificate Number: ${reportNumber}`,
+              text: `Report Number: ${reportNumber}`,
               alignment: AlignmentType.CENTER,
             }),
             new Paragraph({ text: '' }),
@@ -295,9 +313,9 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
             new Paragraph({ text: `Max Capacity: ${model.maxCapacity} kg | e: ${model.e} kg | n: ${model.n}` }),
             new Paragraph({ text: '' }),
             new Paragraph({ text: '2. Laboratory & Environmental Test Conditions', heading: HeadingLevel.HEADING_3 }),
-            new Paragraph({ text: `Laboratory ID: ${session.labId}` }),
+            new Paragraph({ text: `Laboratory: ${session.laboratoryName || session.labId} (${session.labId})` }),
             new Paragraph({ text: `Test Date: ${new Date(session.testDate).toISOString().split('T')[0]}` }),
-            new Paragraph({ text: `Temperature: ${session.environmentalConditions?.temperatureC ?? 22.5} °C | Humidity: ${session.environmentalConditions?.humidityPercent ?? 55} %` }),
+            new Paragraph({ text: `Temperature: ${session.environmentalConditions?.temperatureC ?? 'Not recorded'} °C | Humidity: ${session.environmentalConditions?.humidityPercent ?? 'Not recorded'} %` }),
             new Paragraph({ text: '' }),
             new Paragraph({ text: '3. OIML R-76 Test Observations & Compliance Determination', heading: HeadingLevel.HEADING_3 }),
             obsTable,
@@ -309,11 +327,11 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
             }),
             new Paragraph({ text: '' }),
             new Paragraph({
-              text: 'Cryptographically Hashed & Integrity Verified (SHA-256 Digest)',
+              text: 'SHA-256 digest and server HMAC integrity tag recorded for the PDF and DOCX. This is not a PKI-based digital signature.',
               alignment: AlignmentType.CENTER,
             }),
             new Paragraph({
-              text: 'NAWI Digital Metrology System — Compliant with OIML R-76-1:2006',
+              text: 'NAWI Digital Metrology System — applicable rule edition is recorded with each calculated observation',
               alignment: AlignmentType.CENTER,
             }),
           ],
@@ -339,11 +357,11 @@ export async function generateReport({ testSessionId, userId }) {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
 
-  if (session.status !== 'passed' && session.overallResult !== 'pass') {
+  if (session.status !== 'passed' || session.overallResult !== 'pass') {
     throw new AppError(
       409,
       'INVALID_STATE',
-      'Cannot generate compliance certificate for a test session that has not passed evaluation'
+      'Cannot generate a report unless the session is approved and its evaluation passed'
     );
   }
 
@@ -352,14 +370,22 @@ export async function generateReport({ testSessionId, userId }) {
     throw new AppError(
       409,
       'REPORT_EXISTS',
-      `Official certificate ${existingReport.reportNumber} has already been issued and signed for this session`
+      `Report ${existingReport.reportNumber} has already been issued for this session`
     );
   }
 
-  const observations = await Observation.find({ testSessionId: session._id });
+  const observations = await Observation.find({ testSessionId: session._id }).populate('ruleConfigId');
   const attachments = await Attachment.find({ testSessionId: session._id });
-  const model = session.instrumentModelId;
-  const manufacturer = model.manufacturerId;
+  const registeredModel = session.instrumentModelId;
+  const model = {
+    modelName: session.modelName || registeredModel.modelName,
+    accuracyClass: session.accuracyClass || registeredModel.accuracyClass,
+    maxCapacity: session.maxCapacity ?? registeredModel.maxCapacity,
+    minCapacity: session.minCapacity ?? registeredModel.minCapacity,
+    e: session.scaleInterval ?? registeredModel.e,
+    n: Math.round((session.maxCapacity ?? registeredModel.maxCapacity) / (session.scaleInterval ?? registeredModel.e)),
+  };
+  const manufacturer = { name: session.manufacturerName || registeredModel.manufacturerId.name };
 
   const reportNumber = await getNextReportNumber();
   const signedAt = new Date();
@@ -384,16 +410,21 @@ export async function generateReport({ testSessionId, userId }) {
   await renderPdf({ html, pdfPath: pdfPathAbs });
   await renderDocx({ reportNumber, session, model, manufacturer, observations, attachments, docxPath: docxPathAbs });
 
-  // Calculate cryptographic SHA-256 hash and HMAC digital signature of the actual rendered PDF document buffer
+  // Record integrity digests and server HMAC tags. These are not PKI digital signatures.
   const pdfBuffer = fs.readFileSync(pdfPathAbs);
   const contentHash = sha256(pdfBuffer);
   const digitalSignature = signData(contentHash);
+  const docxBuffer = fs.readFileSync(docxPathAbs);
+  const docxContentHash = sha256(docxBuffer);
+  const docxDigitalSignature = signData(docxContentHash);
 
   const report = await Report.create({
     testSessionId: session._id,
     reportNumber,
     contentHash,
+    docxContentHash,
     digitalSignature,
+    docxDigitalSignature,
     signatureAlgorithm: 'HMAC-SHA256',
     pdfPath: pdfPathRel.replace(/\\/g, '/'),
     docxPath: docxPathRel.replace(/\\/g, '/'),

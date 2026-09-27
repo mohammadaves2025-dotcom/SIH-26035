@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getInstrumentModels } from '../../services/instrumentModel.service.js';
 import { getManufacturers, createManufacturer } from '../../services/manufacturer.service.js';
+import apiClient from '../../services/apiClient.js';
 import { createTestSession } from '../../services/testSession.service.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
-import { ACCURACY_CLASSES, ANNEX_REFS } from '../../config/constants.js';
+import { ANNEX_REFS } from '../../config/constants.js';
 import { FlaskConical, ChevronRight, ChevronLeft } from 'lucide-react';
 
 export default function NewTestSessionPage() {
@@ -17,23 +18,25 @@ export default function NewTestSessionPage() {
   const [form, setForm] = useState({
     instrumentModelId: '',
     serialNumber: '',
-    accuracyClass: 'III',
-    maxCapacity: '',
-    minCapacity: '',
-    scaleInterval: '',
-    labId: 'LAB-DELHI-01',
-    testDate: new Date().toISOString().split('T')[0],
-    temperatureC: '23.0',
-    humidityPercent: '55',
-    inclinationDeg: '0.0',
-    envNotes: 'Climate-controlled cleanroom testing chamber',
-    selectedAnnexes: ['A4_accuracy', 'A4_repeatability', 'A4_eccentricity'],
+    labId: '',
+    testDate: '',
+    temperatureC: '',
+    humidityPercent: '',
+    inclinationDeg: '',
+    envNotes: '',
+    selectedAnnexes: [],
   });
 
   const { data: modelsData } = useQuery({
     queryKey: ['instrument-models-select'],
     queryFn: () => getInstrumentModels({ limit: 200 }),
-    select: (r) => r?.data?.models || r?.data?.docs || Array.isArray(r?.data) ? r.data : (Array.isArray(r) ? r : []),
+    select: (r) => Array.isArray(r?.data) ? r.data : Array.isArray(r?.data?.models) ? r.data.models : Array.isArray(r?.data?.docs) ? r.data.docs : [],
+  });
+  const selectedModel = (modelsData || []).find((model) => model._id === form.instrumentModelId);
+  const { data: laboratories = [] } = useQuery({
+    queryKey: ['laboratories-select'],
+    queryFn: () => apiClient.get('/laboratories'),
+    select: (response) => response?.data?.data || [],
   });
 
   const createMutation = useMutation({
@@ -58,13 +61,14 @@ export default function NewTestSessionPage() {
   };
 
   const handleSubmit = () => {
+    if (!form.testDate || !form.serialNumber.trim() || form.temperatureC === '' ||
+        form.humidityPercent === '' || form.inclinationDeg === '' || !form.envNotes.trim() || form.selectedAnnexes.length === 0) {
+      addToast({ type: 'error', message: 'Enter the serial number, test date, observed environmental conditions, and at least one applicable procedure.' });
+      return;
+    }
     createMutation.mutate({
       instrumentModelId: form.instrumentModelId,
-      serialNumber: form.serialNumber || 'SN-' + Math.floor(Math.random() * 90000 + 10000),
-      accuracyClass: form.accuracyClass,
-      maxCapacity: Number(form.maxCapacity) || undefined,
-      minCapacity: Number(form.minCapacity) || undefined,
-      scaleInterval: Number(form.scaleInterval) || undefined,
+      serialNumber: form.serialNumber.trim(),
       labId: form.labId,
       testDate: form.testDate,
       environmentalConditions: {
@@ -115,14 +119,9 @@ export default function NewTestSessionPage() {
               </div>
               <div className="gov-form-group">
                 <label className="gov-label">Serial Number</label>
-                <input className="gov-input" placeholder="e.g. SN-2026-00123" value={form.serialNumber} onChange={(e) => updateField('serialNumber', e.target.value)} />
+                <input className="gov-input" required placeholder="e.g. SN-2026-00123" value={form.serialNumber} onChange={(e) => updateField('serialNumber', e.target.value)} />
               </div>
-              <div className="gov-form-group">
-                <label className="gov-label">Accuracy Class</label>
-                <select className="gov-select" value={form.accuracyClass} onChange={(e) => updateField('accuracyClass', e.target.value)}>
-                  {ACCURACY_CLASSES.map((c) => <option key={c} value={c}>Class {c}</option>)}
-                </select>
-              </div>
+              {selectedModel && <p>Registered accuracy class: Class {selectedModel.accuracyClass}</p>}
             </>
           )}
 
@@ -133,34 +132,32 @@ export default function NewTestSessionPage() {
                 <div className="gov-form-group">
                   <label className="gov-label">Testing Laboratory Facility</label>
                   <select className="gov-select" value={form.labId} onChange={(e) => updateField('labId', e.target.value)}>
-                    <option value="LAB-DELHI-01">NPL India Primary Metrology Lab (Delhi)</option>
-                    <option value="LAB-AHMEDABAD-02">Regional Reference Standards Laboratory (RRSL Ahmedabad)</option>
-                    <option value="LAB-BENGALURU-03">Regional Reference Standards Laboratory (RRSL Bengaluru)</option>
-                    <option value="LAB-BHUBANESWAR-04">Regional Reference Standards Laboratory (RRSL Bhubaneswar)</option>
+                    <option value="">— Select a registered laboratory —</option>
+                    {laboratories.map((lab) => <option key={lab._id} value={lab.labId}>{lab.labName} ({lab.location})</option>)}
                   </select>
                 </div>
                 <div className="gov-form-group">
                   <label className="gov-label">Evaluation Test Date</label>
-                  <input className="gov-input" type="date" value={form.testDate} onChange={(e) => updateField('testDate', e.target.value)} />
+                  <input className="gov-input" required type="date" value={form.testDate} onChange={(e) => updateField('testDate', e.target.value)} />
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                 <div className="gov-form-group">
                   <label className="gov-label">Ambient Temp (°C)</label>
-                  <input className="gov-input" type="number" step="0.1" value={form.temperatureC} onChange={(e) => updateField('temperatureC', e.target.value)} />
+                  <input className="gov-input" required type="number" step="0.1" value={form.temperatureC} onChange={(e) => updateField('temperatureC', e.target.value)} />
                 </div>
                 <div className="gov-form-group">
                   <label className="gov-label">Relative Humidity (%)</label>
-                  <input className="gov-input" type="number" step="1" value={form.humidityPercent} onChange={(e) => updateField('humidityPercent', e.target.value)} />
+                  <input className="gov-input" required type="number" min="0" max="100" step="1" value={form.humidityPercent} onChange={(e) => updateField('humidityPercent', e.target.value)} />
                 </div>
                 <div className="gov-form-group">
                   <label className="gov-label">Inclination (°)</label>
-                  <input className="gov-input" type="number" step="0.01" value={form.inclinationDeg} onChange={(e) => updateField('inclinationDeg', e.target.value)} />
+                  <input className="gov-input" required type="number" step="0.01" value={form.inclinationDeg} onChange={(e) => updateField('inclinationDeg', e.target.value)} />
                 </div>
               </div>
               <div className="gov-form-group">
                 <label className="gov-label">Environmental Control Notes</label>
-                <input className="gov-input" placeholder="e.g. Temperature stabilized at 23°C ± 1°C" value={form.envNotes} onChange={(e) => updateField('envNotes', e.target.value)} />
+                <input className="gov-input" required placeholder="Record the observed environmental conditions" value={form.envNotes} onChange={(e) => updateField('envNotes', e.target.value)} />
               </div>
             </>
           )}
@@ -168,18 +165,15 @@ export default function NewTestSessionPage() {
           {step === 3 && (
             <>
               <h4 style={{ marginBottom: 16 }}>Step 3 — Metrological Parameters</h4>
-              <div className="gov-form-group">
-                <label className="gov-label">Maximum Capacity (Max in kg)</label>
-                <input className="gov-input" type="number" placeholder="e.g. 30000" value={form.maxCapacity} onChange={(e) => updateField('maxCapacity', e.target.value)} />
-              </div>
-              <div className="gov-form-group">
-                <label className="gov-label">Minimum Capacity (Min in g/kg)</label>
-                <input className="gov-input" type="number" placeholder="e.g. 200" value={form.minCapacity} onChange={(e) => updateField('minCapacity', e.target.value)} />
-              </div>
-              <div className="gov-form-group">
-                <label className="gov-label">Scale Interval (e / d in g/kg)</label>
-                <input className="gov-input" type="number" placeholder="e.g. 10" value={form.scaleInterval} onChange={(e) => updateField('scaleInterval', e.target.value)} />
-              </div>
+              {selectedModel ? (
+                <div className="gov-card-body">
+                  <p>Capacity: {selectedModel.minCapacity}–{selectedModel.maxCapacity}</p>
+                  <p>Verification scale interval e: {selectedModel.e}</p>
+                  <p>Scale intervals n: {selectedModel.n}</p>
+                  <p>Accuracy class: {selectedModel.accuracyClass}</p>
+                  <small>These metrological parameters come from the selected registered model.</small>
+                </div>
+              ) : <p>Select a registered model first to review its metrological parameters.</p>}
             </>
           )}
 
@@ -192,7 +186,7 @@ export default function NewTestSessionPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {ANNEX_REFS.map((a) => (
                   <label key={a.value} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--gov-border-subtle)', borderRadius: 'var(--gov-radius)', cursor: 'pointer', background: form.selectedAnnexes.includes(a.value) ? 'var(--gov-blue-light)' : 'transparent' }}>
-                    <input type="checkbox" checked={form.selectedAnnexes.includes(a.value)} onChange={() => toggleAnnex(a.value)} />
+                <input type="checkbox" checked={form.selectedAnnexes.includes(a.value)} onChange={() => toggleAnnex(a.value)} />
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{a.label}</span>
                   </label>
                 ))}

@@ -13,7 +13,7 @@ router.use(authenticate);
 
 router.post(
   '/:id/attachments',
-  authorize('admin', 'lab_technician', 'lab_admin', 'doca_officer', 'reviewer'),
+  authorize('admin', 'lab_technician', 'lab_admin'),
   multerUpload.single('file'),
   uploadAttachment
 );

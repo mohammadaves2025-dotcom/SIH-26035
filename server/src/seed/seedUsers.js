@@ -3,10 +3,26 @@ import bcrypt from 'bcryptjs';
 import { User } from '../models/User.js';
 import { Manufacturer } from '../models/Manufacturer.js';
 import { InstrumentModel } from '../models/InstrumentModel.js';
+import { Laboratory } from '../models/Laboratory.js';
 import { env } from '../config/env.js';
 
 export async function seedUsers() {
   console.log('Seeding Users & Demo Manufacturer...');
+
+  // Create default Laboratory
+  let lab = await Laboratory.findOne({ labId: 'LAB-DELHI-01' });
+  if (!lab) {
+    lab = await Laboratory.create({
+      code: 'LAB-DELHI-01',
+      labId: 'LAB-DELHI-01',
+      name: 'National Physical Laboratory (Delhi)',
+      labName: 'National Physical Laboratory (Delhi)',
+      accreditationNo: 'NABL-2026-DELHI-01',
+      location: 'New Delhi, India',
+      contactEmail: 'lab@npl.res.in',
+      isActive: true,
+    });
+  }
 
   // Create a default Manufacturer
   let manufacturer = await Manufacturer.findOne({ name: 'Avery India Ltd' });

@@ -33,7 +33,7 @@ export default function LaboratoriesPage() {
   });
 
   const handleCreate = () => {
-    createMut.mutate(form);
+    createMut.mutate({ labId: form.code, labName: form.name, location: form.location, contactEmail: form.contactEmail, accreditationNo: form.accreditationNumber });
   };
 
   const labsList = Array.isArray(data) ? data : [];

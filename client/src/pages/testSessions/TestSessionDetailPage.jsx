@@ -6,6 +6,7 @@ import { generateReport } from '../../services/report.service.js';
 import { getAttachments, uploadAttachment } from '../../services/attachment.service.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
+import { ANNEX_REFS } from '../../config/constants.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import { ArrowLeft, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle2, ShieldCheck, XCircle } from 'lucide-react';
 
@@ -21,7 +22,9 @@ export default function TestSessionDetailPage() {
     referenceLoad: '',
     indicatedValue: '',
     evaluationMethod: 'mpe_band',
-    readings: '',
+    checklistPassed: null,
+    reviewerNotes: '',
+    zeroCorrection: '',
   });
   const [showObsForm, setShowObsForm] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -45,7 +48,8 @@ export default function TestSessionDetailPage() {
       queryClient.invalidateQueries(['test-session', id]);
       addToast({ type: 'success', message: 'Metrological observation recorded successfully' });
       setShowObsForm(false);
-      setObsForm({ annexRef: 'A4_accuracy', referenceLoad: '', indicatedValue: '', evaluationMethod: 'mpe_band', readings: '' });
+      const firstAnnex = session.selectedAnnexes?.[0] || '';
+      setObsForm({ annexRef: firstAnnex, referenceLoad: '', indicatedValue: '', evaluationMethod: ANNEX_REFS.find((item) => item.value === firstAnnex)?.method || 'manual_checklist', checklistPassed: null, reviewerNotes: '', zeroCorrection: '' });
     },
   });
 
@@ -66,7 +70,7 @@ export default function TestSessionDetailPage() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: () => rejectSession(id),
+    mutationFn: (reason) => rejectSession(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries(['test-session', id]);
       addToast({ type: 'warning', message: 'Session returned to draft for re-evaluation' });
@@ -78,7 +82,7 @@ export default function TestSessionDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries(['test-session', id]);
       queryClient.invalidateQueries(['reports']);
-      addToast({ type: 'success', message: 'Report & Digital Signature generated' });
+      addToast({ type: 'success', message: 'Report and integrity tags generated' });
     },
   });
 
@@ -95,26 +99,33 @@ export default function TestSessionDetailPage() {
   if (!session) return <div style={{ padding: 40, textAlign: 'center' }}>Test Session not found</div>;
 
   const observations = session.observations || [];
-  const results = session.results || session.evaluationResults || [];
+  const results = session.results || session.evaluationResults || observations;
   const attachments = Array.isArray(attachmentsData) ? attachmentsData : [];
-  const userRole = user?.role || 'admin';
-  const isReviewerOrAdmin = ['admin', 'reviewer', 'lab_admin', 'doca_officer'].includes(userRole);
+  const userRole = user?.role;
+  const isReviewerOrAdmin = ['admin', 'reviewer'].includes(userRole);
 
   const handleAddObs = () => {
+    if (obsForm.evaluationMethod === 'manual_checklist') {
+      if (obsForm.checklistPassed === null || !obsForm.reviewerNotes.trim()) {
+        addToast({ type: 'error', message: 'Choose the checklist result and record reviewer notes.' });
+        return;
+      }
+      addObsMutation.mutate({ annexRef: obsForm.annexRef, evaluationMethod: 'manual_checklist', checklistPassed: obsForm.checklistPassed, reviewerNotes: obsForm.reviewerNotes.trim() });
+      return;
+    }
+    if (obsForm.referenceLoad === '' || obsForm.indicatedValue === '') {
+      addToast({ type: 'error', message: 'Enter both the applied reference load and instrument indication.' });
+      return;
+    }
     const refLoad = Number(obsForm.referenceLoad);
-    const indVal = Number(obsForm.indicatedValue || obsForm.referenceLoad);
-    const parsedReadings = obsForm.readings
-      ? obsForm.readings.split(',').map((r) => parseFloat(r.trim())).filter((r) => !isNaN(r))
-      : [indVal];
-
-    addObsMutation.mutate({
-      annexRef: obsForm.annexRef,
-      evaluationMethod: obsForm.evaluationMethod,
-      referenceLoad: refLoad,
-      indicatedValue: indVal,
-      testPointLoad: refLoad,
-      readings: parsedReadings,
-    });
+    const indicatedValue = Number(obsForm.indicatedValue);
+    if (!Number.isFinite(refLoad) || !Number.isFinite(indicatedValue)) {
+      addToast({ type: 'error', message: 'Observation values must be finite numbers.' });
+      return;
+    }
+    const observation = { annexRef: obsForm.annexRef, evaluationMethod: 'mpe_band', referenceLoad: refLoad, indicatedValue };
+    if (obsForm.zeroCorrection !== '') observation.zeroCorrection = Number(obsForm.zeroCorrection);
+    addObsMutation.mutate(observation);
   };
 
   const handleFileUpload = (e) => {
@@ -122,6 +133,7 @@ export default function TestSessionDetailPage() {
     if (!selectedFile) return;
     const formData = new FormData();
     formData.append('file', selectedFile);
+    formData.append('fileType', selectedFile.type.startsWith('image/') ? 'photo' : 'document');
     uploadMutation.mutate(formData);
   };
 
@@ -142,14 +154,14 @@ export default function TestSessionDetailPage() {
         </div>
         <div className="gov-card-body">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16, fontSize: 14 }}>
-            <div><span className="text-muted" style={{ fontSize: 12 }}>Instrument Model</span><br /><strong>{session.instrumentModelId?.modelName || 'Standard Scale'}</strong></div>
-            <div><span className="text-muted" style={{ fontSize: 12 }}>Serial Number</span><br /><strong className="text-mono">{session.serialNumber || 'SN-2026-001'}</strong></div>
-            <div><span className="text-muted" style={{ fontSize: 12 }}>Accuracy Class</span><br /><strong>Class {session.accuracyClass || 'III'}</strong></div>
-            <div><span className="text-muted" style={{ fontSize: 12 }}>Max Capacity (Max)</span><br /><strong>{session.maxCapacity || 30000} g</strong></div>
-            <div><span className="text-muted" style={{ fontSize: 12 }}>Min Capacity (Min)</span><br /><strong>{session.minCapacity || 200} g</strong></div>
-            <div><span className="text-muted" style={{ fontSize: 12 }}>Scale Interval (e)</span><br /><strong>{session.scaleInterval || 10} g</strong></div>
-            <div><span className="text-muted" style={{ fontSize: 12 }}>Laboratory ID</span><br /><strong className="text-mono">{session.labId || 'LAB-DELHI-01'}</strong></div>
-            <div><span className="text-muted" style={{ fontSize: 12 }}>Ambient Conditions</span><br /><strong>{session.environmentalConditions?.temperatureC || 23}°C | {session.environmentalConditions?.humidityPercent || 55}% RH</strong></div>
+            <div><span className="text-muted" style={{ fontSize: 12 }}>Instrument Model</span><br /><strong>{session.modelName || session.instrumentModelId?.modelName || '—'}</strong></div>
+            <div><span className="text-muted" style={{ fontSize: 12 }}>Serial Number</span><br /><strong className="text-mono">{session.serialNumber || '—'}</strong></div>
+            <div><span className="text-muted" style={{ fontSize: 12 }}>Accuracy Class</span><br /><strong>Class {session.accuracyClass || '—'}</strong></div>
+            <div><span className="text-muted" style={{ fontSize: 12 }}>Max Capacity (Max)</span><br /><strong>{session.maxCapacity ?? '—'}</strong></div>
+            <div><span className="text-muted" style={{ fontSize: 12 }}>Min Capacity (Min)</span><br /><strong>{session.minCapacity ?? '—'}</strong></div>
+            <div><span className="text-muted" style={{ fontSize: 12 }}>Scale Interval (e)</span><br /><strong>{session.scaleInterval ?? '—'}</strong></div>
+            <div><span className="text-muted" style={{ fontSize: 12 }}>Laboratory ID</span><br /><strong className="text-mono">{session.labId || '—'}</strong></div>
+            <div><span className="text-muted" style={{ fontSize: 12 }}>Ambient Conditions</span><br /><strong>{session.environmentalConditions?.temperatureC ?? '—'}°C | {session.environmentalConditions?.humidityPercent ?? '—'}% RH</strong></div>
           </div>
         </div>
       </div>
@@ -166,9 +178,9 @@ export default function TestSessionDetailPage() {
             </button>
           </>
         )}
-        {(session.status === 'passed' || session.status === 'failed' || session.status === 'submitted' || session.status === 'evaluated') && (
+        {session.status === 'passed' && isReviewerOrAdmin && (
           <button className="gov-btn gov-btn-primary" onClick={() => reportMutation.mutate()} disabled={reportMutation.isPending}>
-            <FileCheck size={14} /> {reportMutation.isPending ? 'Generating Certificate...' : 'Generate OIML Certificate & Sign'}
+            <FileCheck size={14} /> {reportMutation.isPending ? 'Generating report...' : 'Generate test report'}
           </button>
         )}
       </div>
@@ -176,42 +188,47 @@ export default function TestSessionDetailPage() {
       {/* Observation Form Modal/Panel */}
       {showObsForm && (
         <div className="gov-card mb-24" style={{ border: '2px solid var(--gov-blue-primary)' }}>
-          <div className="gov-card-header"><h4>Record Metrological Observation (OIML R-76 Annex A)</h4></div>
+          <div className="gov-card-header"><h4>Record Metrological Observation</h4></div>
           <div className="gov-card-body">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div className="gov-form-group">
                 <label className="gov-label">Annex Test Procedure</label>
-                <select className="gov-select" value={obsForm.annexRef} onChange={(e) => setObsForm((f) => ({ ...f, annexRef: e.target.value }))}>
-                  <option value="A4_accuracy">A.4.4 — Weighing Performance / Accuracy</option>
-                  <option value="A4_repeatability">A.4.10 — Repeatability Test</option>
-                  <option value="A4_eccentricity">A.4.7 — Eccentricity Test (Off-Center)</option>
-                  <option value="A4_discrimination">A.4.8 — Discrimination Test</option>
-                  <option value="A4_tare">A.4.6 — Tare Balancing Test</option>
-                  <option value="B_environmental">Annex B — Influence Factor (Temp/Tilt)</option>
+                <select className="gov-select" value={obsForm.annexRef} onChange={(e) => {
+                  const ref = e.target.value;
+                  setObsForm((f) => ({ ...f, annexRef: ref, evaluationMethod: ANNEX_REFS.find((item) => item.value === ref)?.method || 'manual_checklist' }));
+                }}>
+                  {(session.selectedAnnexes || []).map((ref) => <option key={ref} value={ref}>{ANNEX_REFS.find((item) => item.value === ref)?.label || ref}</option>)}
                 </select>
               </div>
+              <div className="gov-form-group"><label className="gov-label">Evaluation method</label><p>{obsForm.evaluationMethod === 'mpe_band' ? 'MPE calculation (A4 accuracy only)' : 'Manual checklist with evidence'}</p></div>
+              {obsForm.evaluationMethod === 'manual_checklist' ? <>
+                <div className="gov-form-group">
+                  <label className="gov-label">Checklist result</label>
+                  <select className="gov-select" value={obsForm.checklistPassed === null ? '' : String(obsForm.checklistPassed)} onChange={(e) => setObsForm((f) => ({ ...f, checklistPassed: e.target.value === '' ? null : e.target.value === 'true' }))}>
+                    <option value="">Select result</option><option value="true">Pass</option><option value="false">Fail</option>
+                  </select>
+                </div>
+                <div className="gov-form-group">
+                  <label className="gov-label">Reviewer notes / evidence</label>
+                  <input className="gov-input" value={obsForm.reviewerNotes} onChange={(e) => setObsForm((f) => ({ ...f, reviewerNotes: e.target.value }))} />
+                </div>
+              </> : <>
               <div className="gov-form-group">
-                <label className="gov-label">Evaluation Method</label>
-                <select className="gov-select" value={obsForm.evaluationMethod} onChange={(e) => setObsForm((f) => ({ ...f, evaluationMethod: e.target.value }))}>
-                  <option value="mpe_band">MPE Tolerance Band Check</option>
-                  <option value="manual_checklist">Manual Metrological Checklist</option>
-                </select>
+                <label className="gov-label">Reference load (same unit as registered model; kg)</label>
+                <input className="gov-input" type="number" step="any" value={obsForm.referenceLoad} onChange={(e) => setObsForm((f) => ({ ...f, referenceLoad: e.target.value }))} />
               </div>
               <div className="gov-form-group">
-                <label className="gov-label">Reference Load (L in grams)</label>
-                <input className="gov-input" type="number" step="0.1" placeholder="e.g. 500.0" value={obsForm.referenceLoad} onChange={(e) => setObsForm((f) => ({ ...f, referenceLoad: e.target.value, indicatedValue: e.target.value }))} />
+                <label className="gov-label">Instrument indication (kg)</label>
+                <input className="gov-input" type="number" step="any" value={obsForm.indicatedValue} onChange={(e) => setObsForm((f) => ({ ...f, indicatedValue: e.target.value }))} />
               </div>
               <div className="gov-form-group">
-                <label className="gov-label">Indicated Reading (I in grams)</label>
-                <input className="gov-input" type="number" step="0.1" placeholder="e.g. 500.2" value={obsForm.indicatedValue} onChange={(e) => setObsForm((f) => ({ ...f, indicatedValue: e.target.value }))} />
+                <label className="gov-label">Zero correction (optional offset to indication; kg)</label>
+                <input className="gov-input" type="number" step="any" value={obsForm.zeroCorrection} onChange={(e) => setObsForm((f) => ({ ...f, zeroCorrection: e.target.value }))} />
               </div>
-            </div>
-            <div className="gov-form-group">
-              <label className="gov-label">Repeatability Readings (comma-separated, grams)</label>
-              <input className="gov-input" placeholder="e.g. 500.0, 500.1, 500.0, 499.9, 500.0" value={obsForm.readings} onChange={(e) => setObsForm((f) => ({ ...f, readings: e.target.value }))} />
+              </>}
             </div>
             <div className="flex-gap-8">
-              <button className="gov-btn gov-btn-primary" onClick={handleAddObs} disabled={addObsMutation.isPending || !obsForm.referenceLoad}>
+              <button className="gov-btn gov-btn-primary" onClick={handleAddObs} disabled={addObsMutation.isPending || !obsForm.annexRef}>
                 {addObsMutation.isPending ? 'Saving...' : 'Save Observation'}
               </button>
               <button className="gov-btn gov-btn-outline" onClick={() => setShowObsForm(false)}>Cancel</button>
@@ -234,25 +251,24 @@ export default function TestSessionDetailPage() {
                 <tr>
                   <th>#</th>
                   <th>Annex Ref</th>
-                  <th>Reference Load L (g)</th>
-                  <th>Indicated Reading I (g)</th>
-                  <th>Error E (g)</th>
-                  <th>Readings</th>
+                  <th>Reference load (kg)</th>
+                  <th>Indication (kg)</th>
+                  <th>Computed error</th>
+                  <th>Applied MPE</th>
+                  <th>Outcome</th>
                 </tr>
               </thead>
               <tbody>
                 {observations.map((obs, i) => {
-                  const refL = obs.referenceLoad ?? obs.testPointLoad ?? '—';
-                  const indI = obs.indicatedValue ?? (Array.isArray(obs.readings) ? obs.readings[0] : '—');
-                  const errorE = (typeof indI === 'number' && typeof refL === 'number') ? (indI - refL).toFixed(2) : '—';
                   return (
                     <tr key={obs._id || i}>
                       <td>{i + 1}</td>
                       <td><span className="gov-badge gov-badge-info">{obs.annexRef}</span></td>
-                      <td className="text-mono">{refL}</td>
-                      <td className="text-mono">{indI}</td>
-                      <td className="text-mono">{errorE}</td>
-                      <td className="text-mono">{(obs.readings || []).join(', ')}</td>
+                      <td className="text-mono">{obs.referenceLoad ?? '—'}</td>
+                      <td className="text-mono">{obs.indicatedValue ?? '—'}</td>
+                      <td className="text-mono">{obs.computedError ?? 'Pending evaluation'}</td>
+                      <td className="text-mono">{obs.appliedMpe ?? '—'}</td>
+                      <td>{obs.outcome || 'Pending evaluation'}</td>
                     </tr>
                   );
                 })}
@@ -288,9 +304,9 @@ export default function TestSessionDetailPage() {
                     <tr key={i}>
                       <td><strong>{r.annexRef}</strong></td>
                       <td><StatusBadge status={verdict} /></td>
-                      <td className="text-mono">{errVal != null ? (Number(errVal) > 0 ? `+${Number(errVal).toFixed(2)}` : Number(errVal).toFixed(2)) : '0.00'}</td>
-                      <td className="text-mono">{mpeVal != null ? `±${Number(mpeVal).toFixed(2)}` : '±1.00'}</td>
-                      <td className="text-muted" style={{ fontSize: 12 }}>{new Date().toLocaleDateString()}</td>
+                      <td className="text-mono">{errVal != null ? (Number(errVal) > 0 ? `+${Number(errVal)}` : Number(errVal)) : '—'}</td>
+                      <td className="text-mono">{mpeVal != null ? `±${Number(mpeVal)}` : '—'}</td>
+                      <td className="text-muted" style={{ fontSize: 12 }}>{r.updatedAt ? new Date(r.updatedAt).toLocaleDateString() : '—'}</td>
                     </tr>
                   );
                 })}
@@ -300,18 +316,18 @@ export default function TestSessionDetailPage() {
         </div>
       )}
 
-      {/* Reviewer / PKI Digital Signature Panel (FR-10) */}
+      {/* Reviewer approval and report integrity panel */}
       {isReviewerOrAdmin && (
         <div className="gov-card mb-24" style={{ background: 'var(--gov-blue-light)', border: '1px solid var(--gov-blue-primary)' }}>
           <div className="gov-card-header">
             <div className="flex-gap-8">
               <ShieldCheck size={18} color="var(--gov-navy-imperial)" />
-              <h4>Reviewing Officer Approval & Digital Signature (FR-10)</h4>
+              <h4>Reviewing Officer Approval & Report Integrity (FR-10)</h4>
             </div>
           </div>
           <div className="gov-card-body">
             <p style={{ fontSize: 13, marginBottom: 12 }}>
-              Cryptographically verify metrological observations and issue a PKI signed OIML compliance certificate with SHA-256 hash chaining.
+              Review the recorded evaluation, then generate a test report with SHA-256 integrity verification and an HMAC tag. HMAC is not a PKI digital signature.
             </p>
             <div className="flex-gap-8" style={{ flexWrap: 'wrap' }}>
               {session.status === 'under_review' && (
@@ -319,13 +335,13 @@ export default function TestSessionDetailPage() {
                   <button className="gov-btn gov-btn-primary" onClick={() => approveMutation.mutate()} disabled={approveMutation.isPending}>
                     <CheckCircle2 size={14} /> {approveMutation.isPending ? 'Approving...' : 'Approve Evaluation'}
                   </button>
-                  <button className="gov-btn gov-btn-outline" style={{ borderColor: 'var(--gov-red)', color: 'var(--gov-red)' }} onClick={() => rejectMutation.mutate()} disabled={rejectMutation.isPending}>
+                  <button className="gov-btn gov-btn-outline" style={{ borderColor: 'var(--gov-red)', color: 'var(--gov-red)' }} onClick={() => { const reason = window.prompt('Enter the reason for rejection'); if (reason?.trim()) rejectMutation.mutate(reason.trim()); }} disabled={rejectMutation.isPending}>
                     <XCircle size={14} /> {rejectMutation.isPending ? 'Rejecting...' : 'Reject & Return to Draft'}
                   </button>
                 </>
               )}
               <button className="gov-btn gov-btn-accent" onClick={() => reportMutation.mutate()} disabled={reportMutation.isPending}>
-                <FileCheck size={14} /> {reportMutation.isPending ? 'Generating...' : 'Issue PKI Signed Certificate'}
+                <FileCheck size={14} /> {reportMutation.isPending ? 'Generating...' : 'Generate test report'}
               </button>
             </div>
           </div>
@@ -362,7 +378,7 @@ export default function TestSessionDetailPage() {
                   <div className="text-mono" style={{ fontSize: 12, fontWeight: 600, truncate: true }}>{att.originalName || att.filename || 'Attachment'}</div>
                   <div className="text-muted" style={{ fontSize: 11 }}>{att.mimeType || 'Document'}</div>
                   {att.filePath && (
-                    <a href={`http://localhost:5000/${att.filePath}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--gov-navy-imperial)', fontWeight: 500 }}>View File</a>
+                    <a href={`/${att.filePath.replace(/^\/+/, '')}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--gov-navy-imperial)', fontWeight: 500 }}>View File</a>
                   )}
                 </div>
               ))}

@@ -104,8 +104,8 @@ export default function InstrumentModelDetailPage() {
                 {historySessions.map((s) => (
                   <tr key={s._id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/test-sessions/${s._id}`)}>
                     <td className="text-mono">{s._id?.slice(-8)}</td>
-                    <td className="text-mono">{s.serialNumber || 'SN-2026-001'}</td>
-                    <td>{s.labId || 'LAB-DELHI-01'}</td>
+                    <td className="text-mono">{s.serialNumber || '—'}</td>
+                    <td>{s.laboratoryName || s.labId || '—'}</td>
                     <td>{new Date(s.testDate || s.createdAt).toLocaleDateString('en-IN')}</td>
                     <td><StatusBadge status={s.status} /></td>
                     <td>

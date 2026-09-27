@@ -11,11 +11,17 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
+if (process.env.NODE_ENV === 'production' && !process.env.REPORT_INTEGRITY_SECRET) {
+  console.error('FATAL ERROR: REPORT_INTEGRITY_SECRET is required in production.');
+  process.exit(1);
+}
+
 export const env = {
   PORT: process.env.PORT || 5000,
   NODE_ENV: process.env.NODE_ENV || 'development',
   MONGO_URI: process.env.MONGO_URI,
   JWT_SECRET: process.env.JWT_SECRET,
+  REPORT_INTEGRITY_SECRET: process.env.REPORT_INTEGRITY_SECRET || null,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '8h',
   BCRYPT_SALT_ROUNDS: parseInt(process.env.BCRYPT_SALT_ROUNDS || '10', 10),
   CLIENT_ORIGIN: process.env.CLIENT_ORIGIN || 'http://localhost:5173',

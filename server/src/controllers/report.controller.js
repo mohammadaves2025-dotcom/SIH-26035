@@ -3,12 +3,12 @@ import fs from 'fs';
 import { Report } from '../models/Report.js';
 import { TestSession } from '../models/TestSession.js';
 import { InstrumentModel } from '../models/InstrumentModel.js';
-import { Manufacturer } from '../models/Manufacturer.js';
-import { User } from '../models/User.js';
 import { generateReport } from '../services/reportGenerator.service.js';
 import { appendAuditLog } from '../services/auditLogger.service.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { assertSessionAccess, getManufacturerForUser, manufacturerModelIds } from '../utils/tenantAccess.js';
+import { sha256, verifySignature } from '../utils/hash.js';
 
 export const listReports = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, search, status, labId, manufacturerId, accuracyClass, startDate, endDate } = req.query;
@@ -31,23 +31,22 @@ export const listReports = asyncHandler(async (req, res) => {
     ];
   }
 
-  // Auto-inject labId filter for lab_technician and lab_admin roles
-  const effectiveLabId = (req.user.role === 'lab_technician' || req.user.role === 'lab_admin') ? req.user.labId : labId;
+  const sessionQuery = {};
+  const labScoped = ['lab_technician', 'lab_admin'].includes(req.user.role);
+  if (labScoped) sessionQuery.labId = req.user.labId || null;
+  else if (labId) sessionQuery.labId = labId;
+  if (accuracyClass) sessionQuery.accuracyClass = accuracyClass;
 
-  // Handle session/model/manufacturer filters via pre-querying matching TestSession IDs
-  if (effectiveLabId || manufacturerId || accuracyClass) {
-    const sessionQuery = {};
-    if (effectiveLabId) sessionQuery.labId = effectiveLabId;
-    if (accuracyClass) sessionQuery.accuracyClass = accuracyClass;
-
-    if (manufacturerId) {
-      const models = await InstrumentModel.find({ manufacturerId }).select('_id');
-      sessionQuery.instrumentModelId = { $in: models.map((m) => m._id) };
-    }
-
-    const matchingSessions = await TestSession.find(sessionQuery).select('_id');
-    query.testSessionId = { $in: matchingSessions.map((s) => s._id) };
+  if (req.user.role === 'manufacturer') {
+    const ownManufacturer = await getManufacturerForUser(req.user.sub);
+    sessionQuery.instrumentModelId = { $in: await manufacturerModelIds(ownManufacturer?._id) };
+  } else if (manufacturerId) {
+    const models = await InstrumentModel.find({ manufacturerId }).select('_id');
+    sessionQuery.instrumentModelId = { $in: models.map((model) => model._id) };
   }
+
+  const matchingSessions = await TestSession.find(sessionQuery).select('_id');
+  query.testSessionId = { $in: matchingSessions.map((session) => session._id) };
 
   const [reports, total] = await Promise.all([
     Report.find(query)
@@ -80,6 +79,9 @@ export const listReports = asyncHandler(async (req, res) => {
 
 export const createReport = asyncHandler(async (req, res) => {
   const { sessionId } = req.params;
+  const session = await TestSession.findById(sessionId).populate('instrumentModelId');
+  if (!session) throw new AppError(404, 'NOT_FOUND', 'Test session not found');
+  await assertSessionAccess(req, session);
   const report = await generateReport({
     testSessionId: sessionId,
     userId: req.user.sub,
@@ -105,15 +107,7 @@ export const getReportById = asyncHandler(async (req, res) => {
   if (!report) {
     throw new AppError(404, 'NOT_FOUND', 'Report not found');
   }
-
-  if (
-    (req.user.role === 'lab_technician' || req.user.role === 'lab_admin') &&
-    req.user.labId &&
-    report.testSessionId &&
-    report.testSessionId.labId !== req.user.labId
-  ) {
-    throw new AppError(403, 'FORBIDDEN', 'Access denied to report belonging to another laboratory');
-  }
+  await assertSessionAccess(req, report.testSessionId);
 
   res.status(200).json({
     success: true,
@@ -123,40 +117,30 @@ export const getReportById = asyncHandler(async (req, res) => {
 
 export const downloadReportFile = asyncHandler(async (req, res) => {
   const { id, format } = req.params; // format: 'pdf' or 'docx'
-  let report = await Report.findById(id).populate('testSessionId');
+  const report = await Report.findById(id).populate({ path: 'testSessionId', populate: { path: 'instrumentModelId' } });
 
   if (!report) {
     throw new AppError(404, 'NOT_FOUND', 'Report not found');
   }
 
-  if (
-    (req.user.role === 'lab_technician' || req.user.role === 'lab_admin') &&
-    req.user.labId &&
-    report.testSessionId &&
-    report.testSessionId.labId !== req.user.labId
-  ) {
-    throw new AppError(403, 'FORBIDDEN', 'Access denied to download report belonging to another laboratory');
+  await assertSessionAccess(req, report.testSessionId);
+
+  if (!['pdf', 'docx'].includes(format)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'format must be pdf or docx');
   }
 
   let filePath = format === 'docx' ? report.docxPath : report.pdfPath;
   let absolutePath = path.join(process.cwd(), filePath);
 
   if (!fs.existsSync(absolutePath)) {
-    // Generate fresh report file if not present on disk
-    try {
-      const generated = await generateReport({
-        testSessionId: report.testSessionId._id || report.testSessionId,
-        userId: req.user.sub,
-      });
-      filePath = format === 'docx' ? generated.docxPath : generated.pdfPath;
-      absolutePath = path.join(process.cwd(), filePath);
-    } catch (err) {
-      console.error('Error auto-generating report file:', err);
-    }
+    throw new AppError(404, 'NOT_FOUND', `Report file (${format}) could not be generated on disk`);
   }
 
-  if (!fs.existsSync(absolutePath)) {
-    throw new AppError(404, 'NOT_FOUND', `Report file (${format}) could not be generated on disk`);
+  const fileHash = sha256(fs.readFileSync(absolutePath));
+  const expectedHash = format === 'pdf' ? report.contentHash : report.docxContentHash;
+  const expectedSignature = format === 'pdf' ? report.digitalSignature : report.docxDigitalSignature;
+  if (!expectedHash || fileHash !== expectedHash || !verifySignature(fileHash, expectedSignature)) {
+    throw new AppError(409, 'REPORT_INTEGRITY_FAILED', 'Report integrity verification failed');
   }
 
   res.download(absolutePath);

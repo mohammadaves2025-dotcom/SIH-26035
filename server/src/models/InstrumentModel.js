@@ -13,10 +13,10 @@ const instrumentModelSchema = new mongoose.Schema(
       enum: ['I', 'II', 'III', 'IIII'],
       required: true,
     },
-    maxCapacity: { type: Number, required: true, min: 0 },
-    e: { type: Number, required: true, min: 0 },
-    minCapacity: { type: Number, required: true },
-    n: { type: Number, required: true },
+    maxCapacity: { type: Number, required: true, min: 0.000000001 },
+    e: { type: Number, required: true, min: 0.000000001 },
+    minCapacity: { type: Number, required: true, min: 0 },
+    n: { type: Number, required: true, min: 1 },
   },
   { timestamps: true }
 );
