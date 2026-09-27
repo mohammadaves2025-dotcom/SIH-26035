@@ -1,0 +1,63 @@
+/* ===================================================================
+   NAWI Digital Metrology System — GIGW Government Theme
+   Department of Consumer Affairs, Ministry of Consumer Affairs,
+   Food & Public Distribution, Government of India
+   =================================================================== */
+
+:root {
+  /* ── Government Primary Brand ── */
+  --gov-navy-dark: #0B2545;
+  --gov-navy-imperial: #003366;
+  --gov-blue-accent: #134074;
+  --gov-blue-light: #EEF4FF;
+
+  /* ── National Accents ── */
+  --gov-saffron: #D97706;
+  --gov-saffron-light: #FFF7ED;
+  --gov-green: #138808;
+  --gov-green-light: #F0FDF4;
+  --gov-red: #DC2626;
+  --gov-red-light: #FEF2F2;
+  --gov-gold: #D4AF37;
+
+  /* ── Neutral Surface & Typography ── */
+  --gov-bg-page: #F1F5F9;
+  --gov-bg-surface: #FFFFFF;
+  --gov-border: #CBD5E1;
+  --gov-border-subtle: #E2E8F0;
+  --gov-text-heading: #0F172A;
+  --gov-text-body: #334155;
+  --gov-text-muted: #64748B;
+
+  /* ── Interaction ── */
+  --gov-focus-ring: 0 0 0 3px rgba(217, 119, 6, 0.35);
+  --gov-shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --gov-shadow-md: 0 4px 6px -1px rgba(11,37,69,0.08), 0 2px 4px -2px rgba(11,37,69,0.05);
+  --gov-shadow-lg: 0 10px 15px -3px rgba(11,37,69,0.12);
+  --gov-radius: 6px;
+  --gov-radius-lg: 10px;
+
+  /* ── Layout ── */
+  --sidebar-width: 250px;
+  --header-height: 56px;
+  --topbar-height: 34px;
+}
+
+[data-theme="high-contrast"] {
+  --gov-bg-page: #000;
+  --gov-bg-surface: #111;
+  --gov-text-heading: #FFF;
+  --gov-text-body: #E2E8F0;
+  --gov-text-muted: #94A3B8;
+  --gov-border: #FFF;
+  --gov-border-subtle: #555;
+  --gov-navy-dark: #000;
+  --gov-navy-imperial: #000;
+  --gov-saffron: #FACC15;
+  --gov-green: #4ADE80;
+  --gov-red: #F87171;
+}
+
+[data-font-size="-1"] { font-size: 14px; }
+[data-font-size="0"]  { font-size: 15px; }
+[data-font-size="1"]  { font-size: 17px; }

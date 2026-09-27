@@ -1,0 +1,98 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--gov-navy-dark) 0%, var(--gov-navy-imperial) 50%, var(--gov-blue-accent) 100%);
+  padding: 20px;
+}
+
+.login-card {
+  background: var(--gov-bg-surface);
+  border-radius: var(--gov-radius-lg);
+  box-shadow: var(--gov-shadow-lg);
+  width: 100%;
+  max-width: 440px;
+  padding: 36px 32px;
+}
+
+.login-brand {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.login-emblem {
+  height: 48px;
+  margin-bottom: 14px;
+}
+
+.login-brand h1 {
+  font-size: 20px;
+  color: var(--gov-navy-imperial);
+  margin-bottom: 4px;
+}
+
+.login-dept {
+  font-size: 12px;
+  color: var(--gov-text-muted);
+  letter-spacing: 0.02em;
+}
+
+.login-form {
+  margin-bottom: 24px;
+}
+
+.login-pw-wrap {
+  position: relative;
+}
+
+.login-pw-wrap .gov-input {
+  width: 100%;
+  padding-right: 40px;
+}
+
+.login-pw-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--gov-text-muted);
+  cursor: pointer;
+}
+
+.login-submit {
+  width: 100%;
+  justify-content: center;
+  padding: 12px;
+  font-size: 15px;
+  margin-top: 8px;
+}
+
+.login-demo-creds {
+  border-top: 1px solid var(--gov-border-subtle);
+  padding-top: 16px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.login-demo-creds p {
+  margin-bottom: 10px;
+}
+
+.login-demo-creds code {
+  background: var(--gov-blue-light);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.login-demo-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 14px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: left;
+}

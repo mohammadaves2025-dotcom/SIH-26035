@@ -1,0 +1,147 @@
+.main-header {
+  position: fixed;
+  top: var(--topbar-height);
+  left: 0;
+  right: 0;
+  height: var(--header-height);
+  background: var(--gov-navy-imperial);
+  z-index: 8500;
+  display: flex;
+  align-items: center;
+}
+
+.header-inner {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.header-emblem {
+  height: 36px;
+  width: auto;
+  filter: brightness(0) invert(1) opacity(0.85);
+}
+
+.header-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.header-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: 0.02em;
+}
+
+.header-subtitle {
+  font-size: 11px;
+  color: rgba(255,255,255,0.6);
+  letter-spacing: 0.03em;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-seed-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #D97706 0%, #B45309 100%);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--gov-radius);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+
+.header-seed-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
+}
+
+.header-seed-btn.active-demo {
+  background: linear-gradient(135deg, #138808 0%, #0F6806 100%);
+  border-color: #4ADE80;
+}
+
+.header-seed-btn.active-demo:hover:not(:disabled) {
+  background: linear-gradient(135deg, #16A34A 0%, #138808 100%);
+}
+
+.header-seed-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-lab-tag {
+  padding: 3px 10px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.9);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.05em;
+}
+
+.header-user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255,255,255,0.85);
+  font-size: 13px;
+}
+
+.header-user-name {
+  font-weight: 600;
+}
+
+.header-user-role {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--gov-saffron);
+  color: #fff;
+  border-radius: 3px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.header-logout-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.8);
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+}
+.header-logout-btn:hover {
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+}

@@ -1,0 +1,25 @@
+import mongoose from 'mongoose';
+
+export const ROLES = [
+  'admin',            // Rule / System Administrator
+  'reviewer',         // Reviewing / Approving Officer
+  'lab_technician',   // Lab Technician
+  'lab_admin',        // Laboratory Administrator
+  'doca_officer',     // Legal Metrology Officer / Controller (DoCA)
+  'manufacturer',     // Manufacturer / Applicant
+  'auditor',          // Auditor
+];
+
+const userSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    passwordHash: { type: String, required: true, select: false },
+    role: { type: String, enum: ROLES, required: true },
+    labId: { type: String, default: null },
+    laboratoryRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Laboratory', default: null },
+  },
+  { timestamps: true }
+);
+
+export const User = mongoose.model('User', userSchema);

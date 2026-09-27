@@ -1,0 +1,69 @@
+.system-logs-page {
+  max-width: 1300px;
+}
+
+.log-table {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.log-row {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.log-row:hover {
+  background: var(--gov-blue-light) !important;
+}
+
+.log-row.selected {
+  background: #FEF3C7 !important;
+}
+
+.log-row-error {
+  background: #FEF2F2;
+}
+
+.log-row-warn {
+  background: #FFFBEB;
+}
+
+.log-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.log-badge-2xx {
+  background: var(--gov-green-light);
+  color: var(--gov-green);
+  border: 1px solid #BBF7D0;
+}
+
+.log-badge-4xx {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 1px solid #FDE68A;
+}
+
+.log-badge-5xx {
+  background: var(--gov-red-light);
+  color: var(--gov-red);
+  border: 1px solid #FECACA;
+}
+
+.method-tag {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.method-get    { background: #DBEAFE; color: #1E40AF; }
+.method-post   { background: #DCFCE7; color: #166534; }
+.method-put    { background: #FEF3C7; color: #92400E; }
+.method-delete { background: #FEE2E2; color: #991B1B; }

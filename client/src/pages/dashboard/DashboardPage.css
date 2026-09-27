@@ -1,0 +1,62 @@
+.dashboard-page {
+  max-width: 1200px;
+}
+
+.metric-card-top {
+  margin-bottom: 12px;
+}
+
+.metric-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+}
+
+.dashboard-charts {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 20px;
+}
+
+.chart-card {
+  overflow: hidden;
+}
+
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.quick-action-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 22px;
+  border: 1px solid var(--gov-border-subtle);
+  border-radius: var(--gov-radius);
+  color: var(--gov-navy-imperial);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.quick-action-card:hover {
+  background: var(--gov-blue-light);
+  box-shadow: var(--gov-shadow-md);
+  text-decoration: none;
+}
+
+@media (max-width: 900px) {
+  .dashboard-charts {
+    grid-template-columns: 1fr;
+  }
+  .quick-actions-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,57 @@
+.sidebar {
+  position: fixed;
+  top: calc(var(--topbar-height) + var(--header-height));
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  background: var(--gov-bg-surface);
+  border-right: 1px solid var(--gov-border-subtle);
+  display: flex;
+  flex-direction: column;
+  z-index: 7000;
+  overflow-y: auto;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--gov-radius);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gov-text-body);
+  text-decoration: none;
+  transition: background 0.12s, color 0.12s;
+}
+
+.sidebar-link:hover {
+  background: var(--gov-blue-light);
+  color: var(--gov-navy-imperial);
+  text-decoration: none;
+}
+
+.sidebar-link.active {
+  background: var(--gov-navy-imperial);
+  color: #fff;
+}
+
+.sidebar-link.active:hover {
+  background: var(--gov-blue-accent);
+}
+
+.sidebar-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--gov-border-subtle);
+  font-size: 11px;
+  color: var(--gov-text-muted);
+  letter-spacing: 0.03em;
+}

@@ -1,0 +1,27 @@
+import mongoose from 'mongoose';
+
+const attachmentSchema = new mongoose.Schema(
+  {
+    testSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TestSession',
+      required: true,
+    },
+    fileType: {
+      type: String,
+      enum: ['photo', 'document'],
+      required: true,
+    },
+    filePath: { type: String, required: true },
+    originalFilename: { type: String, required: true },
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    uploadedAt: { type: Date, default: Date.now },
+  },
+  { timestamps: true }
+);
+
+export const Attachment = mongoose.model('Attachment', attachmentSchema);

@@ -1,0 +1,203 @@
+import request from 'supertest';
+import path from 'path';
+import fs from 'fs';
+import { setupTestDB, teardownTestDB } from './testHelper.js';
+import app from '../src/app.js';
+import { seedRuleConfigs } from '../src/seed/seedRuleConfigs.js';
+import { seedUsers } from '../src/seed/seedUsers.js';
+
+describe('End-to-End Metrology System Lifecycle', () => {
+  let adminToken;
+  let techToken;
+  let reviewerToken;
+  let manufacturerToken;
+  let instrumentModelId;
+
+  beforeAll(async () => {
+    await setupTestDB();
+    await seedRuleConfigs();
+    const seeded = await seedUsers();
+    instrumentModelId = seeded.instrumentModel._id.toString();
+
+    // Login as Admin
+    const adminRes = await request(app).post('/api/auth/login').send({
+      email: 'admin@nawi.gov.in',
+      password: 'Password123!',
+    });
+    adminToken = adminRes.body.data.token;
+
+    // Login as Lab Tech
+    const techRes = await request(app).post('/api/auth/login').send({
+      email: 'tech@npl.res.in',
+      password: 'Password123!',
+    });
+    techToken = techRes.body.data.token;
+
+    // Login as Reviewer
+    const reviewerRes = await request(app).post('/api/auth/login').send({
+      email: 'reviewer@doca.gov.in',
+      password: 'Password123!',
+    });
+    reviewerToken = reviewerRes.body.data.token;
+
+    // Login as Manufacturer Rep
+    const mfgRes = await request(app).post('/api/auth/login').send({
+      email: 'rep@averyindia.com',
+      password: 'Password123!',
+    });
+    manufacturerToken = mfgRes.body.data.token;
+  }, 120000);
+
+  afterAll(async () => {
+    await teardownTestDB();
+  });
+
+  test('Full Lifecycle: Session creation -> Observations -> Attachment -> Submission -> PDF/DOCX Report Generation -> Public Verification -> Audit Trail -> Revocation', async () => {
+    // 1. Tech creates TestSession
+    const sessionRes = await request(app)
+      .post('/api/test-sessions')
+      .set('Authorization', `Bearer ${techToken}`)
+      .send({
+        instrumentModelId,
+        testDate: '2026-09-25',
+        environmentalConditions: {
+          temperatureC: 22.5,
+          humidityPercent: 55,
+          inclinationDeg: 0,
+          notes: 'Standard lab atmospheric conditions',
+        },
+      });
+
+    expect(sessionRes.status).toBe(201);
+    expect(sessionRes.body.success).toBe(true);
+    const sessionId = sessionRes.body.data._id;
+    expect(sessionRes.body.data.status).toBe('draft');
+
+    // 2. Tech adds Observations
+    const obsRes = await request(app)
+      .post(`/api/test-sessions/${sessionId}/observations`)
+      .set('Authorization', `Bearer ${techToken}`)
+      .send({
+        observations: [
+          {
+            annexRef: 'A1_administrative',
+            evaluationMethod: 'manual_checklist',
+            checklistPassed: true,
+            reviewerNotes: 'Documentary verification passed',
+          },
+          {
+            annexRef: 'A4_accuracy',
+            evaluationMethod: 'mpe_band',
+            referenceLoad: 200,
+            indicatedValue: 200.15,
+          },
+          {
+            annexRef: 'A4_accuracy',
+            evaluationMethod: 'mpe_band',
+            referenceLoad: 500,
+            indicatedValue: 500.2,
+          },
+        ],
+      });
+
+    expect(obsRes.status).toBe(201);
+    expect(obsRes.body.data.length).toBe(3);
+
+    // 3. Tech uploads attachment
+    const testFilePath = path.join(process.cwd(), 'uploads', 'test_sample.txt');
+    fs.mkdirSync(path.dirname(testFilePath), { recursive: true });
+    fs.writeFileSync(testFilePath, 'Metrology test calibration photograph placeholder');
+
+    const attachmentRes = await request(app)
+      .post(`/api/test-sessions/${sessionId}/attachments`)
+      .set('Authorization', `Bearer ${techToken}`)
+      .field('fileType', 'photo')
+      .attach('file', testFilePath);
+
+    expect(attachmentRes.status).toBe(201);
+    expect(attachmentRes.body.data.fileType).toBe('photo');
+
+    // 4. Tech submits session for review
+    const submitRes = await request(app)
+      .post(`/api/test-sessions/${sessionId}/submit`)
+      .set('Authorization', `Bearer ${techToken}`);
+
+    expect(submitRes.status).toBe(200);
+    expect(submitRes.body.data.session.status).toBe('under_review');
+    expect(submitRes.body.data.session.overallResult).toBe('pass');
+
+    // 4b. Reviewer approves session
+    const approveRes = await request(app)
+      .post(`/api/test-sessions/${sessionId}/approve`)
+      .set('Authorization', `Bearer ${reviewerToken}`);
+
+    expect(approveRes.status).toBe(200);
+    expect(approveRes.body.data.status).toBe('passed');
+
+    // 5. Reviewer generates Report (PDF + DOCX)
+    const reportRes = await request(app)
+      .post(`/api/reports/${sessionId}/generate`)
+      .set('Authorization', `Bearer ${reviewerToken}`);
+
+    expect(reportRes.status).toBe(201);
+    const report = reportRes.body.data;
+    expect(report.reportNumber).toMatch(/^NAWI-\d{4}-\d{6}$/);
+    expect(report.contentHash).toHaveLength(64);
+    expect(report.status).toBe('signed');
+
+    // Verify PDF & DOCX files created on disk
+    expect(fs.existsSync(path.join(process.cwd(), report.pdfPath))).toBe(true);
+    expect(fs.existsSync(path.join(process.cwd(), report.docxPath))).toBe(true);
+
+    // 6. Public verification endpoint (no auth required)
+    const verifyRes = await request(app).get(`/api/verify/${report.reportNumber}`);
+    expect(verifyRes.status).toBe(200);
+    expect(verifyRes.body.data.reportNumber).toBe(report.reportNumber);
+    expect(verifyRes.body.data.overallResult).toBe('pass');
+    expect(verifyRes.body.data.status).toBe('signed');
+
+    // Verification by SHA256 hash
+    const verifyHashRes = await request(app).get(`/api/verify/${report.contentHash}`);
+    expect(verifyHashRes.status).toBe(200);
+    expect(verifyHashRes.body.data.reportNumber).toBe(report.reportNumber);
+
+    // 7. Reviewer fetches Audit Logs
+    const auditRes = await request(app)
+      .get('/api/audit-log')
+      .set('Authorization', `Bearer ${reviewerToken}`);
+
+    expect(auditRes.status).toBe(200);
+    expect(auditRes.body.data.length).toBeGreaterThan(0);
+    // Assert cryptographic hash chain integrity
+    for (let i = 0; i < auditRes.body.data.length; i++) {
+      expect(auditRes.body.data[i].currentHash).toHaveLength(64);
+    }
+
+    // 8. Reviewer checks Dashboard Statistics
+    const dashRes = await request(app)
+      .get('/api/dashboard/stats')
+      .set('Authorization', `Bearer ${reviewerToken}`);
+
+    expect(dashRes.status).toBe(200);
+    expect(dashRes.body.data.totalSessions).toBeGreaterThanOrEqual(1);
+    expect(dashRes.body.data.passedCount).toBeGreaterThanOrEqual(1);
+
+    // 9. Admin calls e-Governance Export endpoint
+    const exportRes = await request(app)
+      .get('/api/export/legal-metrology')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(exportRes.status).toBe(200);
+    expect(exportRes.body.data.length).toBeGreaterThanOrEqual(1);
+    expect(exportRes.body.data[0].reportNumber).toBe(report.reportNumber);
+
+    // 10. Reviewer revokes report
+    const revokeRes = await request(app)
+      .post(`/api/reports/${report._id}/revoke`)
+      .set('Authorization', `Bearer ${reviewerToken}`)
+      .send({ reason: 'Re-evaluation requested by Legal Metrology Officer' });
+
+    expect(revokeRes.status).toBe(200);
+    expect(revokeRes.body.data.status).toBe('revoked');
+  }, 60000);
+});

@@ -1,0 +1,91 @@
+.tricolor-stripe {
+  display: flex;
+  height: 3px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9100;
+}
+.tricolor-saffron { flex: 1; background: #FF9933; }
+.tricolor-white   { flex: 1; background: #FFFFFF; }
+.tricolor-green   { flex: 1; background: #138808; }
+
+.topbar {
+  position: fixed;
+  top: 3px;
+  left: 0;
+  right: 0;
+  height: calc(var(--topbar-height) - 3px);
+  background: var(--gov-navy-dark);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+}
+
+.topbar-inner {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar-dept {
+  font-size: 11px;
+  color: rgba(255,255,255,0.8);
+  letter-spacing: 0.02em;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-font-group {
+  display: flex;
+  gap: 2px;
+}
+
+.topbar-font-btn {
+  padding: 2px 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.topbar-font-btn.active {
+  background: var(--gov-saffron);
+  color: #fff;
+  border-color: var(--gov-saffron);
+}
+
+.topbar-sep {
+  color: rgba(255,255,255,0.25);
+  font-size: 12px;
+}
+
+.topbar-btn {
+  font-size: 11px;
+  color: rgba(255,255,255,0.8);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+.topbar-btn:hover {
+  color: #fff;
+  text-decoration: underline;
+}

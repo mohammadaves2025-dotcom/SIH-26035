@@ -1,0 +1,95 @@
+import path from 'path';
+import fs from 'fs';
+import multer from 'multer';
+import { Attachment } from '../models/Attachment.js';
+import { TestSession } from '../models/TestSession.js';
+import { AppError } from '../utils/AppError.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+
+const uploadDir = path.join(process.cwd(), 'uploads', 'attachments');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `attachment-${uniqueSuffix}${ext}`);
+  },
+});
+
+export const multerUpload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+});
+
+export const uploadAttachment = asyncHandler(async (req, res) => {
+  const session = await TestSession.findById(req.params.id);
+  if (!session) {
+    throw new AppError(404, 'NOT_FOUND', 'Test session not found');
+  }
+
+  if (req.user.role === 'lab_technician' && session.labId !== req.user.labId) {
+    throw new AppError(403, 'FORBIDDEN', 'Cannot attach files to another lab\'s session');
+  }
+
+  if (!['draft', 'submitted'].includes(session.status)) {
+    throw new AppError(
+      409,
+      'INVALID_STATE',
+      'Attachments can only be added to draft or submitted test sessions'
+    );
+  }
+
+  if (!req.file) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'File is required');
+  }
+
+  const fileType = req.body.fileType;
+  if (!['photo', 'document'].includes(fileType)) {
+    throw new AppError(
+      400,
+      'VALIDATION_ERROR',
+      "fileType must be 'photo' or 'document'"
+    );
+  }
+
+  const relativePath = path.join('uploads', 'attachments', req.file.filename);
+
+  const attachment = await Attachment.create({
+    testSessionId: session._id,
+    fileType,
+    filePath: relativePath,
+    originalFilename: req.file.originalname,
+    uploadedBy: req.user.sub,
+  });
+
+  res.status(201).json({
+    success: true,
+    data: attachment,
+  });
+});
+
+export const getAttachments = asyncHandler(async (req, res) => {
+  const session = await TestSession.findById(req.params.id);
+  if (!session) {
+    throw new AppError(404, 'NOT_FOUND', 'Test session not found');
+  }
+
+  if (req.user.role === 'lab_technician' && session.labId !== req.user.labId) {
+    throw new AppError(403, 'FORBIDDEN', 'Cannot access attachments for another lab\'s session');
+  }
+
+  const attachments = await Attachment.find({ testSessionId: session._id })
+    .populate('uploadedBy', 'name email')
+    .sort({ createdAt: -1 });
+
+  res.status(200).json({
+    success: true,
+    data: attachments,
+  });
+});

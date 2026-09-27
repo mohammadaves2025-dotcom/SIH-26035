@@ -1,0 +1,4 @@
+import apiClient from './apiClient.js';
+
+export const getRuleConfigs = (params) => apiClient.get('/rule-configs', { params });
+export const createRuleConfig = (data) => apiClient.post('/rule-configs', data);
