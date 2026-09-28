@@ -19,6 +19,7 @@ const userSchema = new mongoose.Schema(
     role: { type: String, enum: ROLES, required: true },
     labId: { type: String, default: null },
     laboratoryRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Laboratory', default: null },
+    manufacturerRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Manufacturer', default: null },
     active: { type: Boolean, default: true },
   },
   { timestamps: true }

@@ -11,6 +11,7 @@
     "seed:rules": "node src/seed/seedRuleConfigs.js",
     "seed:users": "node src/seed/seedUsers.js",
     "migrate:report-revisions": "node src/scripts/migrateReportRevisionIndex.js",
+    "migrate:manufacturer-ref": "node src/scripts/migrateManufacturerRef.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit"
   },
   "dependencies": {

@@ -244,6 +244,7 @@ export const rejectTestSession = asyncHandler(async (req, res) => {
 
   session.status = 'draft';
   session.reviewerNotes = rejectionReason.trim();
+  session.rejectedAt = new Date();
   await session.save();
 
   await appendAuditLog({

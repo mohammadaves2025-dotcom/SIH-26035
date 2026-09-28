@@ -69,12 +69,18 @@ export const initialRules = [
   },
 ];
 
+import { User } from '../models/User.js';
+
 export async function seedRuleConfigs() {
   console.log('Seeding RuleConfigs...');
+  const adminUser = await User.findOne({ email: 'admin@nawi.gov.in' });
+  const adminId = adminUser ? adminUser._id : null;
+
   for (const rule of initialRules) {
+    const ruleData = { ...rule, createdBy: adminId };
     await RuleConfig.findOneAndUpdate(
       { accuracyClass: rule.accuracyClass, oimlEdition: rule.oimlEdition },
-      rule,
+      ruleData,
       { upsert: true, new: true }
     );
   }

@@ -50,6 +50,8 @@ const testSessionSchema = new mongoose.Schema(
       atmosphericPressurehPa: { type: Number },
       notes: { type: String, trim: true, required: true },
     },
+    reviewerNotes: { type: String, trim: true, default: null },
+    rejectedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

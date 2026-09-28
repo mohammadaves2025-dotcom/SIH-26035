@@ -6,6 +6,10 @@ import { AppError } from './AppError.js';
 export async function getManufacturerForUser(userId) {
   const user = await User.findById(userId);
   if (!user) return null;
+  if (user.manufacturerRef) {
+    const mfg = await Manufacturer.findById(user.manufacturerRef);
+    if (mfg) return mfg;
+  }
   return Manufacturer.findOne({ contactEmail: user.email });
 }
 

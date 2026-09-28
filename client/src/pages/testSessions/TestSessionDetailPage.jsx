@@ -186,6 +186,25 @@ export default function TestSessionDetailPage() {
         </div>
       </div>
 
+      {/* Reviewer Rejection Alert Banner */}
+      {session.status === 'draft' && session.reviewerNotes && (
+        <div className="gov-card mb-24" style={{ borderLeft: '4px solid var(--gov-red)', background: '#fff5f5' }}>
+          <div className="gov-card-body">
+            <div className="flex-gap-8" style={{ color: 'var(--gov-red)', fontWeight: 600, marginBottom: 4 }}>
+              <XCircle size={16} /> Session Returned for Revision by Reviewer
+            </div>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--gov-text)' }}>
+              <strong>Reviewer Notes:</strong> {session.reviewerNotes}
+            </p>
+            {session.rejectedAt && (
+              <div className="text-muted" style={{ fontSize: 11, marginTop: 4 }}>
+                Returned on: {new Date(session.rejectedAt).toLocaleString()}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Action Buttons */}
       <div className="flex-gap-8 mb-24" style={{ flexWrap: 'wrap' }}>
         {session.status === 'draft' && canEditDraft && (

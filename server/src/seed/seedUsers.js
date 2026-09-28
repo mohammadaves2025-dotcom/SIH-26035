@@ -88,11 +88,19 @@ export async function seedUsers() {
       labId: null,
     },
     {
+      name: 'Metrology Expert',
+      email: 'metrology@nawi.gov.in',
+      passwordHash,
+      role: 'metrology_expert',
+      labId: null,
+    },
+    {
       name: 'Avery Rep',
       email: 'rep@averyindia.com',
       passwordHash,
       role: 'manufacturer',
       labId: null,
+      manufacturerRef: manufacturer._id,
     },
     {
       name: 'Metrology Auditor',
