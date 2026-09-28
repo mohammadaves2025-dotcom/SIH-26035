@@ -33,7 +33,7 @@ const ruleConfigSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['draft', 'active', 'archived'],
+      enum: ['draft', 'scheduled', 'active', 'archived'],
       default: 'draft',
     },
     subsequentMpeMultiplier: { type: Number, default: 2.0 },

@@ -66,4 +66,27 @@ describe('Rule Resolver Service', () => {
       resolveRuleConfig('III', new Date('2000-01-01'))
     ).rejects.toThrow('No rule configuration for class III effective on or before');
   });
+
+  test('a reviewed scheduled rule resolves only on or after its effective date', async () => {
+    const active = await RuleConfig.create({
+      ...reviewFields(),
+      oimlEdition: 'Baseline fixture',
+      accuracyClass: 'III',
+      effectiveDate: new Date('2020-01-01'),
+      bands: [{ uptoMultipleOfE: 500, mpeFactor: 0.5 }],
+    });
+    const scheduled = await RuleConfig.create({
+      ...reviewFields(),
+      status: 'scheduled',
+      oimlEdition: 'Scheduled fixture',
+      accuracyClass: 'III',
+      effectiveDate: new Date('2030-01-01'),
+      bands: [{ uptoMultipleOfE: 500, mpeFactor: 0.4 }],
+    });
+
+    const beforeEffectiveDate = await resolveRuleConfig('III', new Date('2029-12-31'));
+    const onEffectiveDate = await resolveRuleConfig('III', new Date('2030-01-01'));
+    expect(beforeEffectiveDate._id.toString()).toBe(active._id.toString());
+    expect(onEffectiveDate._id.toString()).toBe(scheduled._id.toString());
+  });
 });

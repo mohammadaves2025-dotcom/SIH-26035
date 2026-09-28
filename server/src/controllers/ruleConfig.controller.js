@@ -27,8 +27,8 @@ export const activateRuleConfig = asyncHandler(async (req, res) => {
   if (!ruleConfig) {
     throw new AppError(404, 'NOT_FOUND', 'Rule configuration not found');
   }
-  if (ruleConfig.status === 'active') {
-    throw new AppError(409, 'INVALID_STATE', 'Rule configuration is already active');
+  if (ruleConfig.status !== 'draft') {
+    throw new AppError(409, 'INVALID_STATE', 'Only a draft rule configuration can be reviewed and approved');
   }
   if (!ruleConfig.createdBy) {
     throw new AppError(422, 'RULE_REVIEW_REQUIRED', 'Seeded or unowned example rules cannot be activated; create a reviewed rule configuration first');
@@ -46,27 +46,33 @@ export const activateRuleConfig = asyncHandler(async (req, res) => {
   if (ruleConfig.createdBy.toString() === req.user.sub) {
     throw new AppError(403, 'SEPARATION_OF_DUTIES', 'The rule author cannot provide the metrology expert approval');
   }
-  const conflictingActiveRule = await RuleConfig.findOne({
+  const conflictingRule = await RuleConfig.findOne({
     _id: { $ne: ruleConfig._id },
     accuracyClass: ruleConfig.accuracyClass,
     effectiveDate: ruleConfig.effectiveDate,
-    status: 'active',
+    status: { $in: ['active', 'scheduled'] },
   });
-  if (conflictingActiveRule) {
-    throw new AppError(409, 'RULE_VERSION_CONFLICT', 'An active rule already exists for this accuracy class and effective date');
+  if (conflictingRule) {
+    throw new AppError(409, 'RULE_VERSION_CONFLICT', 'An active or scheduled rule already exists for this accuracy class and effective date');
   }
   ruleConfig.sourceReference = sourceReference.trim();
   ruleConfig.validationNote = validationNote.trim();
   ruleConfig.approvedBy = req.user.sub;
   ruleConfig.approvedAt = new Date();
-  ruleConfig.status = 'active';
+  const isFutureEffective = ruleConfig.effectiveDate > new Date();
+  ruleConfig.status = isFutureEffective ? 'scheduled' : 'active';
   await ruleConfig.save();
   await appendAuditLog({
     entityType: 'RuleConfig',
     entityId: ruleConfig._id,
-    action: `activate: ${sourceReference.trim()}`,
+    action: `${isFutureEffective ? 'schedule' : 'activate'}: ${sourceReference.trim()}`,
     userId: req.user.sub,
-    details: { sandboxResultHash: ruleConfig.sandboxResultHash, sandboxSummary: ruleConfig.sandboxSummary },
+    details: {
+      sandboxResultHash: ruleConfig.sandboxResultHash,
+      sandboxSummary: ruleConfig.sandboxSummary,
+      status: ruleConfig.status,
+      effectiveDate: ruleConfig.effectiveDate,
+    },
   });
   res.status(200).json({ success: true, data: ruleConfig });
 });

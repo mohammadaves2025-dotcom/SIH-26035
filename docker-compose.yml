@@ -24,9 +24,10 @@ services:
       NODE_ENV: production
       PORT: 5000
       MONGO_URI: mongodb://mongo:27017/nawi_metrology
-      JWT_SECRET: super_secure_production_jwt_secret_key_min_32_chars_long!
-      REPORT_INTEGRITY_SECRET: super_secure_report_integrity_hmac_secret_min_32_chars!
-      CLIENT_ORIGIN: http://localhost,http://localhost:80,http://localhost:5173
+      JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET in the root .env file}"
+      REPORT_INTEGRITY_SECRET: "${REPORT_INTEGRITY_SECRET:?Set REPORT_INTEGRITY_SECRET in the root .env file}"
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost,http://localhost:80,http://localhost:5173}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost}
     depends_on:
       - mongo
 

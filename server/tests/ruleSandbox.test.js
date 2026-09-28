@@ -79,5 +79,33 @@ describe('Rule configuration regression sandbox', () => {
     const unchangedObservation = await Observation.findById(observation._id);
     expect(unchangedObservation.outcome).toBe('fail');
     expect(unchangedObservation.ruleConfigId.toString()).toBe(active._id.toString());
+
+    const futureDraft = await request(app)
+      .post('/api/rule-configs')
+      .set('Authorization', `Bearer ${authorLogin.body.data.token}`)
+      .send({
+        oimlEdition: 'future test draft', accuracyClass: 'III', effectiveDate: '2099-01-01',
+        bands: [{ uptoMultipleOfE: 1000, mpeFactor: 1.25 }],
+      });
+    expect(futureDraft.status).toBe(201);
+    const futureSandbox = await request(app)
+      .post(`/api/rule-configs/${futureDraft.body.data._id}/sandbox`)
+      .set('Authorization', `Bearer ${expertLogin.body.data.token}`);
+    expect(futureSandbox.status).toBe(200);
+    const scheduled = await request(app)
+      .post(`/api/rule-configs/${futureDraft.body.data._id}/activate`)
+      .set('Authorization', `Bearer ${expertLogin.body.data.token}`)
+      .send({ sourceReference: 'future test source', validationNote: 'future rule scheduling test' });
+    expect(scheduled.status).toBe(200);
+    expect(scheduled.body.data.status).toBe('scheduled');
+
+    const beforeEffectiveDate = await request(app)
+      .get('/api/rule-configs?accuracyClass=III&effectiveDate=2098-12-31')
+      .set('Authorization', `Bearer ${expertLogin.body.data.token}`);
+    const onEffectiveDate = await request(app)
+      .get('/api/rule-configs?accuracyClass=III&effectiveDate=2099-01-01')
+      .set('Authorization', `Bearer ${expertLogin.body.data.token}`);
+    expect(beforeEffectiveDate.body.data[0]._id).toBe(candidate._id);
+    expect(onEffectiveDate.body.data[0]._id).toBe(futureDraft.body.data._id);
   });
 });

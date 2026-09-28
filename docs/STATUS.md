@@ -26,7 +26,7 @@ This document provides traceability, verification proof, and operational status 
 | **FR-12** | Multi-Tenant Data Isolation (Laboratory & Manufacturer) | `tenantAccess.js`, `testSession.controller.js` | `auth.test.js`, `p12.test.js` | **DONE** |
 | **FR-13** | Append-Only Cryptographic Audit Logging | `AuditLog.js`, `auditLogger.service.js`, `AuditLogPage.jsx` | `e2e.test.js`, `p12.test.js` | **DONE** |
 | **FR-14** | Rolling 6-Month Dashboard & National Analytics | `dashboard.controller.js`, `DashboardPage.jsx` | `e2e.test.js` | **DONE** |
-| **FR-15** | Versioned Rule Authoring, Expert Review & Dual Control Activation | `ruleConfig.controller.js`, `RuleConfigsPage.jsx` | `ruleResolver.test.js`, `ruleSandbox.test.js` | **PARTIAL — reviewed activation now requires sandbox comparison; regulatory transcription and rule retirement workflow remain** |
+| **FR-15** | Versioned Rule Authoring, Expert Review & Dual Control Activation | `ruleConfig.controller.js`, `RuleConfigsPage.jsx` | `ruleResolver.test.js`, `ruleSandbox.test.js` | **PARTIAL — reviewed rules require sandbox comparison and future-effective approvals are scheduled by date; regulatory transcription and rule retirement workflow remain** |
 
 ---
 
@@ -43,8 +43,8 @@ This document provides traceability, verification proof, and operational status 
   - Production startup guard blocking default secrets (<32 chars) and prohibiting seed accounts in production.
   - Account lockout (5 failed attempts → 15 min lock) and change password endpoint.
   - Helmet CSP directives & Restricted CORS origin configuration.
-  - Server & Client Dockerfiles, docker-compose orchestration, and GitHub Actions CI workflow.
-  - **NOT TESTED**: Docker images have not been built or validated (Docker not available on dev machine).
+  - Server & Client Dockerfiles, docker-compose orchestration, and GitHub Actions CI workflow. Compose now requires externally supplied, separate JWT and report-integrity secrets instead of shipping hard-coded values; setup instructions are in `docs/DEPLOYMENT.md`.
+  - **NOT TESTED**: Docker images have not been built or validated (Docker CLI is unavailable on this dev machine).
 - **P13 Advisory Anomaly Flags**:
   - Robust z-score (median/MAD) anomaly detection against historical model observations (≥ 10).
   - Attaches `advisoryFlags` without modifying `outcome` or overall session result.
