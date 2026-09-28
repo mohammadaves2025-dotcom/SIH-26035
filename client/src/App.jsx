@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from './store/useAuthStore.js';
@@ -48,7 +48,7 @@ function RoleGuard({ allowedRoles, children }) {
   return children;
 }
 
-function ProtectedLayout() {
+function ProtectedLayout({ isMobileOpen, setIsMobileOpen }) {
   const { isAuthenticated } = useAuthStore();
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -56,7 +56,10 @@ function ProtectedLayout() {
 
   return (
     <div className="app-layout">
-      <Sidebar />
+      <Sidebar
+        isMobileOpen={isMobileOpen}
+        onCloseMobileMenu={() => setIsMobileOpen(false)}
+      />
       <main id="main-content" className="app-main">
         <Outlet />
       </main>
@@ -66,6 +69,7 @@ function ProtectedLayout() {
 
 export default function App() {
   const { fontSizeStep, highContrast } = useThemeStore();
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-font-size', String(fontSizeStep));
@@ -80,30 +84,133 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <TopGovtBar />
-        <Header />
+        <Header
+          isMobileOpen={isMobileOpen}
+          onToggleMobileMenu={() => setIsMobileOpen((prev) => !prev)}
+        />
         <ToastContainer />
 
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/verify" element={<div className="app-layout" style={{ paddingTop: 'calc(var(--topbar-height) + var(--header-height))' }}><main className="app-main" style={{ marginLeft: 0 }}><VerifyPage /></main></div>} />
+          <Route
+            path="/verify"
+            element={
+              <div
+                className="app-layout"
+                style={{ paddingTop: 'calc(var(--topbar-height) + var(--header-height))' }}
+              >
+                <main className="app-main" style={{ marginLeft: 0, padding: '20px 16px' }}>
+                  <VerifyPage />
+                </main>
+              </div>
+            }
+          />
 
-          <Route element={<ProtectedLayout />}>
+          <Route
+            element={
+              <ProtectedLayout
+                isMobileOpen={isMobileOpen}
+                setIsMobileOpen={setIsMobileOpen}
+              />
+            }
+          >
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/test-sessions" element={<TestSessionsPage />} />
-            <Route path="/test-sessions/new" element={<RoleGuard allowedRoles={['admin', 'lab_technician', 'lab_admin']}><NewTestSessionPage /></RoleGuard>} />
-            <Route path="/test-sessions/offline/:clientId" element={<RoleGuard allowedRoles={['admin', 'lab_technician', 'lab_admin']}><OfflineSessionPage /></RoleGuard>} />
+            <Route
+              path="/test-sessions/new"
+              element={
+                <RoleGuard allowedRoles={['admin', 'lab_technician', 'lab_admin']}>
+                  <NewTestSessionPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="/test-sessions/offline/:clientId"
+              element={
+                <RoleGuard allowedRoles={['admin', 'lab_technician', 'lab_admin']}>
+                  <OfflineSessionPage />
+                </RoleGuard>
+              }
+            />
             <Route path="/test-sessions/:id" element={<TestSessionDetailPage />} />
             <Route path="/instrument-models" element={<InstrumentModelsPage />} />
             <Route path="/instrument-models/:id" element={<InstrumentModelDetailPage />} />
-            <Route path="/manufacturers" element={<RoleGuard allowedRoles={['admin', 'reviewer', 'lab_admin', 'doca_officer']}><ManufacturersPage /></RoleGuard>} />
-            <Route path="/laboratories" element={<RoleGuard allowedRoles={['admin', 'lab_admin', 'doca_officer']}><LaboratoriesPage /></RoleGuard>} />
+            <Route
+              path="/manufacturers"
+              element={
+                <RoleGuard allowedRoles={['admin', 'reviewer', 'lab_admin', 'doca_officer']}>
+                  <ManufacturersPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="/laboratories"
+              element={
+                <RoleGuard allowedRoles={['admin', 'lab_admin', 'doca_officer']}>
+                  <LaboratoriesPage />
+                </RoleGuard>
+              }
+            />
             <Route path="/test-types" element={<TestTypesPage />} />
-            <Route path="/rule-configs" element={<RoleGuard allowedRoles={['admin', 'metrology_expert', 'lab_admin', 'doca_officer', 'reviewer', 'auditor']}><RuleConfigsPage /></RoleGuard>} />
-            <Route path="/reports" element={<RoleGuard allowedRoles={['admin', 'reviewer', 'lab_admin', 'doca_officer', 'manufacturer', 'auditor']}><ReportsPage /></RoleGuard>} />
-            <Route path="/audit-log" element={<RoleGuard allowedRoles={['admin', 'reviewer', 'lab_admin', 'doca_officer', 'auditor']}><AuditLogPage /></RoleGuard>} />
-            <Route path="/export" element={<RoleGuard allowedRoles={['admin', 'lab_admin', 'doca_officer', 'auditor']}><ExportPage /></RoleGuard>} />
-            <Route path="/system-logs" element={<RoleGuard allowedRoles={['admin', 'lab_admin', 'auditor']}><SystemLogsPage /></RoleGuard>} />
+            <Route
+              path="/rule-configs"
+              element={
+                <RoleGuard
+                  allowedRoles={[
+                    'admin',
+                    'metrology_expert',
+                    'lab_admin',
+                    'doca_officer',
+                    'reviewer',
+                    'auditor',
+                  ]}
+                >
+                  <RuleConfigsPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <RoleGuard
+                  allowedRoles={[
+                    'admin',
+                    'reviewer',
+                    'lab_admin',
+                    'doca_officer',
+                    'manufacturer',
+                    'auditor',
+                  ]}
+                >
+                  <ReportsPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="/audit-log"
+              element={
+                <RoleGuard allowedRoles={['admin', 'reviewer', 'lab_admin', 'doca_officer', 'auditor']}>
+                  <AuditLogPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="/export"
+              element={
+                <RoleGuard allowedRoles={['admin', 'lab_admin', 'doca_officer', 'auditor']}>
+                  <ExportPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="/system-logs"
+              element={
+                <RoleGuard allowedRoles={['admin', 'lab_admin', 'auditor']}>
+                  <SystemLogsPage />
+                </RoleGuard>
+              }
+            />
           </Route>
 
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

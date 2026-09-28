@@ -17,6 +17,13 @@ const reportSchema = new mongoose.Schema(
     hmacTag: { type: String, required: true, immutable: true },
     docxHmacTag: { type: String, default: null, immutable: true },
     signatureAlgorithm: { type: String, default: 'HMAC-SHA256', immutable: true },
+    pdfSignature: { type: String, default: null, immutable: true },
+    docxSignature: { type: String, default: null, immutable: true },
+    signatureCertificate: { type: String, default: null, immutable: true },
+    certificateFingerprint: { type: String, default: null, immutable: true },
+    signerKeyId: { type: String, default: null, immutable: true },
+    pdfSignedAt: { type: Date, default: null, immutable: true },
+    docxSignedAt: { type: Date, default: null, immutable: true },
     pdfPath: { type: String, required: true, immutable: true },
     docxPath: { type: String, required: true, immutable: true },
     status: {

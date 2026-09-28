@@ -1,9 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import { Report } from '../models/Report.js';
-import { verifySignature, sha256 } from '../utils/hash.js';
+import { sha256 } from '../utils/hash.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { verifyReportArtifact } from '../services/digitalSignature.service.js';
 
 export const verifyReport = asyncHandler(async (req, res) => {
   const { reportNumberOrHash } = req.params;
@@ -32,7 +33,7 @@ export const verifyReport = asyncHandler(async (req, res) => {
   const actualPdfHash = pdfExists ? sha256(fs.readFileSync(pdfPath)) : null;
   const isIntegrityVerified = Boolean(
     actualPdfHash && actualPdfHash === report.contentHash &&
-    verifySignature(actualPdfHash, report.hmacTag)
+    verifyReportArtifact(actualPdfHash, report, 'PDF')
   );
 
   const isRevoked = report.status === 'revoked';
@@ -54,7 +55,10 @@ export const verifyReport = asyncHandler(async (req, res) => {
       contentHash: report.contentHash,
       signatureAlgorithm: report.signatureAlgorithm || 'HMAC-SHA256',
       isIntegrityVerified,
-      signatureType: 'server HMAC integrity tag; report is not PKI-signed',
+      isDigitalSignatureVerified: Boolean(isIntegrityVerified && report.pdfSignature),
+      certificateFingerprint: report.certificateFingerprint || null,
+      signerKeyId: report.signerKeyId || null,
+      signatureType: report.pdfSignature ? 'PKI certificate-backed detached signature' : 'legacy server HMAC integrity tag; report is not PKI-signed',
       instrumentModelName: model?.modelName || 'Unknown',
       accuracyClass: model?.accuracyClass || 'Unknown',
       serialNumber: session?.serialNumber || null,

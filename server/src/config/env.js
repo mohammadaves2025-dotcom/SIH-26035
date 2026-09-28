@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import crypto from 'node:crypto';
 
 dotenv.config();
 
@@ -32,6 +33,26 @@ if (process.env.NODE_ENV === 'production') {
   }
   if (process.env.REPORT_INTEGRITY_SECRET.length < 32 || insecureDefaults.has(process.env.REPORT_INTEGRITY_SECRET.trim())) {
     console.error('FATAL ERROR: REPORT_INTEGRITY_SECRET must be at least 32 characters and cannot use default example values in production.');
+    process.exit(1);
+  }
+  const signerUrl = process.env.REPORT_SIGNING_SERVICE_URL;
+  const signerToken = process.env.REPORT_SIGNING_SERVICE_TOKEN;
+  const signerKeyId = process.env.REPORT_SIGNING_KEY_ID;
+  const certificateBase64 = process.env.REPORT_SIGNING_CERTIFICATE_B64;
+  const trustedFingerprints = (process.env.REPORT_SIGNING_TRUSTED_FINGERPRINTS || '').split(',').map((value) => value.trim());
+  if (!signerUrl || !signerToken || !signerKeyId || !certificateBase64 || trustedFingerprints.filter(Boolean).length === 0) {
+    console.error('FATAL ERROR: External PKI signer URL, token, key ID, certificate, and trusted certificate fingerprint(s) are required in production.');
+    process.exit(1);
+  }
+  try {
+    const parsedUrl = new URL(signerUrl);
+    if (parsedUrl.protocol !== 'https:') throw new Error('HTTPS is required');
+    const certificate = new crypto.X509Certificate(Buffer.from(certificateBase64, 'base64').toString('utf8'));
+    const certificateFingerprint = certificate.fingerprint256.replace(/[^a-f0-9]/gi, '').toUpperCase();
+    const trustSet = new Set(trustedFingerprints.map((value) => value.replace(/[^a-f0-9]/gi, '').toUpperCase()));
+    if (!trustSet.has(certificateFingerprint)) throw new Error('Signing certificate fingerprint is not trusted');
+  } catch (error) {
+    console.error(`FATAL ERROR: REPORT_SIGNING_SERVICE configuration is invalid: ${error.message}`);
     process.exit(1);
   }
 }

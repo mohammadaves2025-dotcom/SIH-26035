@@ -16,6 +16,7 @@ describe('Rule configuration regression sandbox', () => {
   afterAll(async () => teardownTestDB());
 
   test('reports historical outcome changes under a draft without changing saved observations', async () => {
+    await RuleConfig.deleteMany({});
     const passwordHash = await bcrypt.hash('Password123!', 10);
     const author = await User.create({ name: 'Rule Author', email: 'sandbox-author@test.com', passwordHash, role: 'admin' });
     const expert = await User.create({ name: 'Rule Expert', email: 'sandbox-expert@test.com', passwordHash, role: 'metrology_expert' });
@@ -98,6 +99,10 @@ describe('Rule configuration regression sandbox', () => {
       .send({ sourceReference: 'future test source', validationNote: 'future rule scheduling test' });
     expect(scheduled.status).toBe(200);
     expect(scheduled.body.data.status).toBe('scheduled');
+    const superseded = await RuleConfig.findById(candidate._id);
+    expect(superseded.status).toBe('archived');
+    expect(superseded.effectiveUntil.toISOString()).toBe(new Date('2099-01-01').toISOString());
+    expect(superseded.supersededByRuleId.toString()).toBe(futureDraft.body.data._id);
 
     const beforeEffectiveDate = await request(app)
       .get('/api/rule-configs?accuracyClass=III&effectiveDate=2098-12-31')

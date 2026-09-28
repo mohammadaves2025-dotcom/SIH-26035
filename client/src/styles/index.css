@@ -442,3 +442,87 @@ code, .mono {
 .flex-gap-8 { display: flex; gap: 8px; align-items: center; }
 .mb-16 { margin-bottom: 16px; }
 .mb-24 { margin-bottom: 24px; }
+
+/* ──────────── Table Responsive Wrapper ──────────── */
+.gov-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--gov-border-subtle);
+  border-radius: var(--gov-radius);
+  margin-bottom: 16px;
+}
+
+.quick-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.quick-action-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  background: var(--gov-blue-light);
+  border: 1px solid rgba(19, 64, 116, 0.15);
+  border-radius: var(--gov-radius);
+  color: var(--gov-navy-imperial);
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+.quick-action-card:hover {
+  background: var(--gov-navy-imperial);
+  color: #ffffff;
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: var(--gov-shadow-md);
+}
+
+/* ──────────── Mobile Responsive Global Rules ──────────── */
+@media (max-width: 768px) {
+  .app-main {
+    margin-left: 0;
+    padding: 16px 12px 36px;
+    width: 100%;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .quick-actions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .gov-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .gov-pagination {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .modal-content {
+    width: 95vw;
+    margin: 10px;
+    max-height: 90vh;
+  }
+}
+

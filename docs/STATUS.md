@@ -21,7 +21,7 @@ This document provides traceability, verification proof, and operational status 
 | **FR-07** | Reviewer Approval & Rejection Loop Workflow | `testSession.controller.js`, `TestSessionDetailPage.jsx` | `e2e.test.js` | **DONE** |
 | **FR-08** | Automated PDF & DOCX Test Report Generation and lifecycle | `reportGenerator.service.js`, `report.controller.js`, `ReportsPage.jsx` | `e2e.test.js` | **PARTIAL — lifecycle states and replacement linkage implemented; domain approval workflow needs review** |
 | **FR-09** | Magic Bytes Validated Photo & Document Evidence Attachments | `Attachment.js`, `attachment.controller.js` | `e2e.test.js`, `p12.test.js` | **DONE** |
-| **FR-10** | Integrity Verification, Vector QR Code & Cryptographic Signing | `qrGenerator.js`, `hash.js`, `report.controller.js` | `e2e.test.js` | **PARTIAL — SHA-256/HMAC integrity checks; no PKI signature** |
+| **FR-10** | Integrity Verification, Vector QR Code & Cryptographic Signing | `qrGenerator.js`, `digitalSignature.service.js`, `report.controller.js` | `e2e.test.js`, `digitalSignature.test.js` | **PARTIAL — detached RSA-SHA256 signing and pinned X.509 verification are implemented through an external signer contract; production HSM/KMS service and trusted timestamp policy must be provisioned** |
 | **FR-11** | Public Verification Portal & Cryptographic Hash/QR Lookup | `verify.controller.js`, `VerifyPage.jsx` | `e2e.test.js` | **PARTIAL — shows publication, integrity, revocation and supersession state** |
 | **FR-12** | Multi-Tenant Data Isolation (Laboratory & Manufacturer) | `tenantAccess.js`, `testSession.controller.js` | `auth.test.js`, `p12.test.js` | **DONE** |
 | **FR-13** | Append-Only Cryptographic Audit Logging | `AuditLog.js`, `auditLogger.service.js`, `AuditLogPage.jsx` | `e2e.test.js`, `p12.test.js` | **DONE** |
@@ -63,6 +63,6 @@ This document provides traceability, verification proof, and operational status 
 4. **Regulatory rule source**: Department of Consumer Affairs source page is registered, but the base General Rules, applicable amendments/corrigenda, and the governing OIML edition still need clause-by-clause consolidation and expert approval.
 5. **Hindi/English Localization**: Not implemented.
 6. **Annex A2/A3/A5/A6 Automatic Computation**: Only A4_accuracy has automatic MPE calculation; all others use manual checklist.
-7. **Report lifecycle**: Basic states and transitions are implemented, but authorized workflow, immutable evidence retention, and deployment/legal acceptance require review. HMAC does not meet a PKI signing requirement.
+7. **Report lifecycle and signing deployment**: Detached PKI signatures are supported through an external signer contract, but an HSM/KMS signer, approved certificate, trusted timestamp policy and domain acceptance must be provisioned before production use.
 8. **Hardware Integration**: No RS-232 / Bluetooth serial scale integration.
 9. **Third-Party NABL LIMS Integration**: Not implemented.

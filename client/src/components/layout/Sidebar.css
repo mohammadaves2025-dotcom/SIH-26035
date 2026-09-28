@@ -10,6 +10,7 @@
   flex-direction: column;
   z-index: 7000;
   overflow-y: auto;
+  transition: transform 0.25s ease;
 }
 
 .sidebar-nav {
@@ -54,4 +55,30 @@
   font-size: 11px;
   color: var(--gov-text-muted);
   letter-spacing: 0.03em;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+/* ──────────── Mobile Responsive Drawer ──────────── */
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    top: calc(var(--topbar-height) + var(--header-height));
+    background: rgba(11, 37, 69, 0.5);
+    z-index: 6999;
+    animation: fade-in 0.2s ease;
+  }
 }

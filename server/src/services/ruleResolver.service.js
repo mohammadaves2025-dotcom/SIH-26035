@@ -9,7 +9,12 @@ export async function resolveRuleConfig(accuracyClass, testDate) {
   const config = await RuleConfig.findOne({
     accuracyClass,
     effectiveDate: { $lte: dateObj },
-    status: { $in: ['active', 'scheduled'] },
+    $or: [
+      { effectiveUntil: null },
+      { effectiveUntil: { $exists: false } },
+      { effectiveUntil: { $gt: dateObj } },
+    ],
+    status: { $in: ['active', 'scheduled', 'archived'] },
     sourceReference: { $type: 'string', $ne: '' },
     validationNote: { $type: 'string', $ne: '' },
     createdBy: { $ne: null },

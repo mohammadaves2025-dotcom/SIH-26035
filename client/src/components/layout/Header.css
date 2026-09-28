@@ -23,7 +23,20 @@
 .header-brand {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+}
+
+.mobile-menu-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+.mobile-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .header-emblem {
@@ -53,7 +66,69 @@
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
+}
+
+/* Offline & Sync Status Badges */
+.header-offline-status {
+  display: flex;
+  align-items: center;
+}
+
+.header-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.header-status-badge.online {
+  background: rgba(19, 136, 8, 0.15);
+  border-color: rgba(74, 222, 128, 0.3);
+  color: #4ADE80;
+  cursor: default;
+}
+
+.header-status-badge.offline {
+  background: rgba(220, 38, 38, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #FCA5A5;
+}
+.header-status-badge.offline:hover {
+  background: rgba(220, 38, 38, 0.3);
+}
+
+.header-status-badge.pending {
+  background: linear-gradient(135deg, #D97706 0%, #B45309 100%);
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.header-status-badge.pending:hover {
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+}
+
+.pending-pill {
+  background: #DC2626;
+  color: #FFF;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.spin {
+  animation: spin-rotate 1.2s linear infinite;
+}
+
+@keyframes spin-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 .header-seed-btn {
@@ -144,4 +219,37 @@
 .header-logout-btn:hover {
   background: rgba(255,255,255,0.2);
   color: #fff;
+}
+
+/* ──────────── Mobile Responsiveness ──────────── */
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: flex;
+  }
+  .header-subtitle {
+    display: none;
+  }
+  .header-title {
+    font-size: 14px;
+  }
+  .header-emblem {
+    height: 28px;
+  }
+  .header-user-role,
+  .header-lab-tag,
+  .header-user-name {
+    display: none;
+  }
+  .demo-btn-text {
+    display: none;
+  }
+  .header-seed-btn {
+    padding: 6px 8px;
+  }
+  .header-inner {
+    padding: 0 12px;
+  }
+  .header-actions {
+    gap: 8px;
+  }
 }

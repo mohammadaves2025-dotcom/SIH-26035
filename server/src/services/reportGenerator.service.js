@@ -20,6 +20,7 @@ import { Manufacturer } from '../models/Manufacturer.js';
 import { Attachment } from '../models/Attachment.js';
 import { Report, Counter } from '../models/Report.js';
 import { sha256, signData } from '../utils/hash.js';
+import { signReportDigest } from './digitalSignature.service.js';
 import { appendAuditLog } from './auditLogger.service.js';
 import { AppError } from '../utils/AppError.js';
 import { generateQrSvg } from '../utils/qrGenerator.js';
@@ -219,8 +220,8 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
       </div>
 
       <div class="footer">
-        <p>SHA-256 integrity digest with server HMAC recorded at ${escapeHtml(new Date(generatedAt).toISOString())}</p>
-        <p>Report integrity tag is not a PKI-based digital signature. Applicable rule editions are listed per calculated observation.</p>
+        <p>SHA-256 digests and detached-signature metadata are recorded in the report repository.</p>
+        <p>HMAC is an internal integrity tag. Check the public verification portal for the PKI signature state and certificate fingerprint. Applicable rule editions are listed per calculated observation.</p>
       </div>
     </body>
     </html>
@@ -337,7 +338,7 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
             }),
             new Paragraph({ text: '' }),
             new Paragraph({
-              text: 'SHA-256 digest and server HMAC integrity tag recorded for the PDF and DOCX. This is not a PKI-based digital signature.',
+              text: 'SHA-256 digests and detached-signature metadata are recorded in the report repository. HMAC is an internal integrity tag; check the public verification portal for the PKI signature state and certificate fingerprint.',
               alignment: AlignmentType.CENTER,
             }),
             new Paragraph({
@@ -421,13 +422,25 @@ export async function generateReport({ testSessionId, userId }) {
   await renderPdf({ html, pdfPath: pdfPathAbs });
   await renderDocx({ reportNumber, session, model, manufacturer, observations, attachments, docxPath: docxPathAbs });
 
-  // Record integrity digests and server HMAC tags. These are not PKI digital signatures.
+  // Keep the server HMAC for storage-integrity checks and add an external PKI signature when configured.
   const pdfBuffer = fs.readFileSync(pdfPathAbs);
   const contentHash = sha256(pdfBuffer);
   const hmacTag = signData(contentHash);
   const docxBuffer = fs.readFileSync(docxPathAbs);
   const docxContentHash = sha256(docxBuffer);
   const docxHmacTag = signData(docxContentHash);
+  let pdfSigning;
+  let docxSigning;
+  try {
+    [pdfSigning, docxSigning] = await Promise.all([
+      signReportDigest(contentHash),
+      signReportDigest(docxContentHash),
+    ]);
+  } catch (error) {
+    fs.rmSync(pdfPathAbs, { force: true });
+    fs.rmSync(docxPathAbs, { force: true });
+    throw error;
+  }
 
   const report = await Report.create({
     testSessionId: session._id,
@@ -438,7 +451,14 @@ export async function generateReport({ testSessionId, userId }) {
     docxContentHash,
     hmacTag,
     docxHmacTag,
-    signatureAlgorithm: 'HMAC-SHA256',
+    signatureAlgorithm: pdfSigning ? pdfSigning.algorithm : 'HMAC-SHA256',
+    pdfSignature: pdfSigning?.signature || null,
+    docxSignature: docxSigning?.signature || null,
+    signatureCertificate: pdfSigning?.certificatePem || null,
+    certificateFingerprint: pdfSigning?.certificateFingerprint || null,
+    signerKeyId: pdfSigning?.keyId || null,
+    pdfSignedAt: pdfSigning?.signedAt || null,
+    docxSignedAt: docxSigning?.signedAt || null,
     pdfPath: pdfPathRel.replace(/\\/g, '/'),
     docxPath: docxPathRel.replace(/\\/g, '/'),
     status: 'integrity_tagged',

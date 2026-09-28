@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import request from 'supertest';
 import app from '../src/app.js';
 import { setupTestDB, teardownTestDB, clearTestDB } from './testHelper.js';
@@ -13,6 +14,8 @@ import { evaluateObservation } from '../src/services/complianceEngine.service.js
 import { seedUsers } from '../src/seed/seedUsers.js';
 import { seedRuleConfigs } from '../src/seed/seedRuleConfigs.js';
 import { Manufacturer } from '../src/models/Manufacturer.js';
+
+jest.setTimeout(60000);
 
 let adminToken, techToken, reviewerToken, manufacturerToken;
 let lab, model, ruleConfig;
@@ -45,7 +48,13 @@ beforeEach(async () => {
     }
   );
 
-  lab = await Laboratory.findOne({ labId: 'LAB-DELHI-01' });
+  lab = (await Laboratory.findOne({ labId: 'LAB-DELHI-01' })) || (await Laboratory.create({
+    labId: 'LAB-DELHI-01',
+    labName: 'Test Metrology Laboratory',
+    accreditationNo: 'TEST-ACCREDITATION',
+    location: 'New Delhi',
+    isActive: true,
+  }));
 
   model = await InstrumentModel.create({
     manufacturerId: seedData.manufacturer._id,

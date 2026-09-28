@@ -7,7 +7,8 @@ import { generateReport } from '../services/reportGenerator.service.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { assertSessionAccess, getManufacturerForUser, manufacturerModelIds } from '../utils/tenantAccess.js';
-import { sha256, verifySignature } from '../utils/hash.js';
+import { sha256 } from '../utils/hash.js';
+import { verifyReportArtifact } from '../services/digitalSignature.service.js';
 import { appendAuditLog } from '../services/auditLogger.service.js';
 
 export const listReports = asyncHandler(async (req, res) => {
@@ -152,8 +153,7 @@ export const downloadReportFile = asyncHandler(async (req, res) => {
 
   const fileHash = sha256(fs.readFileSync(absolutePath));
   const expectedHash = format === 'pdf' ? report.contentHash : report.docxContentHash;
-  const expectedSignature = format === 'pdf' ? report.hmacTag : report.docxHmacTag;
-  if (!expectedHash || fileHash !== expectedHash || !verifySignature(fileHash, expectedSignature)) {
+  if (!expectedHash || fileHash !== expectedHash || !verifyReportArtifact(fileHash, report, format)) {
     throw new AppError(409, 'REPORT_INTEGRITY_FAILED', 'Report integrity verification failed');
   }
 
@@ -162,15 +162,15 @@ export const downloadReportFile = asyncHandler(async (req, res) => {
 
 function assertStoredReportIntegrity(report) {
   const artifacts = [
-    { path: path.resolve(process.cwd(), report.pdfPath), hash: report.contentHash, signature: report.hmacTag, format: 'PDF' },
-    { path: path.resolve(process.cwd(), report.docxPath), hash: report.docxContentHash, signature: report.docxHmacTag, format: 'DOCX' },
+    { path: path.resolve(process.cwd(), report.pdfPath), hash: report.contentHash, format: 'PDF' },
+    { path: path.resolve(process.cwd(), report.docxPath), hash: report.docxContentHash, format: 'DOCX' },
   ];
   for (const artifact of artifacts) {
-    if (!artifact.hash || !artifact.signature || !fs.existsSync(artifact.path)) {
+    if (!artifact.hash || !fs.existsSync(artifact.path)) {
       throw new AppError(409, 'REPORT_INTEGRITY_FAILED', `${artifact.format} file or integrity metadata is missing`);
     }
     const actualHash = sha256(fs.readFileSync(artifact.path));
-    if (actualHash !== artifact.hash || !verifySignature(actualHash, artifact.signature)) {
+    if (actualHash !== artifact.hash || !verifyReportArtifact(actualHash, report, artifact.format)) {
       throw new AppError(409, 'REPORT_INTEGRITY_FAILED', `${artifact.format} integrity verification failed`);
     }
   }

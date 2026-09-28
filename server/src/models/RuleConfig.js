@@ -17,6 +17,8 @@ const ruleConfigSchema = new mongoose.Schema(
       required: true,
     },
     effectiveDate: { type: Date, required: true },
+    effectiveUntil: { type: Date, default: null },
+    supersededByRuleId: { type: mongoose.Schema.Types.ObjectId, ref: 'RuleConfig', default: null },
     sourceReference: { type: String, trim: true, default: null },
     validationNote: { type: String, trim: true, default: null },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

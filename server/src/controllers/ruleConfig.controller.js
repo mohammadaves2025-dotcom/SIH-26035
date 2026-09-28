@@ -55,6 +55,17 @@ export const activateRuleConfig = asyncHandler(async (req, res) => {
   if (conflictingRule) {
     throw new AppError(409, 'RULE_VERSION_CONFLICT', 'An active or scheduled rule already exists for this accuracy class and effective date');
   }
+
+  const predecessor = await RuleConfig.findOne({
+    accuracyClass: ruleConfig.accuracyClass,
+    effectiveDate: { $lt: ruleConfig.effectiveDate },
+    effectiveUntil: null,
+    status: { $in: ['active', 'scheduled'] },
+  }).sort({ effectiveDate: -1 });
+  if (predecessor?._id.equals(ruleConfig._id)) {
+    throw new AppError(409, 'RULE_VERSION_CONFLICT', 'A rule cannot supersede itself');
+  }
+
   ruleConfig.sourceReference = sourceReference.trim();
   ruleConfig.validationNote = validationNote.trim();
   ruleConfig.approvedBy = req.user.sub;
@@ -62,6 +73,23 @@ export const activateRuleConfig = asyncHandler(async (req, res) => {
   const isFutureEffective = ruleConfig.effectiveDate > new Date();
   ruleConfig.status = isFutureEffective ? 'scheduled' : 'active';
   await ruleConfig.save();
+
+  if (predecessor) {
+    predecessor.effectiveUntil = ruleConfig.effectiveDate;
+    predecessor.supersededByRuleId = ruleConfig._id;
+    predecessor.status = 'archived';
+    await predecessor.save();
+    await appendAuditLog({
+      entityType: 'RuleConfig',
+      entityId: predecessor._id,
+      action: 'supersede',
+      userId: req.user.sub,
+      details: {
+        supersededByRuleId: ruleConfig._id,
+        effectiveUntil: ruleConfig.effectiveDate,
+      },
+    });
+  }
   await appendAuditLog({
     entityType: 'RuleConfig',
     entityId: ruleConfig._id,
@@ -72,6 +100,7 @@ export const activateRuleConfig = asyncHandler(async (req, res) => {
       sandboxSummary: ruleConfig.sandboxSummary,
       status: ruleConfig.status,
       effectiveDate: ruleConfig.effectiveDate,
+      predecessorRuleId: predecessor?._id || null,
     },
   });
   res.status(200).json({ success: true, data: ruleConfig });
