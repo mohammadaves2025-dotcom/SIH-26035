@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getTestSessionById, addObservations, submitSession, approveSession, rejectSession } from '../../services/testSession.service.js';
+import { getTestSessionById, addObservations, updateObservation, deleteObservation, submitSession, approveSession, rejectSession } from '../../services/testSession.service.js';
 import { generateReport } from '../../services/report.service.js';
 import { getAttachments, uploadAttachment, downloadAttachment } from '../../services/attachment.service.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { ANNEX_REFS } from '../../config/constants.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
-import { ArrowLeft, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle2, ShieldCheck, XCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle2, ShieldCheck, XCircle, Trash2 } from 'lucide-react';
 
 export default function TestSessionDetailPage() {
   const { id } = useParams();
@@ -50,6 +50,14 @@ export default function TestSessionDetailPage() {
       setShowObsForm(false);
       const firstAnnex = session.selectedAnnexes?.[0] || '';
       setObsForm({ annexRef: firstAnnex, referenceLoad: '', indicatedValue: '', evaluationMethod: ANNEX_REFS.find((item) => item.value === firstAnnex)?.method || 'manual_checklist', checklistPassed: null, reviewerNotes: '', zeroCorrection: '' });
+    },
+  });
+
+  const deleteObsMutation = useMutation({
+    mutationFn: (obsId) => deleteObservation(id, obsId),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['test-session', id]);
+      addToast({ type: 'success', message: 'Observation removed successfully' });
     },
   });
 
@@ -171,6 +179,7 @@ export default function TestSessionDetailPage() {
             <div><span className="text-muted" style={{ fontSize: 12 }}>Max Capacity (Max)</span><br /><strong>{session.maxCapacity ?? '—'}</strong></div>
             <div><span className="text-muted" style={{ fontSize: 12 }}>Min Capacity (Min)</span><br /><strong>{session.minCapacity ?? '—'}</strong></div>
             <div><span className="text-muted" style={{ fontSize: 12 }}>Scale Interval (e)</span><br /><strong>{session.scaleInterval ?? '—'}</strong></div>
+            <div><span className="text-muted" style={{ fontSize: 12 }}>Verification Stage</span><br /><strong>{session.verificationStage === 'subsequent' ? 'Subsequent Inspection (2× MPE)' : 'Initial Verification'}</strong></div>
             <div><span className="text-muted" style={{ fontSize: 12 }}>Laboratory ID</span><br /><strong className="text-mono">{session.labId || '—'}</strong></div>
             <div><span className="text-muted" style={{ fontSize: 12 }}>Ambient Conditions</span><br /><strong>{session.environmentalConditions?.temperatureC ?? '—'}°C | {session.environmentalConditions?.humidityPercent ?? '—'}% RH</strong></div>
           </div>
@@ -189,7 +198,7 @@ export default function TestSessionDetailPage() {
             </button>
           </>
         )}
-        {session.status === 'passed' && isReviewerOrAdmin && (
+        {['passed', 'failed'].includes(session.status) && isReviewerOrAdmin && (
           <button className="gov-btn gov-btn-primary" onClick={() => reportMutation.mutate()} disabled={reportMutation.isPending}>
             <FileCheck size={14} /> {reportMutation.isPending ? 'Generating report...' : 'Generate test report'}
           </button>
@@ -266,7 +275,9 @@ export default function TestSessionDetailPage() {
                   <th>Indication (kg)</th>
                   <th>Computed error</th>
                   <th>Applied MPE</th>
+                  <th>Margin to MPE</th>
                   <th>Outcome</th>
+                  {session.status === 'draft' && canEditDraft && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -277,9 +288,24 @@ export default function TestSessionDetailPage() {
                       <td><span className="gov-badge gov-badge-info">{obs.annexRef}</span></td>
                       <td className="text-mono">{obs.referenceLoad ?? '—'}</td>
                       <td className="text-mono">{obs.indicatedValue ?? '—'}</td>
-                      <td className="text-mono">{obs.computedError ?? 'Pending evaluation'}</td>
-                      <td className="text-mono">{obs.appliedMpe ?? '—'}</td>
+                      <td className="text-mono">{obs.computedError !== undefined && obs.computedError !== null ? (obs.computedError > 0 ? `+${obs.computedError}` : obs.computedError) : 'Pending evaluation'}</td>
+                      <td className="text-mono">{obs.appliedMpe != null ? `±${obs.appliedMpe}` : '—'}</td>
+                      <td className="text-mono">{obs.marginToMpe != null ? (obs.marginToMpe >= 0 ? `+${obs.marginToMpe.toFixed(4)}` : `${obs.marginToMpe.toFixed(4)}`) : '—'}</td>
                       <td>{obs.outcome || 'Pending evaluation'}</td>
+                      {session.status === 'draft' && canEditDraft && (
+                        <td>
+                          <button
+                            type="button"
+                            className="gov-btn gov-btn-outline"
+                            style={{ padding: '2px 6px', color: 'var(--gov-red)', borderColor: 'var(--gov-red)' }}
+                            onClick={() => deleteObsMutation.mutate(obs._id)}
+                            disabled={deleteObsMutation.isPending}
+                            title="Delete observation"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -303,6 +329,7 @@ export default function TestSessionDetailPage() {
                   <th>Verdict</th>
                   <th>Error E (e)</th>
                   <th>Max Permissible Error MPE (±e)</th>
+                  <th>Margin to MPE</th>
                   <th>Evaluated At</th>
                 </tr>
               </thead>
@@ -310,6 +337,7 @@ export default function TestSessionDetailPage() {
                 {results.map((r, i) => {
                   const errVal = r.computedError ?? r.error;
                   const mpeVal = r.appliedMpe ?? r.mpe;
+                  const marginVal = r.marginToMpe;
                   const verdict = (r.outcome ?? r.verdict) || 'passed';
                   return (
                     <tr key={i}>
@@ -317,6 +345,7 @@ export default function TestSessionDetailPage() {
                       <td><StatusBadge status={verdict} /></td>
                       <td className="text-mono">{errVal != null ? (Number(errVal) > 0 ? `+${Number(errVal)}` : Number(errVal)) : '—'}</td>
                       <td className="text-mono">{mpeVal != null ? `±${Number(mpeVal)}` : '—'}</td>
+                      <td className="text-mono">{marginVal != null ? (Number(marginVal) >= 0 ? `+${Number(marginVal).toFixed(4)}` : `${Number(marginVal).toFixed(4)}`) : '—'}</td>
                       <td className="text-muted" style={{ fontSize: 12 }}>{r.updatedAt ? new Date(r.updatedAt).toLocaleDateString() : '—'}</td>
                     </tr>
                   );

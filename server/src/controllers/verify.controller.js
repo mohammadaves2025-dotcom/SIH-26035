@@ -35,11 +35,15 @@ export const verifyReport = asyncHandler(async (req, res) => {
     verifySignature(actualPdfHash, report.hmacTag)
   );
 
+  const isRevoked = report.status === 'revoked';
+
   res.status(200).json({
     success: true,
     data: {
       reportNumber: report.reportNumber,
       status: report.status,
+      isRevoked,
+      revocationNotice: isRevoked ? 'WARNING: This report has been REVOKED by the Legal Metrology Authority' : null,
       generatedAt: report.generatedAt,
       contentHash: report.contentHash,
       signatureAlgorithm: report.signatureAlgorithm || 'HMAC-SHA256',
@@ -47,7 +51,9 @@ export const verifyReport = asyncHandler(async (req, res) => {
       signatureType: 'server HMAC integrity tag; report is not PKI-signed',
       instrumentModelName: model?.modelName || 'Unknown',
       accuracyClass: model?.accuracyClass || 'Unknown',
+      serialNumber: session?.serialNumber || null,
       overallResult: session?.overallResult || 'Unknown',
+      overallVerdict: session?.overallResult || 'Unknown',
     },
   });
 });

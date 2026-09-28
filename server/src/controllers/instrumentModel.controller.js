@@ -120,6 +120,13 @@ export const updateInstrumentModel = asyncHandler(async (req, res) => {
     throw new AppError(404, 'NOT_FOUND', 'Instrument model not found');
   }
 
+  if (req.user.role === 'manufacturer') {
+    const ownManufacturer = await getManufacturerForUser(req.user.sub);
+    if (!ownManufacturer || ownManufacturer._id.toString() !== model.manufacturerId.toString()) {
+      throw new AppError(403, 'FORBIDDEN', 'Manufacturers may only modify their own instrument models');
+    }
+  }
+
   const { modelName, accuracyClass, maxCapacity, e, minCapacity } = req.body;
   if (modelName) model.modelName = modelName;
   if (accuracyClass) model.accuracyClass = accuracyClass;
@@ -133,6 +140,22 @@ export const updateInstrumentModel = asyncHandler(async (req, res) => {
   if (Math.abs(computedN - Math.round(computedN)) > 1e-9) {
     throw new AppError(400, 'VALIDATION_ERROR', 'Max capacity must be an integer multiple of verification interval e');
   }
+  const CLASS_BOUNDS = {
+    I: { nMin: 50000, nMax: null },
+    II: { nMin: 100, nMax: 100000 },
+    III: { nMin: 100, nMax: 10000 },
+    IIII: { nMin: 100, nMax: 1000 },
+  };
+  const bounds = CLASS_BOUNDS[model.accuracyClass];
+  if (bounds) {
+    if (computedN < bounds.nMin) {
+      throw new AppError(422, 'INVALID_CLASS_PARAMETERS', `Computed n (${computedN}) is less than minimum allowed (${bounds.nMin}) for Class ${model.accuracyClass}`);
+    }
+    if (bounds.nMax !== null && computedN > bounds.nMax) {
+      throw new AppError(422, 'INVALID_CLASS_PARAMETERS', `Computed n (${computedN}) is greater than maximum allowed (${bounds.nMax}) for Class ${model.accuracyClass}`);
+    }
+  }
+
   model.n = Math.round(computedN);
 
   await model.save();
@@ -145,6 +168,14 @@ export const deleteInstrumentModel = asyncHandler(async (req, res) => {
   if (!model) {
     throw new AppError(404, 'NOT_FOUND', 'Instrument model not found');
   }
+
+  if (req.user.role === 'manufacturer') {
+    const ownManufacturer = await getManufacturerForUser(req.user.sub);
+    if (!ownManufacturer || ownManufacturer._id.toString() !== model.manufacturerId.toString()) {
+      throw new AppError(403, 'FORBIDDEN', 'Manufacturers may only delete their own instrument models');
+    }
+  }
+
   if (await TestSession.exists({ instrumentModelId: model._id })) {
     throw new AppError(409, 'MODEL_IN_USE', 'Instrument models with test history cannot be deleted');
   }

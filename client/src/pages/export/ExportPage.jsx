@@ -13,11 +13,42 @@ export default function ExportPage() {
     setLoading(true);
     try {
       const res = await getExportData({ startDate, endDate, format });
-      const blob = new Blob([JSON.stringify(res, null, 2)], { type: 'application/json' });
+      const exportData = res?.data || res;
+      let blob;
+      let contentType;
+
+      if (format === 'csv') {
+        // Convert JSON array to real CSV
+        const rows = Array.isArray(exportData) ? exportData : [];
+        if (rows.length === 0) {
+          addToast({ type: 'warn', message: 'No data to export for the selected range' });
+          return;
+        }
+        const headers = Object.keys(rows[0]);
+        const csvLines = [
+          headers.join(','),
+          ...rows.map((row) =>
+            headers.map((h) => {
+              const val = row[h] ?? '';
+              // Escape values containing commas, quotes, or newlines
+              const str = String(val);
+              return str.includes(',') || str.includes('"') || str.includes('\n')
+                ? `"${str.replace(/"/g, '""')}"`
+                : str;
+            }).join(',')
+          ),
+        ];
+        blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        contentType = 'csv';
+      } else {
+        blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        contentType = 'json';
+      }
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `nawi_export_${new Date().toISOString().slice(0,10)}.${format === 'csv' ? 'csv' : 'json'}`;
+      a.download = `nawi_export_${new Date().toISOString().slice(0,10)}.${contentType}`;
       a.click();
       URL.revokeObjectURL(url);
       addToast({ type: 'success', message: `Export file downloaded (${format.toUpperCase()})` });

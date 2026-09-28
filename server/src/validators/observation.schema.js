@@ -61,6 +61,9 @@ export const singleObservationSchema = z
       if (!data.reviewerNotes?.trim()) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'reviewerNotes is required for manual_checklist evaluation', path: ['reviewerNotes'] });
       }
+      if (data.annexRef === 'B_electronic_additional' && (data.reviewerNotes?.trim().length || 0) < 5) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Annex B electronic tests require descriptive reviewer notes detailing test conditions (e.g. voltage, ESD, immunity)', path: ['reviewerNotes'] });
+      }
       if (data.referenceLoad !== undefined || data.indicatedValue !== undefined) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

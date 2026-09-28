@@ -193,7 +193,7 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
                   (att, idx) => `
                 <tr>
                   <td>${idx + 1}</td>
-                  <td>${escapeHtml(att.filename || att.originalName || 'Attachment')}</td>
+                  <td>${escapeHtml(att.originalFilename || att.filename || 'Attachment')}</td>
                   <td>${escapeHtml(att.fileType || 'Document')}</td>
                   <td>${new Date(att.createdAt || Date.now()).toISOString().split('T')[0]}</td>
                 </tr>
@@ -357,11 +357,11 @@ export async function generateReport({ testSessionId, userId }) {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
 
-  if (session.status !== 'passed' || session.overallResult !== 'pass') {
+  if (!['passed', 'failed'].includes(session.status) || !['pass', 'fail'].includes(session.overallResult)) {
     throw new AppError(
       409,
       'INVALID_STATE',
-      'Cannot generate a report unless the session is approved and its evaluation passed'
+      'Cannot generate a report unless the session has been reviewed and approved (passed or failed)'
     );
   }
 

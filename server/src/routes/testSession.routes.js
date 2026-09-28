@@ -2,6 +2,8 @@ import { Router } from 'express';
 import {
   createTestSession,
   addObservations,
+  updateObservation,
+  deleteObservation,
   submitTestSession,
   approveTestSession,
   rejectTestSession,
@@ -13,6 +15,7 @@ import { authorize } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import { createTestSessionSchema } from '../validators/testSession.schema.js';
 import { addObservationsSchema } from '../validators/observation.schema.js';
+import { singleObservationSchema } from '../validators/observation.schema.js';
 
 const router = Router();
 
@@ -30,6 +33,19 @@ router.post(
   authorize('admin', 'lab_technician', 'lab_admin'),
   validate(addObservationsSchema),
   addObservations
+);
+
+router.patch(
+  '/:id/observations/:obsId',
+  authorize('admin', 'lab_technician', 'lab_admin'),
+  validate(singleObservationSchema),
+  updateObservation
+);
+
+router.delete(
+  '/:id/observations/:obsId',
+  authorize('admin', 'lab_technician', 'lab_admin'),
+  deleteObservation
 );
 
 router.post(
@@ -54,3 +70,4 @@ router.get('/', getTestSessions);
 router.get('/:id', getTestSessionById);
 
 export default router;
+

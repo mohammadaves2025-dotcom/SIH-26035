@@ -93,6 +93,11 @@ export default function VerifyPage() {
           </div>
 
           <div className="gov-card-body">
+            {result.isRevoked && (
+              <div className="gov-card mb-16" style={{ background: 'var(--gov-red-light)', border: '1px solid var(--gov-red)', color: 'var(--gov-red)', padding: 12 }}>
+                <strong>{result.revocationNotice || 'WARNING: This report has been REVOKED'}</strong>
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 14 }}>
               <div><span className="text-muted" style={{ fontSize: 12 }}>Report Number</span><br /><strong className="text-mono">{result.reportNumber || result._id}</strong></div>
               <div><span className="text-muted" style={{ fontSize: 12 }}>PDF integrity</span><br /><strong>{result.isIntegrityVerified ? 'Verified' : 'Could not verify stored PDF'}</strong></div>

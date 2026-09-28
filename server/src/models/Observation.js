@@ -38,6 +38,8 @@ const observationSchema = new mongoose.Schema(
     zeroCorrection: { type: Number, default: 0 },
     computedError: { type: Number },
     appliedMpe: { type: Number },
+    marginToMpe: { type: Number },
+    errorRatioE: { type: Number },
     ruleConfigId: { type: mongoose.Schema.Types.ObjectId, ref: 'RuleConfig' },
 
     // manual_checklist fields

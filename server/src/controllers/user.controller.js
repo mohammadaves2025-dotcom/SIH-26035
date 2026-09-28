@@ -4,7 +4,7 @@ import { AppError } from '../utils/AppError.js';
 
 export const getUsers = asyncHandler(async (req, res) => {
   const query = {};
-  if (req.user.role === 'lab_admin') {
+  if (['lab_admin', 'reviewer'].includes(req.user.role)) {
     query.labId = req.user.labId || null;
   } else if (req.query.labId) {
     query.labId = req.query.labId;
@@ -63,9 +63,16 @@ export const deleteUser = asyncHandler(async (req, res) => {
     throw new AppError(403, 'FORBIDDEN', 'Cannot manage users outside your assigned laboratory');
   }
 
-  await User.findByIdAndDelete(req.params.id);
+  if (!userToDelete.active) {
+    throw new AppError(409, 'ALREADY_ARCHIVED', 'User is already archived');
+  }
+
+  // Soft-delete: set active=false to preserve audit trail references (§11.4)
+  userToDelete.active = false;
+  await userToDelete.save();
+
   res.status(200).json({
     success: true,
-    message: 'User removed successfully',
+    message: 'User archived successfully',
   });
 });

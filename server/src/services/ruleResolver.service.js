@@ -3,6 +3,9 @@ import { AppError } from '../utils/AppError.js';
 
 export async function resolveRuleConfig(accuracyClass, testDate) {
   const dateObj = new Date(testDate);
+  if (isNaN(dateObj.getTime())) {
+    throw new AppError(400, 'VALIDATION_ERROR', `Invalid evaluation test date: '${testDate}'`);
+  }
   const config = await RuleConfig.findOne({
     accuracyClass,
     effectiveDate: { $lte: dateObj },

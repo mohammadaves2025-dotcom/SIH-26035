@@ -1,5 +1,6 @@
 import { Manufacturer } from '../models/Manufacturer.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
 
 export const createManufacturer = asyncHandler(async (req, res) => {
   const manufacturer = await Manufacturer.create(req.body);

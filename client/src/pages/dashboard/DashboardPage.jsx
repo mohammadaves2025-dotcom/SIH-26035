@@ -12,7 +12,15 @@ import {
 } from 'recharts';
 import './DashboardPage.css';
 
-const PIE_COLORS = ['#003366', '#D97706', '#138808', '#DC2626', '#D4AF37'];
+const STATUS_CONFIG = {
+  draft: { label: 'Draft', color: '#003366' },
+  submitted: { label: 'Submitted', color: '#D97706' },
+  under_review: { label: 'Under Review', color: '#2563EB' },
+  passed: { label: 'Passed', color: '#138808' },
+  failed: { label: 'Failed', color: '#DC2626' },
+  report_generated: { label: 'Report Generated', color: '#7C3AED' },
+  published: { label: 'Published', color: '#059669' },
+};
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
@@ -33,7 +41,14 @@ export default function DashboardPage() {
   };
 
   const statusData = stats?.statusBreakdown
-    ? Object.entries(stats.statusBreakdown).map(([name, value]) => ({ name, value }))
+    ? Object.entries(stats.statusBreakdown)
+        .map(([key, value]) => ({
+          key,
+          name: STATUS_CONFIG[key]?.label || key.replace(/_/g, ' '),
+          value: Number(value) || 0,
+          color: STATUS_CONFIG[key]?.color || '#003366',
+        }))
+        .filter((item) => item.value > 0)
     : [];
 
   const monthlyData = stats?.monthlyTrend || [];
@@ -90,16 +105,34 @@ export default function DashboardPage() {
             <div className="gov-card-header">
               <h4><CheckCircle2 size={16} style={{ marginRight: 8 }} />Test Session Statuses</h4>
             </div>
-            <div className="gov-card-body" style={{ height: 300 }}>
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie data={statusData} cx="50%" cy="50%" outerRadius={90} innerRadius={45} dataKey="value" label>
-                    {statusData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                  </Pie>
-                  <Legend />
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+            <div className="gov-card-body" style={{ height: 320, padding: 16 }}>
+              {statusData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusData}
+                      cx="50%"
+                      cy="42%"
+                      outerRadius={75}
+                      innerRadius={42}
+                      paddingAngle={3}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      labelLine={true}
+                    >
+                      {statusData.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(val, name) => [`${val} sessions`, name]} />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748B', fontSize: 13 }}>
+                  No active session data to display
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -215,16 +248,34 @@ export default function DashboardPage() {
           <div className="gov-card-header">
             <h4><AlertCircle size={16} style={{ marginRight: 8 }} />Session Status Breakdown</h4>
           </div>
-          <div className="gov-card-body" style={{ height: 300 }}>
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={statusData} cx="50%" cy="50%" outerRadius={100} innerRadius={50} dataKey="value" labelLine={false} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                  {statusData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                </Pie>
-                <Legend />
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="gov-card-body" style={{ height: 320, padding: 16 }}>
+            {statusData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="42%"
+                    outerRadius={80}
+                    innerRadius={45}
+                    paddingAngle={3}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                    labelLine={true}
+                  >
+                    {statusData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(val, name) => [`${val} sessions`, name]} />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748B', fontSize: 13 }}>
+                No active session data to display
+              </div>
+            )}
           </div>
         </div>
       </div>

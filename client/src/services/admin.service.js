@@ -1,6 +1,7 @@
 import apiClient from './apiClient.js';
 
 export const getAuditLogs = (params) => apiClient.get('/audit-log', { params });
+export const verifyAuditIntegrity = () => apiClient.get('/audit-log/integrity');
 export const getDashboardStats = () => apiClient.get('/dashboard/stats');
 export const getExportData = (params) => apiClient.get('/export/legal-metrology', { params });
 export const getDemoStatus = () => apiClient.get('/demo/status');

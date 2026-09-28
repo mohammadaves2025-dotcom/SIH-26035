@@ -16,9 +16,17 @@ export function authenticate(req, res, next) {
   } catch (err) {
     return next(new AppError(401, 'INVALID_TOKEN', 'Invalid or expired token'));
   }
-  User.findById(decoded.sub).select('active').then((user) => {
+  User.findById(decoded.sub).select('active role labId email name').then((user) => {
     if (!user || !user.active) return next(new AppError(401, 'ACCOUNT_DISABLED', 'Account is unavailable'));
-    req.user = decoded;
+    // Use live DB values for role, labId and email — not the potentially stale JWT claims
+    req.user = {
+      ...decoded,
+      role: user.role,
+      labId: user.labId,
+      email: user.email,
+      name: user.name,
+    };
     return next();
   }).catch(next);
 }
+

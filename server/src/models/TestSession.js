@@ -28,6 +28,11 @@ const testSessionSchema = new mongoose.Schema(
       required: true,
     },
     testDate: { type: Date, required: true },
+    verificationStage: {
+      type: String,
+      enum: ['initial', 'subsequent'],
+      default: 'initial',
+    },
     status: {
       type: String,
       enum: ['draft', 'submitted', 'under_review', 'passed', 'failed', 'report_generated', 'published', 'revoked', 'archived'],
@@ -42,6 +47,7 @@ const testSessionSchema = new mongoose.Schema(
       temperatureC: { type: Number, required: true },
       humidityPercent: { type: Number, required: true, min: 0, max: 100 },
       inclinationDeg: { type: Number, required: true },
+      atmosphericPressurehPa: { type: Number },
       notes: { type: String, trim: true, required: true },
     },
   },

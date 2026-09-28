@@ -32,8 +32,28 @@ export default function ReportsPage() {
     },
   });
 
-  const handleDownload = (reportId, format = 'pdf') => {
-    window.open(`/api/reports/${reportId}/download/${format}`, '_blank');
+  const handleDownload = async (reportId, format = 'pdf') => {
+    try {
+      const token = useAuthStore.getState().token;
+      const res = await fetch(`/api/reports/${reportId}/download/${format}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.error?.message || `Download failed (${res.status})`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `report_${reportId.slice(-8)}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      addToast({ type: 'error', message: err.message || 'Download failed' });
+    }
   };
 
   return (

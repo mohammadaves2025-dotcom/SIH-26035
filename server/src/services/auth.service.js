@@ -18,7 +18,7 @@ export async function registerUser({ name, email, password, role, labId }) {
     email,
     passwordHash,
     role,
-    labId: ['lab_technician', 'reviewer'].includes(role) ? labId : null,
+    labId: ['lab_technician', 'reviewer', 'lab_admin'].includes(role) ? labId : null,
   });
 
   return {

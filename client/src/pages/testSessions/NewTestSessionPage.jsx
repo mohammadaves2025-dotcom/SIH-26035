@@ -23,8 +23,9 @@ export default function NewTestSessionPage() {
     temperatureC: '',
     humidityPercent: '',
     inclinationDeg: '',
+    verificationStage: 'initial',
     envNotes: '',
-    selectedAnnexes: [],
+    selectedAnnexes: ['A1_administrative', 'A2_construction', 'A4_accuracy'],
   });
 
   const { data: modelsData } = useQuery({
@@ -71,6 +72,7 @@ export default function NewTestSessionPage() {
       serialNumber: form.serialNumber.trim(),
       labId: form.labId,
       testDate: form.testDate,
+      verificationStage: form.verificationStage,
       environmentalConditions: {
         temperatureC: Number(form.temperatureC),
         humidityPercent: Number(form.humidityPercent),
@@ -140,6 +142,13 @@ export default function NewTestSessionPage() {
                   <label className="gov-label">Evaluation Test Date</label>
                   <input className="gov-input" required type="date" value={form.testDate} onChange={(e) => updateField('testDate', e.target.value)} />
                 </div>
+                <div className="gov-form-group">
+                  <label className="gov-label">Verification Stage (OIML R 76 §3.5)</label>
+                  <select className="gov-select" value={form.verificationStage} onChange={(e) => updateField('verificationStage', e.target.value)}>
+                    <option value="initial">Initial Verification (Standard MPE)</option>
+                    <option value="subsequent">Subsequent / In-Service Inspection (2× MPE)</option>
+                  </select>
+                </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                 <div className="gov-form-group">
@@ -183,10 +192,15 @@ export default function NewTestSessionPage() {
               <p style={{ fontSize: 13, color: 'var(--gov-text-muted)', marginBottom: 14 }}>
                 Select the OIML R-76 annexes to include in this evaluation.
               </p>
+              <div className="flex-gap-8 mb-12">
+                <button type="button" className="gov-btn gov-btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setForm(f => ({ ...f, selectedAnnexes: ANNEX_REFS.map(a => a.value) }))}>Select All</button>
+                <button type="button" className="gov-btn gov-btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setForm(f => ({ ...f, selectedAnnexes: ['A1_administrative', 'A2_construction', 'A4_accuracy'] }))}>Select Mandatory Only</button>
+                <button type="button" className="gov-btn gov-btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setForm(f => ({ ...f, selectedAnnexes: [] }))}>Clear All</button>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {ANNEX_REFS.map((a) => (
                   <label key={a.value} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', border: '1px solid var(--gov-border-subtle)', borderRadius: 'var(--gov-radius)', cursor: 'pointer', background: form.selectedAnnexes.includes(a.value) ? 'var(--gov-blue-light)' : 'transparent' }}>
-                <input type="checkbox" checked={form.selectedAnnexes.includes(a.value)} onChange={() => toggleAnnex(a.value)} />
+                    <input type="checkbox" checked={form.selectedAnnexes.includes(a.value)} onChange={() => toggleAnnex(a.value)} />
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{a.label}</span>
                   </label>
                 ))}

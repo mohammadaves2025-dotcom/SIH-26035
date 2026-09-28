@@ -14,6 +14,7 @@ export const createTestSession = asyncHandler(async (req, res) => {
     instrumentModelId,
     serialNumber,
     testDate,
+    verificationStage,
     environmentalConditions,
     selectedAnnexes,
   } = req.body;
@@ -44,6 +45,7 @@ export const createTestSession = asyncHandler(async (req, res) => {
     laboratoryName: laboratory.labName,
     createdBy: req.user.sub,
     testDate,
+    verificationStage: verificationStage || 'initial',
     status: 'draft',
     environmentalConditions,
   });
@@ -152,11 +154,13 @@ export const submitTestSession = asyncHandler(async (req, res) => {
   const ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
 
   for (const obs of observations) {
-    const evalResult = evaluateObservation(obs, instrumentModel, ruleConfig);
+    const evalResult = evaluateObservation(obs, instrumentModel, ruleConfig, session.verificationStage || 'initial');
     obs.outcome = evalResult.outcome;
     if (obs.evaluationMethod === 'mpe_band') {
       obs.computedError = evalResult.computedError;
       obs.appliedMpe = evalResult.appliedMpe;
+      obs.marginToMpe = evalResult.marginToMpe;
+      obs.errorRatioE = evalResult.errorRatioE;
       obs.ruleConfigId = evalResult.ruleConfigId;
     }
     await obs.save();
@@ -319,3 +323,88 @@ export const getTestSessionById = asyncHandler(async (req, res) => {
     },
   });
 });
+
+export const updateObservation = asyncHandler(async (req, res) => {
+  const observation = await Observation.findById(req.params.obsId);
+  if (!observation) {
+    throw new AppError(404, 'NOT_FOUND', 'Observation not found');
+  }
+
+  const session = await TestSession.findById(observation.testSessionId);
+  if (!session) {
+    throw new AppError(404, 'NOT_FOUND', 'Parent test session not found');
+  }
+
+  if (session.status !== 'draft') {
+    throw new AppError(
+      409,
+      'SESSION_LOCKED',
+      'Observations can only be edited while the session is in draft status'
+    );
+  }
+  await assertSessionAccess(req, session);
+
+  // Only allow updating data fields, not computed fields
+  const allowedFields = ['annexRef', 'evaluationMethod', 'referenceLoad', 'indicatedValue', 'zeroCorrection', 'checklistPassed', 'reviewerNotes'];
+  for (const field of allowedFields) {
+    if (req.body[field] !== undefined) {
+      observation[field] = req.body[field];
+    }
+  }
+
+  // Clear computed fields — they'll be recalculated on next submit
+  observation.computedError = undefined;
+  observation.appliedMpe = undefined;
+  observation.ruleConfigId = undefined;
+  observation.outcome = null;
+
+  await observation.save();
+
+  await appendAuditLog({
+    entityType: 'Observation',
+    entityId: observation._id,
+    action: 'update',
+    userId: req.user.sub,
+  });
+
+  res.status(200).json({
+    success: true,
+    data: observation,
+  });
+});
+
+export const deleteObservation = asyncHandler(async (req, res) => {
+  const observation = await Observation.findById(req.params.obsId);
+  if (!observation) {
+    throw new AppError(404, 'NOT_FOUND', 'Observation not found');
+  }
+
+  const session = await TestSession.findById(observation.testSessionId);
+  if (!session) {
+    throw new AppError(404, 'NOT_FOUND', 'Parent test session not found');
+  }
+
+  if (session.status !== 'draft') {
+    throw new AppError(
+      409,
+      'SESSION_LOCKED',
+      'Observations can only be deleted while the session is in draft status'
+    );
+  }
+  await assertSessionAccess(req, session);
+
+  await Observation.findByIdAndDelete(observation._id);
+
+  await appendAuditLog({
+    entityType: 'Observation',
+    entityId: observation._id,
+    action: 'delete',
+    userId: req.user.sub,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Observation deleted successfully',
+  });
+});
+

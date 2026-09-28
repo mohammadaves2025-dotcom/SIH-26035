@@ -15,7 +15,7 @@ export const getAuditLogs = asyncHandler(async (req, res) => {
   if (req.query.entityType) query.entityType = req.query.entityType;
   if (req.query.entityId) query.entityId = req.query.entityId;
 
-  if (req.user.role === 'lab_admin') {
+  if (['lab_admin', 'reviewer', 'lab_technician'].includes(req.user.role)) {
     const sessions = await TestSession.find({ labId: req.user.labId || null }).select('_id');
     const sessionIds = sessions.map((session) => session._id);
     const [observationIds, attachmentIds, reportIds] = await Promise.all([

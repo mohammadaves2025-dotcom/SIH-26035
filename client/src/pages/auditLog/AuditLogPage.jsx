@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { getAuditLogs } from '../../services/admin.service.js';
-import { ScrollText, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { getAuditLogs, verifyAuditIntegrity } from '../../services/admin.service.js';
+import { useNotificationStore } from '../../store/useNotificationStore.js';
+import { ScrollText, ShieldCheck, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle } from 'lucide-react';
 
 export default function AuditLogPage() {
   const [page, setPage] = useState(1);
   const limit = 20;
+  const addToast = useNotificationStore((s) => s.addToast);
+  const [integrityResult, setIntegrityResult] = useState(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['audit-logs', page],
@@ -14,18 +17,57 @@ export default function AuditLogPage() {
     keepPreviousData: true,
   });
 
+  const verifyMutation = useMutation({
+    mutationFn: verifyAuditIntegrity,
+    onSuccess: (res) => {
+      const resultData = res?.data || res;
+      setIntegrityResult(resultData);
+      if (resultData?.valid) {
+        addToast({ type: 'success', message: `Audit chain verified! All ${resultData.checkedEntries} entries intact.` });
+      } else {
+        addToast({ type: 'error', message: 'Audit chain verification failed! Tampering detected.' });
+      }
+    },
+    onError: () => {
+      addToast({ type: 'error', message: 'Failed to verify audit chain' });
+    },
+  });
+
   const logs = Array.isArray(data) ? data : [];
   const total = data?.pagination?.total || data?.total || logs.length;
   const totalPages = Math.ceil(total / limit) || 1;
 
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header flex-between mb-24">
         <div>
           <h1><ScrollText size={22} style={{ marginRight: 8, verticalAlign: -3 }} />Audit Trail</h1>
           <p className="page-header-subtitle">Immutable SHA-256 hash-chained compliance audit log</p>
         </div>
+        <button
+          className="gov-btn gov-btn-primary"
+          onClick={() => verifyMutation.mutate()}
+          disabled={verifyMutation.isPending}
+        >
+          <ShieldCheck size={16} /> {verifyMutation.isPending ? 'Verifying chain…' : 'Verify Chain Integrity'}
+        </button>
       </div>
+
+      {integrityResult && (
+        <div className="gov-card mb-24" style={{ borderLeft: `4px solid ${integrityResult.valid ? 'var(--gov-green)' : 'var(--gov-red)'}` }}>
+          <div className="gov-card-body flex-gap-12" style={{ alignItems: 'center' }}>
+            {integrityResult.valid ? <CheckCircle color="var(--gov-green)" size={24} /> : <AlertTriangle color="var(--gov-red)" size={24} />}
+            <div>
+              <h4 style={{ margin: 0 }}>{integrityResult.valid ? 'Cryptographic Audit Chain Intact' : 'Audit Chain Tampering Detected'}</h4>
+              <p style={{ fontSize: 13, margin: '4px 0 0 0', color: 'var(--gov-text-muted)' }}>
+                {integrityResult.valid
+                  ? `Successfully verified SHA-256 linkage across ${integrityResult.checkedEntries} sequential entries.`
+                  : `Chain broken at entry ID: ${integrityResult.invalidEntryId || 'Unknown'}`}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="gov-card">
         <div className="gov-card-body" style={{ padding: 0, overflowX: 'auto' }}>

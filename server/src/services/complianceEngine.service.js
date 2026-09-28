@@ -11,7 +11,7 @@ function toScaledInteger(value, label) {
   return BigInt(Math.round(scaled));
 }
 
-export function evaluateObservation(observation, instrumentModel, ruleConfig) {
+export function evaluateObservation(observation, instrumentModel, ruleConfig, verificationStage = 'initial') {
   if (observation.evaluationMethod === 'manual_checklist') {
     const outcome = observation.checklistPassed ? 'pass' : 'fail';
     return { outcome };
@@ -70,16 +70,25 @@ export function evaluateObservation(observation, instrumentModel, ruleConfig) {
     );
   }
 
-  const factorScaled = toScaledInteger(band.mpeFactor, 'MPE factor');
+  // OIML R 76 §3.5: In-service / subsequent verification MPE limits are 2x initial limits
+  const stageMultiplier = verificationStage === 'subsequent' ? 2n : 1n;
+  const factorScaled = toScaledInteger(band.mpeFactor, 'MPE factor') * stageMultiplier;
   const errorScaled = indicatedValueScaled - referenceLoadScaled - zeroCorrectionScaled;
   const withinMpe = (errorScaled < 0n ? -errorScaled : errorScaled) * DECIMAL_SCALE <= factorScaled * eScaled;
   const appliedMpe = Number(factorScaled * eScaled) / (DECIMAL_SCALE_NUMBER * DECIMAL_SCALE_NUMBER);
   const computedError = Number(errorScaled) / DECIMAL_SCALE_NUMBER;
   const outcome = withinMpe ? 'pass' : 'fail';
 
+  // §9.3 step 4: margin and error ratio
+  const marginToMpe = appliedMpe - Math.abs(computedError);
+  const eValue = Number(eScaled) / DECIMAL_SCALE_NUMBER;
+  const errorRatioE = eValue !== 0 ? computedError / eValue : null;
+
   return {
     computedError,
     appliedMpe,
+    marginToMpe,
+    errorRatioE,
     outcome,
     ruleConfigId: ruleConfig._id,
   };

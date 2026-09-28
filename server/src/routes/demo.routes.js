@@ -3,13 +3,22 @@ import { seedDemoData } from '../seed/seedDemoData.js';
 import { TestSession } from '../models/TestSession.js';
 import { Observation } from '../models/Observation.js';
 import { Report } from '../models/Report.js';
-import { AuditLog } from '../models/AuditLog.js';
+import { Attachment } from '../models/Attachment.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
+import { AppError } from '../utils/AppError.js';
 
 const router = Router();
 
-router.get('/status', async (req, res, next) => {
+// Gate all demo routes behind ENABLE_DEMO env var
+router.use((req, res, next) => {
+  if (process.env.ENABLE_DEMO !== 'true') {
+    return next(new AppError(404, 'NOT_FOUND', 'Demo endpoints are not enabled'));
+  }
+  next();
+});
+
+router.get('/status', authenticate, authorize('admin'), async (req, res, next) => {
   try {
     const sessionCount = await TestSession.countDocuments();
     res.json({
@@ -39,11 +48,12 @@ router.post('/seed', authenticate, authorize('admin'), async (req, res, next) =>
 
 router.post('/clear', authenticate, authorize('admin'), async (req, res, next) => {
   try {
+    // Deliberately NOT clearing AuditLog — §11.2 mandates append-only audit trail
     await Promise.all([
       TestSession.deleteMany({}),
       Observation.deleteMany({}),
       Report.deleteMany({}),
-      AuditLog.deleteMany({}),
+      Attachment.deleteMany({}),
     ]);
     res.json({
       success: true,
@@ -56,3 +66,4 @@ router.post('/clear', authenticate, authorize('admin'), async (req, res, next) =
 });
 
 export default router;
+

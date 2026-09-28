@@ -7,6 +7,7 @@ export const createTestSessionSchema = z
     serialNumber: z.string().trim().min(1, 'serialNumber is required'),
     selectedAnnexes: z.array(z.enum(ANNEX_REFS)).min(1, 'Select at least one test procedure'),
     testDate: z.string().date('testDate must be a valid calendar date').transform((val) => new Date(`${val}T00:00:00.000Z`)),
+    verificationStage: z.enum(['initial', 'subsequent']).default('initial').optional(),
     labId: z.string().trim().min(1).optional(),
     environmentalConditions: z
       .object({
