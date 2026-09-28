@@ -88,21 +88,23 @@ export default function Header() {
         </div>
 
         <div className="header-actions">
-          <button
-            className={`header-seed-btn ${isDemoActive ? 'active-demo' : ''}`}
-            onClick={handleToggleDemoData}
-            disabled={loading}
-            title={isDemoActive ? 'Click to clear demo sessions' : 'Click to include Legal Metrology demo datasets'}
-          >
-            {isDemoActive ? <CheckCircle2 size={15} color="#fff" /> : <Database size={15} color="#fff" />}
-            <span>
-              {loading
-                ? 'Processing...'
-                : isDemoActive
-                ? '✓ Demo Data Included'
-                : 'Include Demo Data'}
-            </span>
-          </button>
+          {user && ['admin', 'lab_admin'].includes(user.role) && (
+            <button
+              className={`header-seed-btn ${isDemoActive ? 'active-demo' : ''}`}
+              onClick={handleToggleDemoData}
+              disabled={loading}
+              title={isDemoActive ? 'Click to clear demo sessions' : 'Click to include Legal Metrology demo datasets'}
+            >
+              {isDemoActive ? <CheckCircle2 size={15} color="#fff" /> : <Database size={15} color="#fff" />}
+              <span>
+                {loading
+                  ? 'Processing...'
+                  : isDemoActive
+                  ? '✓ Demo Data Included'
+                  : 'Include Demo Data'}
+              </span>
+            </button>
+          )}
 
           {user && (
             <div className="header-user">

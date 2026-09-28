@@ -62,8 +62,7 @@ export const getInstrumentModels = asyncHandler(async (req, res) => {
 
   // If manufacturer user, auto-filter to their manufacturer
   if (req.user.role === 'manufacturer') {
-    const user = await User.findById(req.user.sub);
-    const mfg = await Manufacturer.findOne({ contactEmail: user?.email });
+    const mfg = await getManufacturerForUser(req.user.sub);
     if (mfg) {
       query.manufacturerId = mfg._id;
     } else {
@@ -101,8 +100,7 @@ export const getInstrumentModelById = asyncHandler(async (req, res) => {
   }
 
   if (req.user.role === 'manufacturer') {
-    const user = await User.findById(req.user.sub);
-    const mfg = await Manufacturer.findOne({ contactEmail: user?.email });
+    const mfg = await getManufacturerForUser(req.user.sub);
     if (!mfg || model.manufacturerId._id.toString() !== mfg._id.toString()) {
       throw new AppError(403, 'FORBIDDEN', 'Cannot access models of another manufacturer');
     }

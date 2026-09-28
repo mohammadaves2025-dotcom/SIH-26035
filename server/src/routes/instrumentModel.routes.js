@@ -23,7 +23,7 @@ router.post(
 );
 router.get('/', getInstrumentModels);
 router.get('/:id', getInstrumentModelById);
-router.patch('/:id', authorize('admin', 'lab_admin'), updateInstrumentModel);
-router.delete('/:id', authorize('admin', 'lab_admin'), deleteInstrumentModel);
+router.patch('/:id', authorize('admin', 'lab_admin', 'manufacturer'), updateInstrumentModel);
+router.delete('/:id', authorize('admin', 'lab_admin', 'manufacturer'), deleteInstrumentModel);
 
 export default router;
