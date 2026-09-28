@@ -3,6 +3,7 @@ import { appendAuditLog } from '../services/auditLogger.service.js';
 import { resolveRuleConfig } from '../services/ruleResolver.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
+import { compareRuleConfigToHistory } from '../services/ruleSandbox.service.js';
 
 export const createRuleConfig = asyncHandler(async (req, res) => {
   const ruleConfig = await RuleConfig.create({ ...req.body, status: 'draft', createdBy: req.user.sub });
@@ -32,6 +33,16 @@ export const activateRuleConfig = asyncHandler(async (req, res) => {
   if (!ruleConfig.createdBy) {
     throw new AppError(422, 'RULE_REVIEW_REQUIRED', 'Seeded or unowned example rules cannot be activated; create a reviewed rule configuration first');
   }
+  if (!ruleConfig.sandboxedAt || !ruleConfig.sandboxResultHash) {
+    throw new AppError(409, 'SANDBOX_REQUIRED', 'Run the historical regression comparison before activating this rule');
+  }
+  const currentSandbox = await compareRuleConfigToHistory(ruleConfig);
+  if (currentSandbox.resultHash !== ruleConfig.sandboxResultHash) {
+    throw new AppError(409, 'SANDBOX_STALE', 'Relevant historical results changed after sandboxing; run the comparison again before activating');
+  }
+  if (ruleConfig.sandboxSummary?.uncomparable > 0) {
+    throw new AppError(409, 'SANDBOX_INCOMPLETE', 'Resolve observations that could not be compared before activating this rule');
+  }
   if (ruleConfig.createdBy.toString() === req.user.sub) {
     throw new AppError(403, 'SEPARATION_OF_DUTIES', 'The rule author cannot provide the metrology expert approval');
   }
@@ -55,8 +66,39 @@ export const activateRuleConfig = asyncHandler(async (req, res) => {
     entityId: ruleConfig._id,
     action: `activate: ${sourceReference.trim()}`,
     userId: req.user.sub,
+    details: { sandboxResultHash: ruleConfig.sandboxResultHash, sandboxSummary: ruleConfig.sandboxSummary },
   });
   res.status(200).json({ success: true, data: ruleConfig });
+});
+
+export const sandboxRuleConfig = asyncHandler(async (req, res) => {
+  const ruleConfig = await RuleConfig.findById(req.params.id);
+  if (!ruleConfig) throw new AppError(404, 'NOT_FOUND', 'Rule configuration not found');
+  if (ruleConfig.status !== 'draft') {
+    throw new AppError(409, 'INVALID_STATE', 'Only a draft rule configuration can be sandboxed');
+  }
+
+  const result = await compareRuleConfigToHistory(ruleConfig);
+  ruleConfig.sandboxedBy = req.user.sub;
+  ruleConfig.sandboxedAt = new Date();
+  ruleConfig.sandboxResultHash = result.resultHash;
+  ruleConfig.sandboxSummary = {
+    compared: result.compared,
+    unchanged: result.unchanged,
+    changed: result.changed,
+    uncomparable: result.uncomparable,
+  };
+  await ruleConfig.save();
+
+  await appendAuditLog({
+    entityType: 'RuleConfig',
+    entityId: ruleConfig._id,
+    action: 'sandbox_regression_comparison',
+    userId: req.user.sub,
+    details: { resultHash: result.resultHash, summary: ruleConfig.sandboxSummary },
+  });
+
+  res.status(200).json({ success: true, data: result });
 });
 
 export const getRuleConfigs = asyncHandler(async (req, res) => {

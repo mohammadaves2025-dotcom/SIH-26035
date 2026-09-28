@@ -22,6 +22,15 @@ const ruleConfigSchema = new mongoose.Schema(
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     approvedAt: { type: Date, default: null },
+    sandboxedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    sandboxedAt: { type: Date, default: null },
+    sandboxResultHash: { type: String, default: null },
+    sandboxSummary: {
+      compared: { type: Number, default: 0 },
+      unchanged: { type: Number, default: 0 },
+      changed: { type: Number, default: 0 },
+      uncomparable: { type: Number, default: 0 },
+    },
     status: {
       type: String,
       enum: ['draft', 'active', 'archived'],

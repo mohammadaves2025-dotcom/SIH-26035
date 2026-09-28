@@ -9,7 +9,7 @@
 |---|---|---|---|---|
 | A1 | MPE band was chosen from `maxCapacity`, not from the test `referenceLoad`. **NOW FIXED** — band selection uses `referenceLoadScaled <= uptoMultipleOfE * eScaled`. | `server/src/services/complianceEngine.service.js` | Needs expert validation | FIXED |
 | A2 | Only `A4_accuracy` is computed automatically. Other annexes use manual `checklistPassed` boolean, throwing `UNSUPPORTED_TEST_METHOD` for `mpe_band` mode on other annexes. | `complianceEngine.service.js`, `client/src/config/constants.js` | Needs expert validation | CONFIRMED |
-| A3 | Rule activation and seed flow gap: `seedRuleConfigs` seeds draft rules without createdBy; `activateRuleConfig` requires author != approver and `metrology_expert` role; `seedUsers` lacked `metrology_expert` user. | `seed/*.js`, `ruleConfig.controller.js` | Needs expert validation | PARTIAL — seed user exists; seeded-rule authorship and independent activation flow still need review |
+| A3 | Rule activation and seed flow gap: `seedRuleConfigs` seeds draft rules without createdBy; `activateRuleConfig` requires author != approver and `metrology_expert` role; `seedUsers` lacked `metrology_expert` user. | `seed/*.js`, `ruleConfig.controller.js` | Needs expert validation | FIXED — seed user and draft author are assigned; author/reviewer separation is enforced |
 | A4 | QR Code replaced with genuine vector SVG QR code generator (using pure JS matrix encoder). | `server/src/utils/qrGenerator.js`, `reportGenerator.service.js` | N/A | CONFIRMED / FIXED |
 | A5 | `rejectTestSession` set `session.reviewerNotes`, but `TestSession` schema had no `reviewerNotes` field (Mongoose silently dropped it). | `testSession.controller.js`, `models/TestSession.js` | N/A | CONFIRMED |
 | A6 | Manufacturer tenancy matches on contact email string equality rather than ObjectId ref. | `utils/tenantAccess.js` | N/A | CONFIRMED |
@@ -22,7 +22,7 @@
 |---|---|---|---|
 | B1 | Report lifecycle incomplete (Draft → Review → Approved → Published → Archived / Revoked with immutable signed reports). | Needs expert validation | PARTIAL — integrity-tagged → published → archived/revoked, reason capture, immutable generated metadata, revision/supersession links, audit events and public status implemented; draft/review approvals and PKI signing remain |
 | B2 | Signing is HMAC-SHA256 server tag rather than asymmetric PKI / software key pair with detached signatures. | Needs expert validation | CONFIRMED |
-| B3 | Rule authoring workflow missing technical review, archive/supersede, sandbox testing, and regression diff re-computation. | Needs expert validation | CONFIRMED |
+| B3 | Rule authoring workflow missing technical review, archive/supersede, sandbox testing, and regression diff re-computation. | Needs expert validation | PARTIAL — historical A4 regression sandbox, outcome deltas, result digest, audit record, stale-result guard, and reviewed activation implemented; rule archive/supersede remains |
 | B4 | No Hindi/English localization in client. | N/A | CONFIRMED |
 | B5 | No offline PWA capability (service worker, IndexedDB, outbox sync). | N/A | PARTIAL — PWA shell, transactional Dexie drafts/outbox, reference caching, idempotent session/observation replay and pending-item retry are implemented; browser offline/online validation remains |
 | B6 | Mandatory test types per instrument category undefined. | Needs expert validation | CONFIRMED |

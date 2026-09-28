@@ -4,7 +4,7 @@
 This document provides traceability, verification proof, and operational status for the NAWI Digital Metrology Test Report Generation System (Problem Statement 26035).
 
 > [!CAUTION]
-> All OIML R-76 section references in this codebase are **UNVERIFIED - PENDING EXPERT** review. No authoritative OIML source document was supplied during development. MPE band values, multiplier logic, and regulatory section citations require independent expert validation before any regulatory or legal use.
+> All OIML R-76 section references and configured MPE values are **UNVERIFIED - PENDING EXPERT** review. The official Department of Consumer Affairs Legal Metrology source page has now been registered in `docs/REGULATORY_SOURCES.md`, but the applicable Gazette amendments and OIML edition have not yet been consolidated into an approved rule set.
 
 ---
 
@@ -26,7 +26,7 @@ This document provides traceability, verification proof, and operational status 
 | **FR-12** | Multi-Tenant Data Isolation (Laboratory & Manufacturer) | `tenantAccess.js`, `testSession.controller.js` | `auth.test.js`, `p12.test.js` | **DONE** |
 | **FR-13** | Append-Only Cryptographic Audit Logging | `AuditLog.js`, `auditLogger.service.js`, `AuditLogPage.jsx` | `e2e.test.js`, `p12.test.js` | **DONE** |
 | **FR-14** | Rolling 6-Month Dashboard & National Analytics | `dashboard.controller.js`, `DashboardPage.jsx` | `e2e.test.js` | **DONE** |
-| **FR-15** | Versioned Rule Authoring, Expert Review & Dual Control Activation | `ruleConfig.controller.js`, `RuleConfigsPage.jsx` | `ruleResolver.test.js`, `p12.test.js` | **DONE** |
+| **FR-15** | Versioned Rule Authoring, Expert Review & Dual Control Activation | `ruleConfig.controller.js`, `RuleConfigsPage.jsx` | `ruleResolver.test.js`, `ruleSandbox.test.js` | **PARTIAL — reviewed activation now requires sandbox comparison; regulatory transcription and rule retirement workflow remain** |
 
 ---
 
@@ -49,6 +49,7 @@ This document provides traceability, verification proof, and operational status 
   - Robust z-score (median/MAD) anomaly detection against historical model observations (≥ 10).
   - Attaches `advisoryFlags` without modifying `outcome` or overall session result.
   - Reviewer flag acknowledgement endpoint.
+- **Rule authoring**: Draft rules can be compared against historical A4 outcomes in a sandbox; outcome deltas are shown, digested, audit logged, and rechecked before activation. This regression comparison is not a substitute for source-clause or metrology validation.
 
 ---
 
@@ -59,8 +60,9 @@ This document provides traceability, verification proof, and operational status 
 1. **P11 Offline Entry & Sync**: Core local draft and replay path is implemented; end-to-end offline/online validation and conflict resolution remain.
 2. **Docker Validation**: Dockerfiles exist but have never been built or tested.
 3. **OIML Constants**: All MPE band values, multiplier logic, and section references are UNVERIFIED - PENDING EXPERT review.
-4. **Hindi/English Localization**: Not implemented.
-5. **Annex A2/A3/A5/A6 Automatic Computation**: Only A4_accuracy has automatic MPE calculation; all others use manual checklist.
-6. **Report lifecycle**: Basic states and transitions are implemented, but authorized workflow, immutable evidence retention, and deployment/legal acceptance require review. HMAC does not meet a PKI signing requirement.
-7. **Hardware Integration**: No RS-232 / Bluetooth serial scale integration.
-8. **Third-Party NABL LIMS Integration**: Not implemented.
+4. **Regulatory rule source**: Department of Consumer Affairs source page is registered, but the base General Rules, applicable amendments/corrigenda, and the governing OIML edition still need clause-by-clause consolidation and expert approval.
+5. **Hindi/English Localization**: Not implemented.
+6. **Annex A2/A3/A5/A6 Automatic Computation**: Only A4_accuracy has automatic MPE calculation; all others use manual checklist.
+7. **Report lifecycle**: Basic states and transitions are implemented, but authorized workflow, immutable evidence retention, and deployment/legal acceptance require review. HMAC does not meet a PKI signing requirement.
+8. **Hardware Integration**: No RS-232 / Bluetooth serial scale integration.
+9. **Third-Party NABL LIMS Integration**: Not implemented.
