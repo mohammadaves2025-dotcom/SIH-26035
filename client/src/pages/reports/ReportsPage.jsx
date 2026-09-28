@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { revokeReport } from '../../services/report.service.js';
+import { archiveReport, publishReport, revokeReport } from '../../services/report.service.js';
 import apiClient from '../../services/apiClient.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
@@ -15,10 +15,12 @@ export default function ReportsPage() {
   const [revokeId, setRevokeId] = useState(null);
   const [reason, setReason] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({ modelName: '', serialNumber: '', overallResult: '', status: '' });
+  const updateFilter = (field, value) => setFilters((current) => ({ ...current, [field]: value }));
 
   const { data, isLoading } = useQuery({
-    queryKey: ['reports-list', searchTerm],
-    queryFn: () => apiClient.get('/reports', { params: { search: searchTerm } }),
+    queryKey: ['reports-list', searchTerm, filters],
+    queryFn: () => apiClient.get('/reports', { params: { search: searchTerm, ...filters } }),
     select: (r) => r?.data?.reports || r?.data?.docs || [],
   });
 
@@ -29,6 +31,22 @@ export default function ReportsPage() {
       addToast({ type: 'success', message: 'Report revoked successfully' });
       setRevokeId(null);
       setReason('');
+    },
+  });
+
+  const publishMut = useMutation({
+    mutationFn: publishReport,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['reports-list']);
+      addToast({ type: 'success', message: 'Report published after both generated files passed integrity checks.' });
+    },
+  });
+
+  const archiveMut = useMutation({
+    mutationFn: ({ id, reason }) => archiveReport(id, reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['reports-list']);
+      addToast({ type: 'success', message: 'Report archived. Its files and integrity metadata remain immutable.' });
     },
   });
 
@@ -74,7 +92,7 @@ export default function ReportsPage() {
             <input
               className="gov-input"
               style={{ flex: 1, border: 'none', background: 'transparent' }}
-              placeholder="Search by Report Number (e.g. NAWI-2026-000001) or Cryptographic SHA-256 Hash..."
+              placeholder="Search report number or SHA-256 hash"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -83,6 +101,16 @@ export default function ReportsPage() {
                 Clear
               </button>
             )}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8, marginTop: 12 }}>
+            <input className="gov-input" aria-label="Filter by model name" placeholder="Model name" value={filters.modelName} onChange={(event) => updateFilter('modelName', event.target.value)} />
+            <input className="gov-input" aria-label="Filter by serial number" placeholder="Serial number" value={filters.serialNumber} onChange={(event) => updateFilter('serialNumber', event.target.value)} />
+            <select className="gov-select" aria-label="Filter by verdict" value={filters.overallResult} onChange={(event) => updateFilter('overallResult', event.target.value)}>
+              <option value="">All verdicts</option><option value="pass">Pass</option><option value="fail">Fail</option>
+            </select>
+            <select className="gov-select" aria-label="Filter by report state" value={filters.status} onChange={(event) => updateFilter('status', event.target.value)}>
+              <option value="">All report states</option><option value="integrity_tagged">Awaiting publication</option><option value="published">Published</option><option value="archived">Archived</option><option value="revoked">Revoked</option>
+            </select>
           </div>
         </div>
       </div>
@@ -112,11 +140,13 @@ export default function ReportsPage() {
                     <td><strong className="text-mono">{rep.reportNumber || rep._id?.slice(-8)}</strong></td>
                     <td className="text-mono">{rep.testSessionId?._id?.slice(-8) || rep.testSessionId || '—'}</td>
                     <td><StatusBadge status={rep.testSessionId?.overallResult || 'unknown'} /></td>
-                    <td><StatusBadge status={rep.status} /></td>
+                    <td>{rep.supersededByReportId ? <><StatusBadge status="archived" /><div style={{ fontSize: 11, marginTop: 4 }}>Superseded by {rep.supersededByReportId.reportNumber}</div></> : <StatusBadge status={rep.status} />}</td>
                     <td><code className="text-mono" style={{ fontSize: 11 }}>{rep.contentHash ? `${rep.contentHash.slice(0, 12)}…` : '—'}</code></td>
                     <td>{rep.createdAt ? new Date(rep.createdAt).toLocaleDateString('en-IN') : '—'}</td>
                     <td>
                       <div className="flex-gap-8">
+                        {canRevoke && rep.status === 'integrity_tagged' && <button className="gov-btn gov-btn-primary" style={{ padding: '4px 8px', fontSize: 12 }} onClick={() => publishMut.mutate(rep._id)} disabled={publishMut.isPending}><ShieldCheck size={12} /> Publish</button>}
+                        {canRevoke && rep.status === 'published' && <button className="gov-btn gov-btn-outline" style={{ padding: '4px 8px', fontSize: 12 }} onClick={() => { const archiveReason = window.prompt('Reason for archiving this report'); if (archiveReason?.trim()) archiveMut.mutate({ id: rep._id, reason: archiveReason.trim() }); }} disabled={archiveMut.isPending}>Archive</button>}
                         <button onClick={() => handleDownload(rep._id, 'pdf')} className="gov-btn gov-btn-outline" style={{ padding: '4px 8px', fontSize: 12 }}>
                           <Download size={12} /> PDF
                         </button>

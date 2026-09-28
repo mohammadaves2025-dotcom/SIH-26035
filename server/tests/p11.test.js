@@ -7,10 +7,13 @@ import { Laboratory } from '../src/models/Laboratory.js';
 import { Manufacturer } from '../src/models/Manufacturer.js';
 import { InstrumentModel } from '../src/models/InstrumentModel.js';
 import { TestSession } from '../src/models/TestSession.js';
+import { Observation } from '../src/models/Observation.js';
 
 describe('Phase P11 — Offline Batch Sync & Outbox Replay', () => {
   let adminToken;
   let sessionId;
+  let modelId;
+  let labId;
 
   beforeAll(async () => {
     await setupTestDB();
@@ -51,6 +54,8 @@ describe('Phase P11 — Offline Batch Sync & Outbox Replay', () => {
       minCapacity: 0.5,
       n: 1000,
     });
+    modelId = model._id.toString();
+    labId = lab.labId;
 
     const session = await TestSession.create({
       instrumentModelId: model._id,
@@ -111,5 +116,65 @@ describe('Phase P11 — Offline Batch Sync & Outbox Replay', () => {
 
     expect(res2.status).toBe(200);
     expect(res2.body.data.processed).toContain(clientId);
+  });
+
+  test('creates an offline session before replaying its queued observations and is idempotent', async () => {
+    const sessionClientId = `offline-session-${Date.now()}`;
+    const observationClientId = `offline-observation-${Date.now()}`;
+    const batch = [
+      {
+        clientId: sessionClientId,
+        type: 'CREATE_SESSION',
+        data: {
+          instrumentModelId: modelId,
+          serialNumber: 'SN-OFFLINE-001',
+          selectedAnnexes: ['A4_accuracy'],
+          testDate: new Date().toISOString().slice(0, 10),
+          verificationStage: 'initial',
+          labId,
+          environmentalConditions: { temperatureC: 22, humidityPercent: 50, inclinationDeg: 0, notes: 'Offline entry' },
+        },
+      },
+      {
+        clientId: observationClientId,
+        type: 'ADD_OBSERVATION',
+        sessionId: sessionClientId,
+        data: { annexRef: 'A4_accuracy', evaluationMethod: 'mpe_band', referenceLoad: 10, indicatedValue: 10.01 },
+      },
+    ];
+
+    const replay = () => request(app)
+      .post('/api/test-sessions/sync/batch')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ batch });
+
+    const first = await replay();
+    expect(first.status).toBe(200);
+    expect(first.body.data.conflicts).toHaveLength(0);
+    const created = first.body.data.processed.find((item) => item.clientId === sessionClientId);
+    expect(created.sessionId).toBeTruthy();
+    expect(first.body.data.processed).toContain(observationClientId);
+    expect(await TestSession.countDocuments({ clientSyncId: sessionClientId })).toBe(1);
+    expect(await Observation.countDocuments({ testSessionId: created.sessionId, clientSyncId: observationClientId })).toBe(1);
+
+    const second = await replay();
+    expect(second.status).toBe(200);
+    expect(second.body.data.conflicts).toHaveLength(0);
+    expect(await TestSession.countDocuments({ clientSyncId: sessionClientId })).toBe(1);
+    expect(await Observation.countDocuments({ testSessionId: created.sessionId, clientSyncId: observationClientId })).toBe(1);
+
+    const savedObservation = await Observation.findOne({ testSessionId: created.sessionId, clientSyncId: observationClientId });
+    const deleted = await request(app)
+      .delete(`/api/test-sessions/${created.sessionId}/observations/${savedObservation._id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(deleted.status).toBe(200);
+    const archivedObservation = await Observation.findById(savedObservation._id);
+    expect(archivedObservation.deletedAt).toBeTruthy();
+    expect(await Observation.countDocuments({ testSessionId: created.sessionId, deletedAt: null })).toBe(0);
+    const integrity = await request(app)
+      .get('/api/audit-log/integrity')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(integrity.status).toBe(200);
+    expect(integrity.body.data.valid).toBe(true);
   });
 });

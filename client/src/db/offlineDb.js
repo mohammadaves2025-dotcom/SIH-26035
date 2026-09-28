@@ -23,4 +23,8 @@ db.version(1).stores({
   cachedRuleConfigs: 'id, accuracyClass, oimlEdition, status',
 });
 
+db.version(2).stores({
+  cachedLaboratories: 'id, labId, labName, isActive',
+});
+
 export default db;

@@ -22,6 +22,9 @@ const observationSchema = new mongoose.Schema(
       ref: 'TestSession',
       required: true,
     },
+    clientSyncId: { type: String, trim: true, default: undefined },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     annexRef: {
       type: String,
       enum: ANNEX_REFS,
@@ -64,5 +67,10 @@ const observationSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+observationSchema.index({ testSessionId: 1, clientSyncId: 1 }, {
+  unique: true,
+  partialFilterExpression: { clientSyncId: { $type: 'string' } },
+});
 
 export const Observation = mongoose.model('Observation', observationSchema);

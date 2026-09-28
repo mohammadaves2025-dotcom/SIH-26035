@@ -5,6 +5,7 @@ import StatusBadge from '../../components/common/StatusBadge.jsx';
 import { Plus, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/useAuthStore.js';
+import { getDraftSessions } from '../../services/offlineSync.js';
 
 export default function TestSessionsPage() {
   const [page, setPage] = useState(1);
@@ -21,6 +22,10 @@ export default function TestSessionsPage() {
       getTestSessions({ page, limit, search, status: statusFilter || undefined }),
     select: (res) => res?.data || res,
     keepPreviousData: true,
+  });
+  const { data: offlineDrafts = [] } = useQuery({
+    queryKey: ['offline-test-session-drafts'],
+    queryFn: getDraftSessions,
   });
 
   const sessions = Array.isArray(data) ? data : (data?.sessions || data?.docs || []);
@@ -49,6 +54,19 @@ export default function TestSessionsPage() {
           <Plus size={16} /> New Session
         </button>}
       </div>
+
+      {offlineDrafts.length > 0 && <div className="gov-card mb-24">
+        <div className="gov-card-header"><h4>On-device drafts ({offlineDrafts.length})</h4></div>
+        <div className="gov-card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          <table className="gov-table"><thead><tr><th>Instrument model</th><th>Serial no.</th><th>Sync status</th><th>Created</th></tr></thead>
+            <tbody>{offlineDrafts.map((draft) => <tr key={draft.clientId} style={{ cursor: 'pointer' }} onClick={() => navigate(`/test-sessions/offline/${draft.clientId}`)}>
+              <td>{draft.modelName || draft.instrumentModelId}</td><td className="text-mono">{draft.serialNumber}</td>
+              <td><StatusBadge status={draft.syncedAt ? 'passed' : 'draft'} />{draft.syncedAt ? ' Synced' : ' On this device'}</td>
+              <td>{new Date(draft.createdAt).toLocaleDateString('en-IN')}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </div>}
 
       {/* Filters */}
       <div className="gov-card mb-24">

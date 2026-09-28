@@ -70,6 +70,7 @@ export const listReports = asyncHandler(async (req, res) => {
           populate: { path: 'manufacturerId' },
         },
       })
+      .populate('supersededByReportId', 'reportNumber')
       .populate('generatedBy', 'name email')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -159,6 +160,74 @@ export const downloadReportFile = asyncHandler(async (req, res) => {
   res.download(absolutePath);
 });
 
+function assertStoredReportIntegrity(report) {
+  const artifacts = [
+    { path: path.resolve(process.cwd(), report.pdfPath), hash: report.contentHash, signature: report.hmacTag, format: 'PDF' },
+    { path: path.resolve(process.cwd(), report.docxPath), hash: report.docxContentHash, signature: report.docxHmacTag, format: 'DOCX' },
+  ];
+  for (const artifact of artifacts) {
+    if (!artifact.hash || !artifact.signature || !fs.existsSync(artifact.path)) {
+      throw new AppError(409, 'REPORT_INTEGRITY_FAILED', `${artifact.format} file or integrity metadata is missing`);
+    }
+    const actualHash = sha256(fs.readFileSync(artifact.path));
+    if (actualHash !== artifact.hash || !verifySignature(actualHash, artifact.signature)) {
+      throw new AppError(409, 'REPORT_INTEGRITY_FAILED', `${artifact.format} integrity verification failed`);
+    }
+  }
+}
+
+export const publishReport = asyncHandler(async (req, res) => {
+  const report = await Report.findById(req.params.id).populate('testSessionId');
+  if (!report) throw new AppError(404, 'NOT_FOUND', 'Report not found');
+  await assertSessionAccess(req, report.testSessionId);
+  if (report.status !== 'integrity_tagged') {
+    throw new AppError(409, 'INVALID_STATE', 'Only an integrity-tagged report can be published');
+  }
+  assertStoredReportIntegrity(report);
+
+  report.status = 'published';
+  report.publishedAt = new Date();
+  report.publishedBy = req.user.sub;
+  await report.save();
+
+  const session = report.testSessionId;
+  session.status = 'published';
+  await session.save();
+  await appendAuditLog({ entityType: 'Report', entityId: report._id, action: 'publish', userId: req.user.sub });
+
+  res.status(200).json({ success: true, data: report });
+});
+
+export const archiveReport = asyncHandler(async (req, res) => {
+  const { reason } = req.body;
+  if (!reason || typeof reason !== 'string' || !reason.trim()) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'A valid archival reason is required');
+  }
+  const report = await Report.findById(req.params.id).populate('testSessionId');
+  if (!report) throw new AppError(404, 'NOT_FOUND', 'Report not found');
+  await assertSessionAccess(req, report.testSessionId);
+  if (report.status !== 'published') {
+    throw new AppError(409, 'INVALID_STATE', 'Only a published report can be archived');
+  }
+
+  report.status = 'archived';
+  report.archivedAt = new Date();
+  report.archivedBy = req.user.sub;
+  await report.save();
+
+  const session = report.testSessionId;
+  session.status = session.overallResult === 'pass' ? 'passed' : 'failed';
+  await session.save();
+  await appendAuditLog({
+    entityType: 'Report',
+    entityId: report._id,
+    action: `archive: ${reason.trim()}`,
+    userId: req.user.sub,
+  });
+
+  res.status(200).json({ success: true, data: report });
+});
+
 export const revokeReport = asyncHandler(async (req, res) => {
   const { reason } = req.body;
   if (!reason || typeof reason !== 'string' || !reason.trim()) {
@@ -176,10 +245,16 @@ export const revokeReport = asyncHandler(async (req, res) => {
   }
 
   report.status = 'revoked';
+  report.revokedAt = new Date();
+  report.revokedBy = req.user.sub;
+  report.revocationReason = reason.trim();
   await report.save();
 
-  const session = await TestSession.findById(report.testSessionId);
-  if (session?.status === 'report_generated') {
+  const [session, newerReport] = await Promise.all([
+    TestSession.findById(report.testSessionId),
+    Report.findOne({ supersedesReportId: report._id }),
+  ]);
+  if (!newerReport && ['report_generated', 'published'].includes(session?.status)) {
     session.status = session.overallResult === 'pass' ? 'passed' : 'failed';
     await session.save();
   }

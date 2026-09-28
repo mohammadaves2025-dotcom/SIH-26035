@@ -9,8 +9,10 @@ import { appendAuditLog } from '../services/auditLogger.service.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { assertSessionAccess, getManufacturerForUser, manufacturerModelIds } from '../utils/tenantAccess.js';
+import { createTestSessionSchema } from '../validators/testSession.schema.js';
+import { singleObservationSchema } from '../validators/observation.schema.js';
 
-export const createTestSession = asyncHandler(async (req, res) => {
+async function createSessionRecord(req, body) {
   const {
     instrumentModelId,
     serialNumber,
@@ -18,10 +20,10 @@ export const createTestSession = asyncHandler(async (req, res) => {
     verificationStage,
     environmentalConditions,
     selectedAnnexes,
-  } = req.body;
+  } = body;
 
   const isLabBoundUser = ['lab_technician', 'lab_admin'].includes(req.user.role);
-  const labId = isLabBoundUser ? req.user.labId : req.body.labId;
+  const labId = isLabBoundUser ? req.user.labId : body.labId;
   if (!labId) throw new AppError(400, 'VALIDATION_ERROR', 'A registered laboratory is required');
   const laboratory = await Laboratory.findOne({ labId, isActive: true });
   if (!laboratory) throw new AppError(422, 'INVALID_LABORATORY', 'The selected laboratory is not registered or is inactive');
@@ -48,6 +50,7 @@ export const createTestSession = asyncHandler(async (req, res) => {
     testDate,
     verificationStage: verificationStage || 'initial',
     status: 'draft',
+    clientSyncId: body.clientSyncId || null,
     environmentalConditions,
   });
 
@@ -58,6 +61,11 @@ export const createTestSession = asyncHandler(async (req, res) => {
     userId: req.user.sub,
   });
 
+  return session;
+}
+
+export const createTestSession = asyncHandler(async (req, res) => {
+  const session = await createSessionRecord(req, req.body);
   res.status(201).json({
     success: true,
     data: session,
@@ -119,7 +127,7 @@ export const submitTestSession = asyncHandler(async (req, res) => {
   }
   await assertSessionAccess(req, session);
 
-  const observations = await Observation.find({ testSessionId: session._id });
+  const observations = await Observation.find({ testSessionId: session._id, deletedAt: null });
   if (observations.length === 0) {
     throw new AppError(
       409,
@@ -316,7 +324,7 @@ export const getTestSessionById = asyncHandler(async (req, res) => {
 
   await assertSessionAccess(req, session);
 
-  const observations = await Observation.find({ testSessionId: session._id });
+  const observations = await Observation.find({ testSessionId: session._id, deletedAt: null });
 
   res.status(200).json({
     success: true,
@@ -332,6 +340,7 @@ export const updateObservation = asyncHandler(async (req, res) => {
   if (!observation) {
     throw new AppError(404, 'NOT_FOUND', 'Observation not found');
   }
+  if (observation.deletedAt) throw new AppError(404, 'NOT_FOUND', 'Observation not found');
 
   if (req.params.id && observation.testSessionId.toString() !== req.params.id) {
     throw new AppError(400, 'VALIDATION_ERROR', 'Observation does not belong to the specified test session');
@@ -351,12 +360,14 @@ export const updateObservation = asyncHandler(async (req, res) => {
   }
   await assertSessionAccess(req, session);
 
+  const allowedFields = ['annexRef', 'evaluationMethod', 'referenceLoad', 'indicatedValue', 'zeroCorrection', 'checklistPassed', 'reviewerNotes'];
+  const before = Object.fromEntries(allowedFields.map((field) => [field, observation[field] ?? null]));
+
   if (req.body.annexRef && !(session.selectedAnnexes || []).includes(req.body.annexRef)) {
     throw new AppError(422, 'UNSELECTED_PROCEDURE', `${req.body.annexRef} was not selected for this test session`);
   }
 
   // Only allow updating data fields, not computed fields
-  const allowedFields = ['annexRef', 'evaluationMethod', 'referenceLoad', 'indicatedValue', 'zeroCorrection', 'checklistPassed', 'reviewerNotes'];
   for (const field of allowedFields) {
     if (req.body[field] !== undefined) {
       observation[field] = req.body[field];
@@ -378,6 +389,7 @@ export const updateObservation = asyncHandler(async (req, res) => {
     entityId: observation._id,
     action: 'update',
     userId: req.user.sub,
+    details: { before, after: Object.fromEntries(allowedFields.map((field) => [field, observation[field] ?? null])) },
   });
 
   res.status(200).json({
@@ -391,6 +403,7 @@ export const deleteObservation = asyncHandler(async (req, res) => {
   if (!observation) {
     throw new AppError(404, 'NOT_FOUND', 'Observation not found');
   }
+  if (observation.deletedAt) throw new AppError(404, 'NOT_FOUND', 'Observation not found');
 
   const session = await TestSession.findById(observation.testSessionId);
   if (!session) {
@@ -406,13 +419,17 @@ export const deleteObservation = asyncHandler(async (req, res) => {
   }
   await assertSessionAccess(req, session);
 
-  await Observation.findByIdAndDelete(observation._id);
+  const snapshot = observation.toObject();
+  observation.deletedAt = new Date();
+  observation.deletedBy = req.user.sub;
+  await observation.save();
 
   await appendAuditLog({
     entityType: 'Observation',
     entityId: observation._id,
     action: 'delete',
     userId: req.user.sub,
+    details: { snapshot },
   });
 
   res.status(200).json({
@@ -431,19 +448,54 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
 
   const processed = [];
   const conflicts = [];
+  const sessionIdsByClientId = new Map();
 
   for (const item of batch) {
     const { clientId, type, sessionId, obsId, data, updatedAt } = item;
     if (!clientId) continue;
+    const syncKey = `${req.user.sub}:${clientId}`;
 
-    if (processedSyncClientIds.has(clientId)) {
-      processed.push(clientId);
+    if (processedSyncClientIds.has(syncKey)) {
+      if (type === 'CREATE_SESSION') {
+        const existing = await TestSession.findOne({ createdBy: req.user.sub, clientSyncId: clientId });
+        if (existing) {
+          sessionIdsByClientId.set(clientId, existing._id);
+          processed.push({ clientId, sessionId: existing._id.toString() });
+        } else {
+          processed.push(clientId);
+        }
+      } else {
+        processed.push(clientId);
+      }
       continue;
     }
 
     try {
-      if (type === 'ADD_OBSERVATION') {
-        const session = await TestSession.findById(sessionId);
+      if (type === 'CREATE_SESSION') {
+        const validation = createTestSessionSchema.safeParse(data);
+        if (!validation.success) {
+          conflicts.push({
+            clientId,
+            reason: validation.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '),
+          });
+          continue;
+        }
+        const session = await TestSession.findOne({ createdBy: req.user.sub, clientSyncId: clientId })
+          || await createSessionRecord(req, { ...validation.data, clientSyncId: clientId });
+        sessionIdsByClientId.set(clientId, session._id);
+        processedSyncClientIds.add(syncKey);
+        processed.push({ clientId, sessionId: session._id.toString() });
+      } else if (type === 'ADD_OBSERVATION') {
+        const validation = singleObservationSchema.safeParse(data);
+        if (!validation.success) {
+          conflicts.push({
+            clientId,
+            reason: validation.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '),
+          });
+          continue;
+        }
+        const resolvedSessionId = sessionIdsByClientId.get(sessionId) || sessionId;
+        const session = await TestSession.findById(resolvedSessionId);
         if (!session) {
           conflicts.push({ clientId, reason: 'Test session not found' });
           continue;
@@ -455,15 +507,24 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
           continue;
         }
 
-        const obsDoc = await Observation.create({
-          testSessionId: session._id,
-          ...data,
-        });
-        await appendAuditLog({ entityType: 'Observation', entityId: obsDoc._id, action: 'create:sync', userId: req.user.sub });
-        processedSyncClientIds.add(clientId);
+        if (!(session.selectedAnnexes || []).includes(validation.data.annexRef)) {
+          conflicts.push({ clientId, reason: `${validation.data.annexRef} was not selected for this session` });
+          continue;
+        }
+
+        const existingObservation = await Observation.findOne({ testSessionId: session._id, clientSyncId: clientId });
+        if (!existingObservation) {
+          const obsDoc = await Observation.create({
+            testSessionId: session._id,
+            ...validation.data,
+            clientSyncId: clientId,
+          });
+          await appendAuditLog({ entityType: 'Observation', entityId: obsDoc._id, action: 'create:sync', userId: req.user.sub });
+        }
+        processedSyncClientIds.add(syncKey);
         processed.push(clientId);
       } else if (type === 'UPDATE_OBSERVATION') {
-        const observation = await Observation.findById(obsId);
+        const observation = await Observation.findOne({ _id: obsId, deletedAt: null });
         if (!observation) {
           conflicts.push({ clientId, reason: 'Observation not found' });
           continue;
@@ -486,7 +547,7 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
         }
         await observation.save();
         await appendAuditLog({ entityType: 'Observation', entityId: observation._id, action: 'update:sync', userId: req.user.sub });
-        processedSyncClientIds.add(clientId);
+        processedSyncClientIds.add(syncKey);
         processed.push(clientId);
       } else {
         conflicts.push({ clientId, reason: 'Unsupported sync action type' });
@@ -506,7 +567,7 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
 });
 
 export const acknowledgeObservationFlag = asyncHandler(async (req, res) => {
-  const observation = await Observation.findById(req.params.obsId);
+  const observation = await Observation.findOne({ _id: req.params.obsId, deletedAt: null });
   if (!observation) throw new AppError(404, 'NOT_FOUND', 'Observation not found');
 
   const session = await TestSession.findById(observation.testSessionId);
@@ -533,4 +594,3 @@ export const acknowledgeObservationFlag = asyncHandler(async (req, res) => {
     data: observation,
   });
 });
-

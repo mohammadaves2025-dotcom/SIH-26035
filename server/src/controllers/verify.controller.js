@@ -11,13 +11,13 @@ export const verifyReport = asyncHandler(async (req, res) => {
   let report = await Report.findOne({ reportNumber: reportNumberOrHash }).populate({
     path: 'testSessionId',
     populate: { path: 'instrumentModelId' },
-  });
+  }).populate('supersededByReportId', 'reportNumber');
 
   if (!report) {
     report = await Report.findOne({ contentHash: reportNumberOrHash }).populate({
       path: 'testSessionId',
       populate: { path: 'instrumentModelId' },
-    });
+    }).populate('supersededByReportId', 'reportNumber');
   }
 
   if (!report) {
@@ -36,6 +36,7 @@ export const verifyReport = asyncHandler(async (req, res) => {
   );
 
   const isRevoked = report.status === 'revoked';
+  const isSuperseded = Boolean(report.supersededByReportId);
 
   res.status(200).json({
     success: true,
@@ -43,6 +44,11 @@ export const verifyReport = asyncHandler(async (req, res) => {
       reportNumber: report.reportNumber,
       status: report.status,
       isRevoked,
+      isPublished: report.status === 'published',
+      isSuperseded,
+      supersededByReportNumber: report.supersededByReportId?.reportNumber || null,
+      revocationReason: report.revocationReason || null,
+      publishedAt: report.publishedAt || null,
       revocationNotice: isRevoked ? 'WARNING: This report has been REVOKED by the Legal Metrology Authority' : null,
       generatedAt: report.generatedAt,
       contentHash: report.contentHash,

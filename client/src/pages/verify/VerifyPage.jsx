@@ -29,6 +29,12 @@ export default function VerifyPage() {
     }
   };
 
+  const integrityFailed = !result?.isIntegrityVerified;
+  const isCurrentPublished = result?.isPublished && !result?.isSuperseded;
+  const resultColor = integrityFailed || result?.isRevoked || result?.isSuperseded
+    ? 'var(--gov-red)'
+    : isCurrentPublished ? 'var(--gov-green)' : 'var(--gov-orange)';
+
   useEffect(() => {
     if (query) {
       handleVerify(query);
@@ -40,7 +46,7 @@ export default function VerifyPage() {
       <div className="page-header">
         <div>
           <h1><ShieldCheck size={22} style={{ marginRight: 8, verticalAlign: -3 }} />Public Verification Portal</h1>
-          <p className="page-header-subtitle">Check a report record and the integrity of its stored PDF</p>
+          <p className="page-header-subtitle">Check publication status and the integrity of the stored PDF</p>
         </div>
       </div>
 
@@ -82,11 +88,11 @@ export default function VerifyPage() {
       {/* Verification Result */}
       {result && (
         <div className="gov-card">
-          <div className="gov-card-header" style={{ background: result.status === 'revoked' || !result.isIntegrityVerified ? 'var(--gov-red-light)' : 'var(--gov-green-light)' }}>
+          <div className="gov-card-header" style={{ background: resultColor === 'var(--gov-red)' ? 'var(--gov-red-light)' : resultColor === 'var(--gov-green)' ? 'var(--gov-green-light)' : 'var(--gov-orange-light, #fff4e5)' }}>
             <div className="flex-gap-8">
-              <CheckCircle2 size={20} color={result.status === 'revoked' || !result.isIntegrityVerified ? 'var(--gov-red)' : 'var(--gov-green)'} />
-              <h3 style={{ color: result.status === 'revoked' || !result.isIntegrityVerified ? 'var(--gov-red)' : 'var(--gov-green)' }}>
-                {result.status === 'revoked' ? 'Report REVOKED' : result.isIntegrityVerified ? 'Report record and PDF integrity verified' : 'Report record found; PDF integrity not verified'}
+              <CheckCircle2 size={20} color={resultColor} />
+              <h3 style={{ color: resultColor }}>
+                {result.isRevoked ? 'Report REVOKED' : result.isSuperseded ? 'Report SUPERSEDED' : integrityFailed ? 'Report integrity could not be verified' : isCurrentPublished ? 'Published report verified' : 'Report is not currently published'}
               </h3>
             </div>
             <StatusBadge status={result.overallVerdict || result.status} />
@@ -96,6 +102,21 @@ export default function VerifyPage() {
             {result.isRevoked && (
               <div className="gov-card mb-16" style={{ background: 'var(--gov-red-light)', border: '1px solid var(--gov-red)', color: 'var(--gov-red)', padding: 12 }}>
                 <strong>{result.revocationNotice || 'WARNING: This report has been REVOKED'}</strong>
+              </div>
+            )}
+            {result.isSuperseded && (
+              <div className="gov-card mb-16" style={{ background: 'var(--gov-red-light)', border: '1px solid var(--gov-red)', color: 'var(--gov-red)', padding: 12 }}>
+                This report has been superseded by {result.supersededByReportNumber || 'a newer report'} and should not be used as the current certificate.
+              </div>
+            )}
+            {!result.isRevoked && !result.isSuperseded && !result.isPublished && (
+              <div className="gov-card mb-16" style={{ background: 'var(--gov-orange-light, #fff4e5)', padding: 12 }}>
+                Integrity verification alone does not make a report official. Current status: <strong>{result.status}</strong>.
+              </div>
+            )}
+            {result.isPublished && !result.isSuperseded && (
+              <div className="gov-card mb-16" style={{ background: 'var(--gov-green-light)', padding: 12 }}>
+                Published {result.publishedAt ? `on ${new Date(result.publishedAt).toLocaleString()}` : ''}.
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 14 }}>

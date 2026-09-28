@@ -87,6 +87,7 @@ export const verifyAuditChain = asyncHandler(async (_req, res) => {
       action: log.action,
       userId: log.userId,
       timestamp: log.timestamp,
+      ...(log.details === undefined ? {} : { details: log.details }),
     });
     const expectedHash = sha256(expectedPreviousHash + payload);
     if (log.prevHash !== expectedPreviousHash || log.currentHash !== expectedHash) {

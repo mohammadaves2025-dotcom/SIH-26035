@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getInstrumentModels } from '../../services/instrumentModel.service.js';
@@ -7,6 +7,7 @@ import apiClient from '../../services/apiClient.js';
 import { createTestSession } from '../../services/testSession.service.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { ANNEX_REFS } from '../../config/constants.js';
+import { cacheInstrumentModels, cacheLaboratories, getCachedInstrumentModels, getCachedLaboratories, saveDraftSession } from '../../services/offlineSync.js';
 import { FlaskConical, ChevronRight, ChevronLeft } from 'lucide-react';
 
 export default function NewTestSessionPage() {
@@ -14,6 +15,9 @@ export default function NewTestSessionPage() {
   const queryClient = useQueryClient();
   const addToast = useNotificationStore((s) => s.addToast);
   const [step, setStep] = useState(1);
+  const [online, setOnline] = useState(navigator.onLine);
+  const [cachedModels, setCachedModels] = useState([]);
+  const [cachedLabs, setCachedLabs] = useState([]);
 
   const [form, setForm] = useState({
     instrumentModelId: '',
@@ -33,12 +37,38 @@ export default function NewTestSessionPage() {
     queryFn: () => getInstrumentModels({ limit: 200 }),
     select: (r) => Array.isArray(r?.data) ? r.data : Array.isArray(r?.data?.models) ? r.data.models : Array.isArray(r?.data?.docs) ? r.data.docs : [],
   });
-  const selectedModel = (modelsData || []).find((model) => model._id === form.instrumentModelId);
   const { data: laboratories = [] } = useQuery({
     queryKey: ['laboratories-select'],
     queryFn: () => apiClient.get('/laboratories'),
     select: (response) => response?.data?.data || [],
   });
+  const availableModels = modelsData?.length ? modelsData : cachedModels;
+  const availableLabs = laboratories.length ? laboratories : cachedLabs;
+  const selectedModel = availableModels.find((model) => (model._id || model.id) === form.instrumentModelId);
+
+  useEffect(() => {
+    const setNetworkState = () => setOnline(navigator.onLine);
+    window.addEventListener('online', setNetworkState);
+    window.addEventListener('offline', setNetworkState);
+    getCachedInstrumentModels().then(setCachedModels).catch(() => {});
+    getCachedLaboratories().then(setCachedLabs).catch(() => {});
+    return () => {
+      window.removeEventListener('online', setNetworkState);
+      window.removeEventListener('offline', setNetworkState);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (modelsData?.length) {
+      cacheInstrumentModels(modelsData).then(() => setCachedModels(modelsData)).catch(() => {});
+    }
+  }, [modelsData]);
+
+  useEffect(() => {
+    if (laboratories.length) {
+      cacheLaboratories(laboratories).then(() => setCachedLabs(laboratories)).catch(() => {});
+    }
+  }, [laboratories]);
 
   const createMutation = useMutation({
     mutationFn: createTestSession,
@@ -47,6 +77,17 @@ export default function NewTestSessionPage() {
       addToast({ type: 'success', message: 'Test session created successfully' });
       const id = res?.data?._id || res?._id;
       navigate(id ? `/test-sessions/${id}` : '/test-sessions');
+    },
+    onError: async (error, payload) => {
+      if (error?.response) return;
+      try {
+        const { clientId } = await saveDraftSession(payload);
+        queryClient.invalidateQueries(['offline-test-session-drafts']);
+        addToast({ type: 'warning', message: 'The server could not be reached. Session saved on this device for later sync.' });
+        navigate(`/test-sessions/offline/${clientId}`);
+      } catch {
+        addToast({ type: 'error', message: 'Could not reach the server or save the session on this device.' });
+      }
     },
   });
 
@@ -62,13 +103,15 @@ export default function NewTestSessionPage() {
   };
 
   const handleSubmit = () => {
-    if (!form.testDate || !form.serialNumber.trim() || form.temperatureC === '' ||
+    if (!form.instrumentModelId || !form.labId || !form.testDate || !form.serialNumber.trim() || form.temperatureC === '' ||
         form.humidityPercent === '' || form.inclinationDeg === '' || !form.envNotes.trim() || form.selectedAnnexes.length === 0) {
       addToast({ type: 'error', message: 'Enter the serial number, test date, observed environmental conditions, and at least one applicable procedure.' });
       return;
     }
-    createMutation.mutate({
+    const payload = {
       instrumentModelId: form.instrumentModelId,
+      modelName: selectedModel?.modelName || '',
+      manufacturerName: selectedModel?.manufacturer?.name || selectedModel?.manufacturerName || '',
       serialNumber: form.serialNumber.trim(),
       labId: form.labId,
       testDate: form.testDate,
@@ -80,7 +123,17 @@ export default function NewTestSessionPage() {
         notes: form.envNotes,
       },
       selectedAnnexes: form.selectedAnnexes,
-    });
+    };
+
+    if (!online) {
+      saveDraftSession(payload).then(({ clientId }) => {
+        queryClient.invalidateQueries(['offline-test-session-drafts']);
+        addToast({ type: 'success', message: 'Session saved on this device and queued to sync when online.' });
+        navigate(`/test-sessions/offline/${clientId}`);
+      }).catch(() => addToast({ type: 'error', message: 'Could not save the offline session on this device.' }));
+      return;
+    }
+    createMutation.mutate(payload);
   };
 
   return (
@@ -89,6 +142,7 @@ export default function NewTestSessionPage() {
         <div>
           <h1><FlaskConical size={22} style={{ marginRight: 8, verticalAlign: -3 }} />New Test Session</h1>
           <p className="page-header-subtitle">Create a new OIML R-76 evaluation session with environmental & metrological capture</p>
+          {!online && <p role="status" className="text-muted">Offline mode: using the last cached instrument and laboratory lists.</p>}
         </div>
       </div>
 
@@ -114,8 +168,8 @@ export default function NewTestSessionPage() {
                 <label className="gov-label">Instrument Model</label>
                 <select className="gov-select" value={form.instrumentModelId} onChange={(e) => updateField('instrumentModelId', e.target.value)}>
                   <option value="">— Select model —</option>
-                  {(modelsData || []).map((m) => (
-                    <option key={m._id} value={m._id}>{m.modelName} ({m.manufacturer?.name || '—'})</option>
+                  {availableModels.map((m) => (
+                    <option key={m._id || m.id} value={m._id || m.id}>{m.modelName} ({m.manufacturer?.name || m.manufacturerName || '—'})</option>
                   ))}
                 </select>
               </div>
@@ -135,7 +189,7 @@ export default function NewTestSessionPage() {
                   <label className="gov-label">Testing Laboratory Facility</label>
                   <select className="gov-select" value={form.labId} onChange={(e) => updateField('labId', e.target.value)}>
                     <option value="">— Select a registered laboratory —</option>
-                    {laboratories.map((lab) => <option key={lab._id} value={lab.labId}>{lab.labName} ({lab.location})</option>)}
+                    {availableLabs.map((lab) => <option key={lab._id || lab.id} value={lab.labId}>{lab.labName} ({lab.location})</option>)}
                   </select>
                 </div>
                 <div className="gov-form-group">
@@ -219,7 +273,7 @@ export default function NewTestSessionPage() {
               </button>
             ) : (
               <button className="gov-btn gov-btn-accent" onClick={handleSubmit} disabled={createMutation.isPending || !form.instrumentModelId}>
-                {createMutation.isPending ? 'Creating...' : 'Create Session'}
+                {createMutation.isPending ? 'Creating...' : online ? 'Create Session' : 'Save Offline Draft'}
               </button>
             )}
           </div>

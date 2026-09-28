@@ -15,6 +15,7 @@ import DashboardPage from './pages/dashboard/DashboardPage.jsx';
 import TestSessionsPage from './pages/testSessions/TestSessionsPage.jsx';
 import NewTestSessionPage from './pages/testSessions/NewTestSessionPage.jsx';
 import TestSessionDetailPage from './pages/testSessions/TestSessionDetailPage.jsx';
+import OfflineSessionPage from './pages/testSessions/OfflineSessionPage.jsx';
 import InstrumentModelsPage from './pages/instrumentModels/InstrumentModelsPage.jsx';
 import InstrumentModelDetailPage from './pages/instrumentModels/InstrumentModelDetailPage.jsx';
 import ManufacturersPage from './pages/manufacturers/ManufacturersPage.jsx';
@@ -91,6 +92,7 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/test-sessions" element={<TestSessionsPage />} />
             <Route path="/test-sessions/new" element={<RoleGuard allowedRoles={['admin', 'lab_technician', 'lab_admin']}><NewTestSessionPage /></RoleGuard>} />
+            <Route path="/test-sessions/offline/:clientId" element={<RoleGuard allowedRoles={['admin', 'lab_technician', 'lab_admin']}><OfflineSessionPage /></RoleGuard>} />
             <Route path="/test-sessions/:id" element={<TestSessionDetailPage />} />
             <Route path="/instrument-models" element={<InstrumentModelsPage />} />
             <Route path="/instrument-models/:id" element={<InstrumentModelDetailPage />} />

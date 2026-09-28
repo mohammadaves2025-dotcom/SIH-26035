@@ -185,6 +185,18 @@ describe('End-to-End Metrology System Lifecycle', () => {
     expect(verifyRes.body.data.reportNumber).toBe(report.reportNumber);
     expect(verifyRes.body.data.overallResult).toBe('pass');
     expect(verifyRes.body.data.status).toBe('integrity_tagged');
+    expect(verifyRes.body.data.isPublished).toBe(false);
+    expect(verifyRes.body.data.isIntegrityVerified).toBe(true);
+
+    // Only a reviewer/admin can publish, and publication checks both stored artifacts.
+    const publishRes = await request(app)
+      .post(`/api/reports/${report._id}/publish`)
+      .set('Authorization', `Bearer ${reviewerToken}`);
+    expect(publishRes.status).toBe(200);
+    expect(publishRes.body.data.status).toBe('published');
+
+    const publishedVerifyRes = await request(app).get(`/api/verify/${report.reportNumber}`);
+    expect(publishedVerifyRes.body.data.isPublished).toBe(true);
 
     // Verification by SHA256 hash
     const verifyHashRes = await request(app).get(`/api/verify/${report.contentHash}`);
@@ -220,6 +232,13 @@ describe('End-to-End Metrology System Lifecycle', () => {
     expect(exportRes.status).toBe(200);
     expect(exportRes.body.data.length).toBeGreaterThanOrEqual(1);
     expect(exportRes.body.data[0].reportNumber).toBe(report.reportNumber);
+
+    const archiveRes = await request(app)
+      .post(`/api/reports/${report._id}/archive`)
+      .set('Authorization', `Bearer ${reviewerToken}`)
+      .send({ reason: 'Revised report requested' });
+    expect(archiveRes.status).toBe(200);
+    expect(archiveRes.body.data.status).toBe('archived');
 
     // 10. Reviewer revokes report
     const revokeRes = await request(app)

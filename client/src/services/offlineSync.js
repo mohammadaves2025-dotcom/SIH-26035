@@ -31,16 +31,17 @@ export async function saveDraftSession(sessionData) {
     createdAt: now,
   };
 
-  await db.draftSessions.add(draft);
-
-  await db.outbox.add({
-    clientId,
-    type: 'CREATE_SESSION',
-    sessionId: null,
-    data: sessionData,
-    status: 'pending',
-    createdAt: now,
-    retryCount: 0,
+  await db.transaction('rw', db.draftSessions, db.outbox, async () => {
+    await db.draftSessions.add(draft);
+    await db.outbox.add({
+      clientId,
+      type: 'CREATE_SESSION',
+      sessionId: null,
+      data: sessionData,
+      status: 'pending',
+      createdAt: now,
+      retryCount: 0,
+    });
   });
 
   return { clientId, draft };
@@ -60,19 +61,68 @@ export async function saveDraftObservation(sessionClientId, observationData) {
     createdAt: now,
   };
 
-  await db.draftObservations.add(draft);
-
-  await db.outbox.add({
-    clientId,
-    type: 'ADD_OBSERVATION',
-    sessionId: sessionClientId,
-    data: observationData,
-    status: 'pending',
-    createdAt: now,
-    retryCount: 0,
+  await db.transaction('rw', db.draftObservations, db.outbox, async () => {
+    await db.draftObservations.add(draft);
+    await db.outbox.add({
+      clientId,
+      type: 'ADD_OBSERVATION',
+      sessionId: sessionClientId,
+      data: observationData,
+      status: 'pending',
+      createdAt: now,
+      retryCount: 0,
+    });
   });
 
   return { clientId, draft };
+}
+
+export async function getDraftSession(clientId) {
+  return db.draftSessions.where('clientId').equals(clientId).first();
+}
+
+export async function getDraftObservations(sessionClientId) {
+  return db.draftObservations.where('sessionClientId').equals(sessionClientId).sortBy('createdAt');
+}
+
+export async function getDraftSyncIssues(clientId, serverSessionId) {
+  const items = await db.outbox.filter((item) => (
+    item.clientId === clientId || item.sessionId === clientId ||
+    (serverSessionId && item.sessionId === serverSessionId)
+  )).toArray();
+  return items.filter((item) => item.status === 'pending' && item.lastError);
+}
+
+export async function getDraftPendingItems(clientId, serverSessionId) {
+  const items = await db.outbox.filter((item) => (
+    item.clientId === clientId || item.sessionId === clientId ||
+    (serverSessionId && item.sessionId === serverSessionId)
+  )).toArray();
+  return items.filter((item) => item.status === 'pending');
+}
+
+export async function discardQueuedObservation(clientId) {
+  return db.transaction('rw', db.outbox, db.draftObservations, async () => {
+    await db.outbox.where('clientId').equals(clientId).delete();
+    await db.draftObservations.where('clientId').equals(clientId).delete();
+  });
+}
+
+export async function discardOfflineSession(clientId, serverSessionId) {
+  return db.transaction('rw', db.draftSessions, db.draftObservations, db.outbox, async () => {
+    await db.draftSessions.where('clientId').equals(clientId).delete();
+    await db.draftObservations.where('sessionClientId').equals(clientId).delete();
+    await db.outbox.where('clientId').equals(clientId).delete();
+    await db.outbox.where('sessionId').equals(clientId).delete();
+    if (serverSessionId) await db.outbox.where('sessionId').equals(serverSessionId).delete();
+  });
+}
+
+export async function updateDraftSession(clientId, changes) {
+  const draft = await getDraftSession(clientId);
+  if (!draft) return false;
+  await db.draftSessions.update(draft.id, changes);
+  return true;
 }
 
 /**
@@ -94,8 +144,23 @@ export async function getDraftSessions() {
  * Uses the POST /api/test-sessions/sync/batch endpoint.
  * Marks successfully processed items as 'synced'.
  */
-export async function replayOutbox(token) {
+let replayInFlight = null;
+
+export function replayOutbox(token) {
+  if (replayInFlight) return replayInFlight;
+  replayInFlight = replayOutboxNow(token).finally(() => {
+    replayInFlight = null;
+  });
+  return replayInFlight;
+}
+
+async function replayOutboxNow(token) {
   const pending = await getPendingOutbox();
+  pending.sort((a, b) => {
+    if (a.type === 'CREATE_SESSION' && b.type !== 'CREATE_SESSION') return -1;
+    if (b.type === 'CREATE_SESSION' && a.type !== 'CREATE_SESSION') return 1;
+    return a.createdAt.localeCompare(b.createdAt) || a.id - b.id;
+  });
 
   if (pending.length === 0) {
     return { synced: 0, failed: 0 };
@@ -115,7 +180,13 @@ export async function replayOutbox(token) {
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    const processed = new Set(response.data.data?.processed || []);
+    const processedItems = response.data.data?.processed || [];
+    const processed = new Set(processedItems.map((item) => typeof item === 'string' ? item : item.clientId));
+    const sessionIds = new Map(processedItems
+      .filter((item) => typeof item === 'object' && item.sessionId)
+      .map((item) => [item.clientId, item.sessionId]));
+    const conflicts = response.data.data?.conflicts || [];
+    const conflictByClientId = new Map(conflicts.map((item) => [item.clientId, item.reason]));
     let synced = 0;
     let failed = 0;
 
@@ -127,19 +198,18 @@ export async function replayOutbox(token) {
         await db.outbox.update(item.id, {
           status: 'pending',
           retryCount: (item.retryCount || 0) + 1,
+          lastError: conflictByClientId.get(item.clientId) || 'Not acknowledged by server',
         });
         failed++;
       }
     }
 
-    // Clean up synced draft sessions
-    const syncedClientIds = [...processed];
-    for (const cid of syncedClientIds) {
-      await db.draftSessions.where('clientId').equals(cid).delete();
-      await db.draftObservations.where('sessionClientId').equals(cid).delete();
+    for (const [clientId, serverSessionId] of sessionIds) {
+      await updateDraftSession(clientId, { serverSessionId, syncedAt: new Date().toISOString() });
+      await db.outbox.where('sessionId').equals(clientId).modify({ sessionId: serverSessionId });
     }
 
-    return { synced, failed };
+    return { synced, failed, conflicts };
   } catch (error) {
     // Network error — leave items as pending for next retry
     console.warn('[OfflineSync] Replay failed, items remain in outbox:', error.message);
@@ -154,6 +224,7 @@ export async function cacheInstrumentModels(models) {
   await db.cachedInstrumentModels.clear();
   const records = models.map((m) => ({
     id: m._id,
+    _id: m._id,
     modelName: m.modelName,
     accuracyClass: m.accuracyClass,
     maxCapacity: m.maxCapacity,
@@ -179,6 +250,21 @@ export async function cacheRuleConfigs(configs) {
     bands: c.bands,
   }));
   await db.cachedRuleConfigs.bulkAdd(records);
+}
+
+export async function cacheLaboratories(laboratories) {
+  await db.cachedLaboratories.clear();
+  await db.cachedLaboratories.bulkAdd(laboratories.map((lab) => ({
+    id: lab._id,
+    labId: lab.labId,
+    labName: lab.labName,
+    location: lab.location,
+    isActive: lab.isActive,
+  })));
+}
+
+export async function getCachedLaboratories() {
+  return db.cachedLaboratories.toArray();
 }
 
 /**

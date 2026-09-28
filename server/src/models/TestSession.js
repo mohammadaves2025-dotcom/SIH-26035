@@ -27,6 +27,7 @@ const testSessionSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    clientSyncId: { type: String, trim: true, default: undefined },
     testDate: { type: Date, required: true },
     verificationStage: {
       type: String,
@@ -55,5 +56,10 @@ const testSessionSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+testSessionSchema.index({ createdBy: 1, clientSyncId: 1 }, {
+  unique: true,
+  partialFilterExpression: { clientSyncId: { $type: 'string' } },
+});
 
 export const TestSession = mongoose.model('TestSession', testSessionSchema);

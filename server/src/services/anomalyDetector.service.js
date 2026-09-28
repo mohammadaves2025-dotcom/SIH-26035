@@ -27,6 +27,7 @@ export async function detectObservationAnomalies(observation, session) {
   // Find prior observations for the same model and same annex/reference load
   const priorObs = await Observation.find({
     testSessionId: { $in: sessionIds },
+    deletedAt: null,
     annexRef: observation.annexRef,
     evaluationMethod: 'mpe_band',
     errorRatioE: { $ne: null },

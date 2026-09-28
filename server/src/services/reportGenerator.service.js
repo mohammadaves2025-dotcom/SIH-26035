@@ -376,16 +376,16 @@ export async function generateReport({ testSessionId, userId }) {
   }
 
   const latestReport = await Report.findOne({ testSessionId: session._id }).sort({ revisionNumber: -1 });
-  if (latestReport && latestReport.status !== 'revoked') {
+  if (latestReport && !['archived', 'revoked'].includes(latestReport.status)) {
     throw new AppError(
       409,
       'REPORT_EXISTS',
-      `Report ${latestReport.reportNumber} already exists; revoke it before generating a replacement`
+      `Report ${latestReport.reportNumber} must be archived or revoked before generating a replacement`
     );
   }
   const revisionNumber = (latestReport?.revisionNumber || 0) + 1;
 
-  const observations = await Observation.find({ testSessionId: session._id }).populate('ruleConfigId');
+  const observations = await Observation.find({ testSessionId: session._id, deletedAt: null }).populate('ruleConfigId');
   const attachments = await Attachment.find({ testSessionId: session._id });
   const registeredModel = session.instrumentModelId;
   const model = {
@@ -445,6 +445,17 @@ export async function generateReport({ testSessionId, userId }) {
     generatedBy: userId,
     generatedAt,
   });
+
+  if (latestReport) {
+    latestReport.supersededByReportId = report._id;
+    await latestReport.save();
+    await appendAuditLog({
+      entityType: 'Report',
+      entityId: latestReport._id,
+      action: `superseded_by:${report.reportNumber}`,
+      userId,
+    });
+  }
 
   session.status = 'report_generated';
   await session.save();

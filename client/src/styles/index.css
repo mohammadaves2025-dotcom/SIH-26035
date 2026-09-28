@@ -270,6 +270,7 @@ code, .mono {
 .gov-badge-fail      { background: var(--gov-red-light); color: var(--gov-red); border: 1px solid #FECACA; }
 .gov-badge-published { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
 .gov-badge-revoked   { background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
+.gov-badge-archived  { background: #E2E8F0; color: #475569; border: 1px solid #CBD5E1; }
 
 /* ──────────── Metric Cards ──────────── */
 .metric-grid {

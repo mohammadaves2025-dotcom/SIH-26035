@@ -5,6 +5,7 @@ const auditLogSchema = new mongoose.Schema(
     entityType: { type: String, required: true },
     entityId: { type: mongoose.Schema.Types.ObjectId, required: true },
     action: { type: String, required: true },
+    details: { type: mongoose.Schema.Types.Mixed, default: undefined },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

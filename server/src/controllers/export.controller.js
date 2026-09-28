@@ -14,7 +14,7 @@ async function generateExportData(req, startDate, endDate) {
   const to = endDate ? new Date(endDate) : now;
 
   const query = {
-    status: 'integrity_tagged',
+    status: 'published',
     generatedAt: { $gte: from, $lte: to },
   };
 

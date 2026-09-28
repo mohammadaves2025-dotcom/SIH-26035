@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './styles/index.css';
 import { registerSW } from 'virtual:pwa-register';
+import { replayOutbox } from './services/offlineSync.js';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -23,16 +24,20 @@ const updateSW = registerSW({
 });
 
 // Replay outbox when connectivity resumes
-window.addEventListener('online', async () => {
+async function replayOfflineOutbox() {
   try {
-    const { replayOutbox } = await import('./services/offlineSync.js');
-    const authStore = JSON.parse(localStorage.getItem('auth-storage') || '{}');
+    if (!navigator.onLine) return;
+    const authStore = JSON.parse(localStorage.getItem('nawi_auth') || '{}');
     const token = authStore?.state?.token;
     if (token) {
       const result = await replayOutbox(token);
       console.log('[OfflineSync] Outbox replayed:', result);
+      window.dispatchEvent(new CustomEvent('nawi:outbox-replayed', { detail: result }));
     }
   } catch (err) {
     console.warn('[OfflineSync] Auto-replay failed:', err.message);
   }
-});
+}
+
+window.addEventListener('online', replayOfflineOutbox);
+replayOfflineOutbox();
