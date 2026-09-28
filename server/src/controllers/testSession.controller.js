@@ -4,6 +4,7 @@ import { InstrumentModel } from '../models/InstrumentModel.js';
 import { Laboratory } from '../models/Laboratory.js';
 import { resolveRuleConfig } from '../services/ruleResolver.service.js';
 import { evaluateObservation, evaluateSession } from '../services/complianceEngine.service.js';
+import { detectObservationAnomalies } from '../services/anomalyDetector.service.js';
 import { appendAuditLog } from '../services/auditLogger.service.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -163,6 +164,7 @@ export const submitTestSession = asyncHandler(async (req, res) => {
       obs.errorRatioE = evalResult.errorRatioE;
       obs.ruleConfigId = evalResult.ruleConfigId;
     }
+    await detectObservationAnomalies(obs, session);
     await obs.save();
     await appendAuditLog({ entityType: 'Observation', entityId: obs._id, action: `evaluate:${ruleConfig._id}:${evalResult.outcome}`, userId: req.user.sub });
   }
@@ -500,6 +502,35 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
       processed,
       conflicts,
     },
+  });
+});
+
+export const acknowledgeObservationFlag = asyncHandler(async (req, res) => {
+  const observation = await Observation.findById(req.params.obsId);
+  if (!observation) throw new AppError(404, 'NOT_FOUND', 'Observation not found');
+
+  const session = await TestSession.findById(observation.testSessionId);
+  if (!session) throw new AppError(404, 'NOT_FOUND', 'Test session not found');
+  await assertSessionAccess(req, session);
+
+  if (observation.advisoryFlags && observation.advisoryFlags.length > 0) {
+    for (const flag of observation.advisoryFlags) {
+      flag.acknowledged = true;
+      flag.acknowledgedBy = req.user.sub;
+      flag.acknowledgedAt = new Date();
+    }
+    await observation.save();
+    await appendAuditLog({
+      entityType: 'Observation',
+      entityId: observation._id,
+      action: 'acknowledge_advisory_flag',
+      userId: req.user.sub,
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    data: observation,
   });
 });
 

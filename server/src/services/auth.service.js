@@ -30,6 +30,8 @@ export async function registerUser({ name, email, password, role, labId }) {
   };
 }
 
+import { appendAuditLog } from './auditLogger.service.js';
+
 export async function loginUser({ email, password }) {
   const user = await User.findOne({ email }).select('+passwordHash');
   if (!user) {
@@ -37,9 +39,32 @@ export async function loginUser({ email, password }) {
   }
   if (!user.active) throw new AppError(401, 'ACCOUNT_DISABLED', 'This account is disabled');
 
+  // Account lockout check
+  if (user.lockUntil && user.lockUntil > new Date()) {
+    const minutesRemaining = Math.ceil((user.lockUntil - new Date()) / 60000);
+    throw new AppError(
+      423,
+      'ACCOUNT_LOCKED',
+      `Account is locked due to repeated failed login attempts. Try again in ${minutesRemaining} minutes.`
+    );
+  }
+
   const isMatch = await bcrypt.compare(password, user.passwordHash);
   if (!isMatch) {
+    const attempts = (user.failedLoginAttempts || 0) + 1;
+    user.failedLoginAttempts = attempts;
+    if (attempts >= 5) {
+      user.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 minute lockout
+    }
+    await user.save();
     throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email or password');
+  }
+
+  // Reset lockout counters on success
+  if (user.failedLoginAttempts > 0 || user.lockUntil) {
+    user.failedLoginAttempts = 0;
+    user.lockUntil = null;
+    await user.save();
   }
 
   const tokenPayload = {
@@ -62,4 +87,29 @@ export async function loginUser({ email, password }) {
       labId: user.labId,
     },
   };
+}
+
+export async function changePassword(userId, { currentPassword, newPassword }) {
+  const user = await User.findById(userId).select('+passwordHash');
+  if (!user) {
+    throw new AppError(404, 'NOT_FOUND', 'User not found');
+  }
+
+  const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!isMatch) {
+    throw new AppError(400, 'INVALID_CREDENTIALS', 'Current password is incorrect');
+  }
+
+  const saltRounds = env.BCRYPT_SALT_ROUNDS || 10;
+  user.passwordHash = await bcrypt.hash(newPassword, saltRounds);
+  await user.save();
+
+  await appendAuditLog({
+    entityType: 'User',
+    entityId: user._id,
+    action: 'change_password',
+    userId: user._id,
+  });
+
+  return { success: true, message: 'Password updated successfully' };
 }

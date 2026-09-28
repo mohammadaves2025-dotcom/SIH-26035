@@ -67,7 +67,7 @@ export const deleteUser = asyncHandler(async (req, res) => {
     throw new AppError(409, 'ALREADY_ARCHIVED', 'User is already archived');
   }
 
-  // Soft-delete: set active=false to preserve audit trail references (§11.4)
+  // Soft-delete: set active=false to preserve audit trail references
   userToDelete.active = false;
   await userToDelete.save();
 

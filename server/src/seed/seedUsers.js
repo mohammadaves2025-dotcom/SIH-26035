@@ -7,6 +7,10 @@ import { Laboratory } from '../models/Laboratory.js';
 import { env } from '../config/env.js';
 
 export async function seedUsers() {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('FATAL: Seed users cannot be created in production mode!');
+    throw new Error('Seed users creation is forbidden in production environment');
+  }
   console.log('Seeding Users & Demo Manufacturer...');
 
   // Create default Laboratory
@@ -58,6 +62,8 @@ export async function seedUsers() {
       passwordHash,
       role: 'admin',
       labId: null,
+      failedLoginAttempts: 0,
+      lockUntil: null,
     },
     {
       name: 'Lab Tech (NPL Delhi)',

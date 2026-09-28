@@ -21,6 +21,8 @@ const userSchema = new mongoose.Schema(
     laboratoryRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Laboratory', default: null },
     manufacturerRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Manufacturer', default: null },
     active: { type: Boolean, default: true },
+    failedLoginAttempts: { type: Number, default: 0 },
+    lockUntil: { type: Date, default: null },
   },
   { timestamps: true }
 );

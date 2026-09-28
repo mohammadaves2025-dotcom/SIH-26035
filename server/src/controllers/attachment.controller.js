@@ -34,6 +34,35 @@ export const multerUpload = multer({
   },
 });
 
+function validateMagicBytes(filePath) {
+  const buffer = Buffer.alloc(12);
+  let fd;
+  try {
+    fd = fs.openSync(filePath, 'r');
+    fs.readSync(fd, buffer, 0, 12, 0);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return true;
+  // PNG: 89 50 4E 47
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return true;
+  // PDF: 25 50 44 46 (%PDF)
+  if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) return true;
+  // DOCX / ZIP: 50 4B 03 04 (PK..)
+  if (buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04) return true;
+  // WebP: RIFF (52 49 46 46) + WEBP at offset 8
+  if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+      buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) return true;
+
+  // Plain text / CSV: printable ASCII or UTF8 whitespace
+  const isText = buffer.every(b => (b >= 9 && b <= 13) || (b >= 32 && b <= 126) || b === 0);
+  if (isText) return true;
+
+  return false;
+}
+
 export const uploadAttachment = asyncHandler(async (req, res) => {
   const session = await TestSession.findById(req.params.id);
   if (!session) {
@@ -52,6 +81,11 @@ export const uploadAttachment = asyncHandler(async (req, res) => {
 
   if (!req.file) {
     throw new AppError(400, 'VALIDATION_ERROR', 'File is required');
+  }
+
+  if (!validateMagicBytes(req.file.path)) {
+    try { fs.unlinkSync(req.file.path); } catch (_) {}
+    throw new AppError(400, 'INVALID_FILE_TYPE', 'File content magic bytes do not match expected signature');
   }
 
   const fileType = req.body.fileType;

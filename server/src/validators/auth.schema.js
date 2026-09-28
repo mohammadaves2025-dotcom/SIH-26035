@@ -7,7 +7,10 @@ export const registerSchema = z.object({
   password: z
     .string()
     .min(8, 'Password must be at least 8 characters long')
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 'Password must contain at least one uppercase letter, one lowercase letter, and one number'),
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])/,
+      'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&#)'
+    ),
   role: z.enum(['lab_technician', 'reviewer', 'lab_admin', 'manufacturer'], {
     errorMap: () => ({ message: 'Role must be lab_technician, reviewer, lab_admin, or manufacturer' }),
   }),
@@ -21,4 +24,15 @@ export const registerSchema = z.object({
 export const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(1, 'Password is required'),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z
+    .string()
+    .min(8, 'Password must be at least 8 characters long')
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])/,
+      'New password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&#)'
+    ),
 });

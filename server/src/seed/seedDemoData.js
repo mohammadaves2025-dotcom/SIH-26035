@@ -191,7 +191,7 @@ export async function seedDemoData() {
     models.push(doc);
   }
 
-  // 7. Seed All 7 User Roles (§4 Table of Architecture Blueprint)
+  // 7. Seed All 7 User Roles
   const passwordHash = await bcrypt.hash('Password123!', env.BCRYPT_SALT_ROUNDS || 10);
   const initialUsers = [
     { name: 'System Admin', email: 'admin@nawi.gov.in', passwordHash, role: 'admin', labId: null },

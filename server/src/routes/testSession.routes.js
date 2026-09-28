@@ -10,6 +10,7 @@ import {
   getTestSessions,
   getTestSessionById,
   batchSyncTestSessions,
+  acknowledgeObservationFlag,
 } from '../controllers/testSession.controller.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
@@ -46,6 +47,12 @@ router.delete(
   '/:id/observations/:obsId',
   authorize('admin', 'lab_technician', 'lab_admin'),
   deleteObservation
+);
+
+router.post(
+  '/:id/observations/:obsId/acknowledge-flag',
+  authorize('admin', 'reviewer'),
+  acknowledgeObservationFlag
 );
 
 router.post(

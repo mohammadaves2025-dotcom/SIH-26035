@@ -70,7 +70,7 @@ export function evaluateObservation(observation, instrumentModel, ruleConfig, ve
     );
   }
 
-  // OIML R 76 §3.5 & RuleConfig: In-service / subsequent verification MPE multiplier from RuleConfig
+  // In-service / subsequent verification MPE multiplier from RuleConfig (UNVERIFIED - PENDING EXPERT)
   const multValue = verificationStage === 'subsequent' ? (ruleConfig.subsequentMpeMultiplier ?? 2.0) : 1.0;
   const stageMultiplier = toScaledInteger(multValue, 'subsequent MPE multiplier');
   const factorScaled = (toScaledInteger(band.mpeFactor, 'MPE factor') * stageMultiplier) / DECIMAL_SCALE;
@@ -80,7 +80,7 @@ export function evaluateObservation(observation, instrumentModel, ruleConfig, ve
   const computedError = Number(errorScaled) / DECIMAL_SCALE_NUMBER;
   const outcome = withinMpe ? 'pass' : 'fail';
 
-  // §9.3 step 4: margin and error ratio
+  // Margin and error ratio computation
   const marginToMpe = appliedMpe - Math.abs(computedError);
   const eValue = Number(eScaled) / DECIMAL_SCALE_NUMBER;
   const errorRatioE = eValue !== 0 ? computedError / eValue : null;

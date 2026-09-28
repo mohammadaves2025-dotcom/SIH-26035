@@ -51,6 +51,16 @@ const observationSchema = new mongoose.Schema(
       enum: ['pass', 'fail', null],
       default: null,
     },
+    advisoryFlags: [
+      {
+        flagType: { type: String, default: 'ANOMALY_ERROR_RATIO' },
+        zScore: { type: Number },
+        message: { type: String },
+        acknowledged: { type: Boolean, default: false },
+        acknowledgedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        acknowledgedAt: { type: Date, default: null },
+      },
+    ],
   },
   { timestamps: true }
 );

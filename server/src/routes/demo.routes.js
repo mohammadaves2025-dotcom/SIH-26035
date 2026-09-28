@@ -48,7 +48,7 @@ router.post('/seed', authenticate, authorize('admin'), async (req, res, next) =>
 
 router.post('/clear', authenticate, authorize('admin'), async (req, res, next) => {
   try {
-    // Deliberately NOT clearing AuditLog — §11.2 mandates append-only audit trail
+    // Deliberately NOT clearing AuditLog — append-only audit trail by design
     await Promise.all([
       TestSession.deleteMany({}),
       Observation.deleteMany({}),

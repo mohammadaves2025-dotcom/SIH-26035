@@ -27,3 +27,10 @@ export async function teardownTestDB() {
     await mongoServer.stop();
   }
 }
+
+export async function clearTestDB() {
+  const collections = mongoose.connection.collections;
+  for (const key in collections) {
+    await collections[key].deleteMany();
+  }
+}

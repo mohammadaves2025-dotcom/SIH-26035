@@ -1,0 +1,44 @@
+name: CI Build & Test Workflow
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  backend-tests:
+    name: Run Backend Server Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+      - name: Install Server Dependencies
+        run: cd server && npm ci
+      - name: Run Backend Tests
+        run: cd server && npm test
+        env:
+          NODE_ENV: test
+          JWT_SECRET: test_jwt_secret_key_32_chars_long_minimum!
+          REPORT_INTEGRITY_SECRET: test_report_integrity_secret_32_chars!
+
+  frontend-build:
+    name: Build Frontend Client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+      - name: Install Client Dependencies
+        run: cd client && npm ci
+      - name: Build Vite Client
+        run: cd client && npm run build
