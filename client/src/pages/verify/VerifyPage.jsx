@@ -53,7 +53,7 @@ export default function VerifyPage() {
               <input
                 className="gov-input"
                 style={{ flex: 1 }}
-                placeholder="e.g. REP-2024-0012 or 7f8a9b..."
+                placeholder="e.g. NAWI-2026-000001 or 7f8a9b..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
