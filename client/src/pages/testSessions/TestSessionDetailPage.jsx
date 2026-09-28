@@ -8,7 +8,7 @@ import { useAuthStore } from '../../store/useAuthStore.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { ANNEX_REFS } from '../../config/constants.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
-import { ArrowLeft, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle2, ShieldCheck, XCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle2, ShieldCheck, XCircle, Trash2, Pencil } from 'lucide-react';
 
 export default function TestSessionDetailPage() {
   const { id } = useParams();
@@ -27,6 +27,7 @@ export default function TestSessionDetailPage() {
     zeroCorrection: '',
   });
   const [showObsForm, setShowObsForm] = useState(false);
+  const [editingObsId, setEditingObsId] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
 
   const { data: session, isLoading } = useQuery({
@@ -48,6 +49,19 @@ export default function TestSessionDetailPage() {
       queryClient.invalidateQueries(['test-session', id]);
       addToast({ type: 'success', message: 'Metrological observation recorded successfully' });
       setShowObsForm(false);
+      setEditingObsId(null);
+      const firstAnnex = session.selectedAnnexes?.[0] || '';
+      setObsForm({ annexRef: firstAnnex, referenceLoad: '', indicatedValue: '', evaluationMethod: ANNEX_REFS.find((item) => item.value === firstAnnex)?.method || 'manual_checklist', checklistPassed: null, reviewerNotes: '', zeroCorrection: '' });
+    },
+  });
+
+  const updateObsMutation = useMutation({
+    mutationFn: ({ obsId, data }) => updateObservation(id, obsId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['test-session', id]);
+      addToast({ type: 'success', message: 'Observation updated successfully' });
+      setShowObsForm(false);
+      setEditingObsId(null);
       const firstAnnex = session.selectedAnnexes?.[0] || '';
       setObsForm({ annexRef: firstAnnex, referenceLoad: '', indicatedValue: '', evaluationMethod: ANNEX_REFS.find((item) => item.value === firstAnnex)?.method || 'manual_checklist', checklistPassed: null, reviewerNotes: '', zeroCorrection: '' });
     },
@@ -124,27 +138,33 @@ export default function TestSessionDetailPage() {
   };
 
   const handleAddObs = () => {
+    let payload;
     if (obsForm.evaluationMethod === 'manual_checklist') {
       if (obsForm.checklistPassed === null || !obsForm.reviewerNotes.trim()) {
         addToast({ type: 'error', message: 'Choose the checklist result and record reviewer notes.' });
         return;
       }
-      addObsMutation.mutate({ annexRef: obsForm.annexRef, evaluationMethod: 'manual_checklist', checklistPassed: obsForm.checklistPassed, reviewerNotes: obsForm.reviewerNotes.trim() });
-      return;
+      payload = { annexRef: obsForm.annexRef, evaluationMethod: 'manual_checklist', checklistPassed: obsForm.checklistPassed, reviewerNotes: obsForm.reviewerNotes.trim() };
+    } else {
+      if (obsForm.referenceLoad === '' || obsForm.indicatedValue === '') {
+        addToast({ type: 'error', message: 'Enter both the applied reference load and instrument indication.' });
+        return;
+      }
+      const refLoad = Number(obsForm.referenceLoad);
+      const indicatedValue = Number(obsForm.indicatedValue);
+      if (!Number.isFinite(refLoad) || !Number.isFinite(indicatedValue)) {
+        addToast({ type: 'error', message: 'Observation values must be finite numbers.' });
+        return;
+      }
+      payload = { annexRef: obsForm.annexRef, evaluationMethod: 'mpe_band', referenceLoad: refLoad, indicatedValue };
+      if (obsForm.zeroCorrection !== '') payload.zeroCorrection = Number(obsForm.zeroCorrection);
     }
-    if (obsForm.referenceLoad === '' || obsForm.indicatedValue === '') {
-      addToast({ type: 'error', message: 'Enter both the applied reference load and instrument indication.' });
-      return;
+
+    if (editingObsId) {
+      updateObsMutation.mutate({ obsId: editingObsId, data: payload });
+    } else {
+      addObsMutation.mutate(payload);
     }
-    const refLoad = Number(obsForm.referenceLoad);
-    const indicatedValue = Number(obsForm.indicatedValue);
-    if (!Number.isFinite(refLoad) || !Number.isFinite(indicatedValue)) {
-      addToast({ type: 'error', message: 'Observation values must be finite numbers.' });
-      return;
-    }
-    const observation = { annexRef: obsForm.annexRef, evaluationMethod: 'mpe_band', referenceLoad: refLoad, indicatedValue };
-    if (obsForm.zeroCorrection !== '') observation.zeroCorrection = Number(obsForm.zeroCorrection);
-    addObsMutation.mutate(observation);
   };
 
   const handleFileUpload = (e) => {
@@ -313,6 +333,27 @@ export default function TestSessionDetailPage() {
                       <td>{obs.outcome || 'Pending evaluation'}</td>
                       {session.status === 'draft' && canEditDraft && (
                         <td>
+                          <button
+                            type="button"
+                            className="gov-btn gov-btn-outline"
+                            style={{ padding: '2px 6px', marginRight: 6 }}
+                            onClick={() => {
+                              setEditingObsId(obs._id);
+                              setObsForm({
+                                annexRef: obs.annexRef,
+                                referenceLoad: obs.referenceLoad ?? '',
+                                indicatedValue: obs.indicatedValue ?? '',
+                                evaluationMethod: obs.evaluationMethod || 'mpe_band',
+                                checklistPassed: obs.checklistPassed ?? null,
+                                reviewerNotes: obs.reviewerNotes || '',
+                                zeroCorrection: obs.zeroCorrection ?? '',
+                              });
+                              setShowObsForm(true);
+                            }}
+                            title="Edit observation"
+                          >
+                            <Pencil size={12} />
+                          </button>
                           <button
                             type="button"
                             className="gov-btn gov-btn-outline"
