@@ -97,9 +97,11 @@ export const createReport = asyncHandler(async (req, res) => {
   const session = await TestSession.findById(sessionId).populate('instrumentModelId');
   if (!session) throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   await assertSessionAccess(req, session);
+  const { remarks, officerRemarks } = req.body || {};
   const report = await generateReport({
     testSessionId: sessionId,
     userId: req.user.sub,
+    remarks: remarks || officerRemarks,
   });
 
   res.status(201).json({

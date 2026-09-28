@@ -16,15 +16,20 @@ export function authenticate(req, res, next) {
   } catch (err) {
     return next(new AppError(401, 'INVALID_TOKEN', 'Invalid or expired token'));
   }
-  User.findById(decoded.sub).select('active role labId email name').then((user) => {
+  User.findById(decoded.sub).select('active role labId email name tokenVersion manufacturerRef').then((user) => {
     if (!user || !user.active) return next(new AppError(401, 'ACCOUNT_DISABLED', 'Account is unavailable'));
-    // Use live DB values for role, labId and email — not the potentially stale JWT claims
+    if (decoded.tokenVersion !== undefined && user.tokenVersion !== undefined && decoded.tokenVersion !== user.tokenVersion) {
+      return next(new AppError(401, 'TOKEN_EXPIRED', 'Session has expired due to password change or account update'));
+    }
+    // Use live DB values for role, labId, manufacturerRef and email — not the potentially stale JWT claims
     req.user = {
       ...decoded,
+      _id: user._id.toString(),
       role: user.role,
       labId: user.labId,
       email: user.email,
       name: user.name,
+      manufacturerRef: user.manufacturerRef ? user.manufacturerRef.toString() : null,
     };
     return next();
   }).catch(next);

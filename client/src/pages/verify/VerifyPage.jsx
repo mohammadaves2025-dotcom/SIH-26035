@@ -119,7 +119,7 @@ export default function VerifyPage() {
                 Published {result.publishedAt ? `on ${new Date(result.publishedAt).toLocaleString()}` : ''}.
               </div>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, fontSize: 14 }}>
               <div><span className="text-muted" style={{ fontSize: 12 }}>Report Number</span><br /><strong className="text-mono">{result.reportNumber || result._id}</strong></div>
               <div><span className="text-muted" style={{ fontSize: 12 }}>PDF integrity</span><br /><strong>{result.isIntegrityVerified ? 'Verified' : 'Could not verify stored PDF'}</strong></div>
               <div><span className="text-muted" style={{ fontSize: 12 }}>Accuracy Class</span><br /><strong>Class {result.accuracyClass || result.testSessionId?.accuracyClass || '—'}</strong></div>

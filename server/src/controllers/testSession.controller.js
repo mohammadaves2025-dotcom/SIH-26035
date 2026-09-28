@@ -181,6 +181,8 @@ export const submitTestSession = asyncHandler(async (req, res) => {
 
   session.status = 'under_review';
   session.overallResult = overall;
+  session.submittedBy = req.user.sub;
+  session.submittedAt = new Date();
   await session.save();
 
   await appendAuditLog({
@@ -205,6 +207,10 @@ export const approveTestSession = asyncHandler(async (req, res) => {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
   await assertSessionAccess(req, session);
+
+  if (session.submittedBy && session.submittedBy.toString() === req.user.sub && process.env.ALLOW_SELF_APPROVAL !== 'true') {
+    throw new AppError(403, 'SEPARATION_OF_DUTIES', 'The reviewing officer cannot approve a test session they submitted themselves');
+  }
 
   if (session.status !== 'under_review' || !['pass', 'fail'].includes(session.overallResult)) {
     throw new AppError(
@@ -237,6 +243,10 @@ export const rejectTestSession = asyncHandler(async (req, res) => {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
   await assertSessionAccess(req, session);
+
+  if (session.submittedBy && session.submittedBy.toString() === req.user.sub && process.env.ALLOW_SELF_APPROVAL !== 'true') {
+    throw new AppError(403, 'SEPARATION_OF_DUTIES', 'The reviewing officer cannot reject a test session they submitted themselves');
+  }
 
   if (session.status !== 'under_review' || !['pass', 'fail'].includes(session.overallResult)) {
     throw new AppError(

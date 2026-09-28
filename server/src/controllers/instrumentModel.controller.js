@@ -127,6 +127,15 @@ export const updateInstrumentModel = asyncHandler(async (req, res) => {
   }
 
   const { modelName, accuracyClass, maxCapacity, e, minCapacity } = req.body;
+  const isChangingSpec = (accuracyClass && accuracyClass !== model.accuracyClass) ||
+    (maxCapacity !== undefined && maxCapacity !== model.maxCapacity) ||
+    (e !== undefined && e !== model.e) ||
+    (minCapacity !== undefined && minCapacity !== model.minCapacity);
+
+  if (isChangingSpec && (await TestSession.exists({ instrumentModelId: model._id }))) {
+    throw new AppError(409, 'MODEL_IN_USE', 'Metrological parameters (accuracy class, capacity, scale interval) cannot be modified once test sessions exist for this model');
+  }
+
   if (modelName) model.modelName = modelName;
   if (accuracyClass) model.accuracyClass = accuracyClass;
   if (maxCapacity !== undefined) model.maxCapacity = maxCapacity;
@@ -215,8 +224,14 @@ export const getInstrumentModelHistory = asyncHandler(async (req, res) => {
   ]);
 
   const sessionIds = sessions.map((s) => s._id);
-  const reports = await Report.find({ testSessionId: { $in: sessionIds } });
-  const reportsBySession = new Map(reports.map((r) => [r.testSessionId.toString(), r]));
+  const reports = await Report.find({ testSessionId: { $in: sessionIds } }).sort({ revision: -1, createdAt: -1 });
+  const reportsBySession = new Map();
+  for (const r of reports) {
+    const key = r.testSessionId.toString();
+    if (!reportsBySession.has(key)) {
+      reportsBySession.set(key, r);
+    }
+  }
 
   const history = sessions.map((s) => ({
     session: s,

@@ -7,6 +7,7 @@ import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { appendAuditLog } from '../services/auditLogger.service.js';
 import { assertSessionAccess } from '../utils/tenantAccess.js';
+import { sha256 } from '../utils/hash.js';
 
 const uploadDir = path.join(process.cwd(), 'uploads', 'attachments');
 if (!fs.existsSync(uploadDir)) {
@@ -66,52 +67,62 @@ function validateMagicBytes(filePath) {
 export const uploadAttachment = asyncHandler(async (req, res) => {
   const session = await TestSession.findById(req.params.id);
   if (!session) {
+    if (req.file) { try { fs.unlinkSync(req.file.path); } catch (_) {} }
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
 
-  await assertSessionAccess(req, session);
+  try {
+    await assertSessionAccess(req, session);
 
-  if (!['draft', 'submitted'].includes(session.status)) {
-    throw new AppError(
-      409,
-      'INVALID_STATE',
-      'Attachments can only be added to draft or submitted test sessions'
-    );
+    if (!['draft', 'submitted'].includes(session.status)) {
+      throw new AppError(
+        409,
+        'INVALID_STATE',
+        'Attachments can only be added to draft or submitted test sessions'
+      );
+    }
+
+    if (!req.file) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'File is required');
+    }
+
+    if (!validateMagicBytes(req.file.path)) {
+      throw new AppError(400, 'INVALID_FILE_TYPE', 'File content magic bytes do not match expected signature');
+    }
+
+    const fileType = req.body.fileType;
+    if (!['photo', 'document'].includes(fileType)) {
+      throw new AppError(
+        400,
+        'VALIDATION_ERROR',
+        "fileType must be 'photo' or 'document'"
+      );
+    }
+
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const fileHash = sha256(fileBuffer);
+    const relativePath = path.join('uploads', 'attachments', req.file.filename);
+
+    const attachment = await Attachment.create({
+      testSessionId: session._id,
+      fileType,
+      filePath: relativePath,
+      originalFilename: req.file.originalname,
+      uploadedBy: req.user.sub,
+      sha256Hash: fileHash,
+    });
+    await appendAuditLog({ entityType: 'Attachment', entityId: attachment._id, action: 'upload', userId: req.user.sub, details: { sha256Hash: fileHash } });
+
+    res.status(201).json({
+      success: true,
+      data: attachment,
+    });
+  } catch (err) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+    }
+    throw err;
   }
-
-  if (!req.file) {
-    throw new AppError(400, 'VALIDATION_ERROR', 'File is required');
-  }
-
-  if (!validateMagicBytes(req.file.path)) {
-    try { fs.unlinkSync(req.file.path); } catch (_) {}
-    throw new AppError(400, 'INVALID_FILE_TYPE', 'File content magic bytes do not match expected signature');
-  }
-
-  const fileType = req.body.fileType;
-  if (!['photo', 'document'].includes(fileType)) {
-    throw new AppError(
-      400,
-      'VALIDATION_ERROR',
-      "fileType must be 'photo' or 'document'"
-    );
-  }
-
-  const relativePath = path.join('uploads', 'attachments', req.file.filename);
-
-  const attachment = await Attachment.create({
-    testSessionId: session._id,
-    fileType,
-    filePath: relativePath,
-    originalFilename: req.file.originalname,
-    uploadedBy: req.user.sub,
-  });
-  await appendAuditLog({ entityType: 'Attachment', entityId: attachment._id, action: 'upload', userId: req.user.sub });
-
-  res.status(201).json({
-    success: true,
-    data: attachment,
-  });
 });
 
 export const getAttachments = asyncHandler(async (req, res) => {

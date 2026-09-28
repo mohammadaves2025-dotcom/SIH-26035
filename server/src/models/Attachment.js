@@ -19,6 +19,7 @@ const attachmentSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    sha256Hash: { type: String },
     uploadedAt: { type: Date, default: Date.now },
   },
   { timestamps: true }

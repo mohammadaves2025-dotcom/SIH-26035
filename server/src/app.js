@@ -9,6 +9,16 @@ import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
 
+app.set('trust proxy', 1);
+
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+app.get('/ready', (_req, res) => {
+  res.status(200).json({ status: 'ready', timestamp: new Date().toISOString() });
+});
+
 const allowedOrigins = (env.CLIENT_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map((o) => o.trim());
@@ -36,7 +46,7 @@ app.use(
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error('CORS origin not allowed'));
+        callback(new AppError(403, 'CORS_NOT_ALLOWED', 'CORS origin not allowed'));
       }
     },
     credentials: true,

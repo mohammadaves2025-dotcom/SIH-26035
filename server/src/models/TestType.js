@@ -7,6 +7,13 @@ const testTypeSchema = new mongoose.Schema(
     oimlAnnexRef: { type: String, required: true, trim: true },
     formulaRef: { type: String, default: 'E = I - L' },
     description: { type: String, trim: true },
+    mandatoryFor: [
+      {
+        accuracyClass: { type: String, enum: ['I', 'II', 'III', 'IIII'] },
+        verificationStage: { type: String, enum: ['initial', 'subsequent', 'all'], default: 'all' },
+      },
+    ],
+    isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
 );

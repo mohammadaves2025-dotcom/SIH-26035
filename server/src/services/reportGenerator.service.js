@@ -358,7 +358,7 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
   }
 }
 
-export async function generateReport({ testSessionId, userId }) {
+export async function generateReport({ testSessionId, userId, remarks }) {
   const session = await TestSession.findById(testSessionId).populate({
     path: 'instrumentModelId',
     populate: { path: 'manufacturerId' },
@@ -417,10 +417,11 @@ export async function generateReport({ testSessionId, userId }) {
     observations,
     attachments,
     generatedAt,
+    remarks,
   });
 
   await renderPdf({ html, pdfPath: pdfPathAbs });
-  await renderDocx({ reportNumber, session, model, manufacturer, observations, attachments, docxPath: docxPathAbs });
+  await renderDocx({ reportNumber, session, model, manufacturer, observations, attachments, docxPath: docxPathAbs, remarks });
 
   // Keep the server HMAC for storage-integrity checks and add an external PKI signature when configured.
   const pdfBuffer = fs.readFileSync(pdfPathAbs);
@@ -462,6 +463,7 @@ export async function generateReport({ testSessionId, userId }) {
     pdfPath: pdfPathRel.replace(/\\/g, '/'),
     docxPath: docxPathRel.replace(/\\/g, '/'),
     status: 'integrity_tagged',
+    officerRemarks: remarks ? remarks.trim() : null,
     generatedBy: userId,
     generatedAt,
   });

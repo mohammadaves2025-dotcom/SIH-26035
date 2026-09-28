@@ -249,7 +249,7 @@ export default function TestSessionDetailPage() {
         <div className="gov-card mb-24" style={{ border: '2px solid var(--gov-blue-primary)' }}>
           <div className="gov-card-header"><h4>Record Metrological Observation</h4></div>
           <div className="gov-card-body">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
               <div className="gov-form-group">
                 <label className="gov-label">Annex Test Procedure</label>
                 <select className="gov-select" value={obsForm.annexRef} onChange={(e) => {
@@ -301,7 +301,7 @@ export default function TestSessionDetailPage() {
         <div className="gov-card-header">
           <h4>Test Observations ({observations.length})</h4>
         </div>
-        <div className="gov-card-body" style={{ padding: 0, overflowX: 'auto' }}>
+        <div className="gov-card-body gov-table-wrapper" style={{ padding: 0 }}>
           {observations.length === 0 ? (
             <p style={{ padding: 20, textAlign: 'center', color: 'var(--gov-text-muted)' }}>No test observations recorded yet.</p>
           ) : (
@@ -381,7 +381,7 @@ export default function TestSessionDetailPage() {
           <div className="gov-card-header">
             <h4>Evaluation Results & MPE Limits</h4>
           </div>
-          <div className="gov-card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          <div className="gov-card-body gov-table-wrapper" style={{ padding: 0 }}>
             <table className="gov-table">
               <thead>
                 <tr>

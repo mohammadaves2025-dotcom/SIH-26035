@@ -23,6 +23,7 @@ const userSchema = new mongoose.Schema(
     active: { type: Boolean, default: true },
     failedLoginAttempts: { type: Number, default: 0 },
     lockUntil: { type: Date, default: null },
+    tokenVersion: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

@@ -19,5 +19,16 @@ const auditLogSchema = new mongoose.Schema(
 );
 
 auditLogSchema.index({ timestamp: -1 });
+auditLogSchema.index({ prevHash: 1 }, { unique: true });
+
+auditLogSchema.pre(['updateOne', 'updateMany', 'findOneAndUpdate', 'deleteOne', 'deleteMany'], function () {
+  throw new Error('AuditLog records are strictly immutable and cannot be updated or deleted.');
+});
+
+auditLogSchema.pre('save', function () {
+  if (!this.isNew) {
+    throw new Error('AuditLog records are strictly immutable and cannot be modified after creation.');
+  }
+});
 
 export const AuditLog = mongoose.model('AuditLog', auditLogSchema);

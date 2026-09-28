@@ -184,7 +184,7 @@ export default function NewTestSessionPage() {
           {step === 2 && (
             <>
               <h4 style={{ marginBottom: 16 }}>Step 2 — Environmental & Laboratory Conditions (FR-02)</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                 <div className="gov-form-group">
                   <label className="gov-label">Testing Laboratory Facility</label>
                   <select className="gov-select" value={form.labId} onChange={(e) => updateField('labId', e.target.value)}>
@@ -204,7 +204,7 @@ export default function NewTestSessionPage() {
                   </select>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
                 <div className="gov-form-group">
                   <label className="gov-label">Ambient Temp (°C)</label>
                   <input className="gov-input" required type="number" step="0.1" value={form.temperatureC} onChange={(e) => updateField('temperatureC', e.target.value)} />

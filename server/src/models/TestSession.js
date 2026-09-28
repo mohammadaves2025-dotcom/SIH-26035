@@ -53,6 +53,8 @@ const testSessionSchema = new mongoose.Schema(
     },
     reviewerNotes: { type: String, trim: true, default: null },
     rejectedAt: { type: Date, default: null },
+    submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    submittedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

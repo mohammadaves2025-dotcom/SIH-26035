@@ -147,15 +147,19 @@ export const downloadExportJob = asyncHandler(async (req, res) => {
     }
 
     const headers = Object.keys(rows[0]);
+    const sanitizeCsvCell = (val) => {
+      let str = String(val ?? '');
+      if (/^[=+\-@\t\r]/.test(str)) {
+        str = "'" + str;
+      }
+      return str.includes(',') || str.includes('"') || str.includes('\n')
+        ? `"${str.replace(/"/g, '""')}"`
+        : str;
+    };
     const csvLines = [
       headers.join(','),
       ...rows.map((row) =>
-        headers.map((h) => {
-          const str = String(row[h] ?? '');
-          return str.includes(',') || str.includes('"') || str.includes('\n')
-            ? `"${str.replace(/"/g, '""')}"`
-            : str;
-        }).join(',')
+        headers.map((h) => sanitizeCsvCell(row[h])).join(',')
       ),
     ];
 

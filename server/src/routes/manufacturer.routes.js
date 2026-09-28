@@ -7,9 +7,9 @@ const router = Router();
 
 router.use(authenticate);
 
-router.post('/', authorize('admin', 'lab_technician', 'lab_admin', 'doca_officer'), createManufacturer);
+router.post('/', authorize('admin', 'doca_officer'), createManufacturer);
 router.get('/', getManufacturers);
-router.patch('/:id', authorize('admin', 'lab_admin'), updateManufacturer);
-router.delete('/:id', authorize('admin', 'lab_admin'), deleteManufacturer);
+router.patch('/:id', authorize('admin', 'doca_officer'), updateManufacturer);
+router.delete('/:id', authorize('admin', 'doca_officer'), deleteManufacturer);
 
 export default router;
