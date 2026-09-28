@@ -3,6 +3,11 @@ import crypto from 'node:crypto';
 
 dotenv.config();
 
+if (process.env.NODE_ENV === 'test') {
+  process.env.MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/nawi_test';
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'test_jwt_secret_key_32_chars_long_minimum!';
+}
+
 const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET'];
 
 for (const envVar of requiredEnvVars) {

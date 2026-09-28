@@ -10,6 +10,11 @@ jobs:
   backend-tests:
     name: Run Backend Server Tests
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js 20.x
@@ -24,6 +29,7 @@ jobs:
         run: cd server && npm test
         env:
           NODE_ENV: test
+          MONGO_URI: mongodb://127.0.0.1:27017/nawi_test
           JWT_SECRET: test_jwt_secret_key_32_chars_long_minimum!
           REPORT_INTEGRITY_SECRET: test_report_integrity_secret_32_chars!
 
