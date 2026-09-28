@@ -70,7 +70,7 @@ describe('Compliance Engine Service', () => {
   test('uses n-based band above the inclusive class boundary', () => {
     const n501Instrument = { ...instrument, maxCapacity: 250.5, n: 501 };
     const result = evaluateObservation(
-      { evaluationMethod: 'mpe_band', referenceLoad: 200, indicatedValue: 200.4 },
+      { evaluationMethod: 'mpe_band', referenceLoad: 250.5, indicatedValue: 250.9 },
       n501Instrument,
       ruleConfig
     );

@@ -60,7 +60,7 @@ export function evaluateObservation(observation, instrumentModel, ruleConfig, ve
     .slice()
     .sort((a, b) => a.uptoMultipleOfE - b.uptoMultipleOfE);
 
-  const band = sortedBands.find((b) => maxCapacityScaled <= BigInt(b.uptoMultipleOfE) * eScaled);
+  const band = sortedBands.find((b) => b.uptoMultipleOfE == null || referenceLoadScaled <= BigInt(b.uptoMultipleOfE) * eScaled) || sortedBands[sortedBands.length - 1];
 
   if (!band) {
     throw new AppError(
