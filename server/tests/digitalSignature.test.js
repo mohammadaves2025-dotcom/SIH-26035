@@ -1,33 +1,58 @@
 import { createServer } from 'node:http';
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { getCertificateFingerprint, signReportDigest, verifyDetachedSignature } from '../src/services/digitalSignature.service.js';
 
+const privateKey = `-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCj6acSSM6eHDXa
+zicjuWHQEmn1PE6Z7OUo6DGwo6sBvUUmjCfENF6l4A0W44llgTMhkFws4murgILD
+NsCD0aVw+oLssbhQmDiMCN1MaL0dXpR7zxrQasBLjjuakaCwMYpgvo8YZpXHmTI0
+WuMvZyFoIR9dA3JhQ+M+I+vpmPkzgtfJU5NhlyXcnDZJzpf0ecw6ywcX9UljC7HF
+CInzHhLwmYRCUMg3Hotr895w0l5AqPtW4Y5sr9pZPs5QfiZtKKxm5AUCVeerDOOo
+ZlbTZ200Npb6rlEnkUInY2xqGou0Cd6an3knXNjychzs3zmpwoV2QVoEZLVQKzEC
+HWg8g85JAgMBAAECggEAMKnQ2UPWW+iiMIjd4+RI3t5oqM8zws0rJ97vybJ9tbF8
+kzovIDgwFW0UVcRN6V3XUVKrmwPJ1Yv8xno946TdSlKFhkIpJ3xZ5XFISkQaSVro
+GG3fVxsqZgQfO/+aRlUe8SQCFct3EmAwII0PP+aNa33R8upwDeJ619sQUjUBX0Iy
+axIahFMQat+W/+XP1UXqkHbNyIsMdNgbXO82MozPL63hiNdIa3WWtHwqSpnUPvkv
+YinzBxN3IMbrSR/I4Gx0sv0Q3cRBzWRydAovZEh5UacrqYlJ74zSeMtxM6GqCYK4
+esIoelr6SvCp59Dzo0Uxmqrr8JDeE6wO0Op+oF52FQKBgQDawbq+fUKQI1Ica3DO
+3e44g6B9/6L8BwT31POshgPdQzjy20DJzw8Cu1vUndddmmACVMwhBCs/DRcw6k+m
+hI2QDqxYIXIjlUPhAHNoagvi2Og41WlsPxBx6AysDjYcEengmg1mXVAiucC8otC1
+zVkpY8rMUD+la2+Nrvba5AqTjwKBgQC/0ZsnF7Oi0OgU2Wv1mQq0Rkx2+RNHdAs/
+6s+hQug3OS9YESyvrVVUsQegsBlfFN2lAgN3GtTPcxK7x1IJiyVTYBoMErpGFUFw
+v87IYYtA9sqsSkfwwHgM657hGzaUuKCDFMjsN/xBuoCoL+pJi5bHr9RlXtKfp8K5
+Koe5ZdO0pwKBgAr6d/3BWYrUSvWkKrgnCSKK8I4CO1K8o3IwnL4Gx8Dd88i0Wi8G
+ljFD59rmxP0sly7mxIvPor/6TzSkPbUUp+oX4mxV2V2RyyNKm4Ac+lW7HwRjKXRG
+QfQFekVUPUDxYTRlZtDBVBk6C0MsRJ8rHBNor6/LQzZxCtsocbkQgrtfAoGBALy1
+3rkv9TdZ5OkWGcMOZFyEyJdHZbMnNCYWwVv6MfCaXrx6cQcINOnUHBf3B47mPUQn
+3fbgO7s3j5eTeV8QOJF0+0sjZYSrRq1A1pOGe3RXF382uN3ezHyRlcYKesEHfkpX
+OXBDh/W2IPrV4N2n6ZfcoM114yrU5Zo7gDliN0wDAoGAEvgJV9L3kE5b78UkpYKg
+cmKPDXpLVcYYgg9JM3Lv9z8rqkGresuofrZnBup+DWTGORJzDp72iVFaCFV+IXup
+gLGlMs+sQ2mcyvDfwFV5OOyUSPwbtLtgN8zneJZAsiTQpsL74YTB8RsD7HIK50xs
+z6B+O70KTA3pDJWlMRrjvQQ=
+-----END PRIVATE KEY-----`;
+
+const certificatePem = `-----BEGIN CERTIFICATE-----
+MIIDFzCCAf+gAwIBAgIUe4UZTVgVtaULLx977s0fHocavMgwDQYJKoZIhvcNAQEL
+BQAwGzEZMBcGA1UEAwwQTkFXSSBUZXN0IFNpZ25lcjAeFw0yNjA5MjgxOTAyNTJa
+Fw0zNjA5MjUxOTAyNTJaMBsxGTAXBgNVBAMMEE5BV0kgVGVzdCBTaWduZXIwggEi
+MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCj6acSSM6eHDXazicjuWHQEmn1
+PE6Z7OUo6DGwo6sBvUUmjCfENF6l4A0W44llgTMhkFws4murgILDNsCD0aVw+oLs
+sbhQmDiMCN1MaL0dXpR7zxrQasBLjjuakaCwMYpgvo8YZpXHmTI0WuMvZyFoIR9d
+A3JhQ+M+I+vpmPkzgtfJU5NhlyXcnDZJzpf0ecw6ywcX9UljC7HFCInzHhLwmYRC
+UMg3Hotr895w0l5AqPtW4Y5sr9pZPs5QfiZtKKxm5AUCVeerDOOoZlbTZ200Npb6
+rlEnkUInY2xqGou0Cd6an3knXNjychzs3zmpwoV2QVoEZLVQKzECHWg8g85JAgMB
+AAGjUzBRMB0GA1UdDgQWBBSg8MJ9n1iqYhy2VFWy8+MuB3A/TjAfBgNVHSMEGDAW
+gBSg8MJ9n1iqYhy2VFWy8+MuB3A/TjAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3
+DQEBCwUAA4IBAQAkaVtMZDx9JFkVukk/pclQfG9+ZRn6nMyNMBq9X2hGgKnw53rq
+UEV5okY8d7N/SrVbO9gSGFafSbj/PYAM7wlqJMfRBdVtsDhfxzXn1t6XO6J19uC4
+Q0IFpZ+A2kV38QoQCnoOie4CgFmE0wm0EQ9nGs035dg/FLoEWJrqnQNf018A41WX
+EJgY9qNd6vNuSLxEyVXxhTB6ouZymXKgNvMzTya1XbPJchogq4WLywjAmJLSEWSF
+m/BOlqpV+WvQD2J+eiuqvxnyDGy310QBQxsB21HZ103xC1DtBXygqAw0gVVzR6HK
+Ee2eUo63QaZKYVYGkKJunVtVS+dZ2JXTHOUJ
+-----END CERTIFICATE-----`;
+
 describe('External PKI report signer adapter', () => {
-  let tempDir;
-  let privateKey;
-  let certificatePem;
-  let certificateFingerprint;
-
-  beforeAll(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nawi-pki-test-'));
-    const keyPath = path.join(tempDir, 'test-private.pem');
-    const certPath = path.join(tempDir, 'test-certificate.pem');
-    execFileSync('C:\\Program Files\\Git\\usr\\bin\\openssl.exe', [
-      'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', keyPath,
-      '-out', certPath, '-subj', '/CN=NAWI Test Signer', '-days', '2',
-    ], { stdio: 'ignore' });
-    privateKey = fs.readFileSync(keyPath, 'utf8');
-    certificatePem = fs.readFileSync(certPath, 'utf8');
-    certificateFingerprint = getCertificateFingerprint(certificatePem);
-  });
-
-  afterAll(() => {
-    if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
-  });
+  const certificateFingerprint = getCertificateFingerprint(certificatePem);
 
   test('obtains an RSA signature from the isolated service and validates it against a pinned certificate', async () => {
     const server = createServer(async (request, response) => {
