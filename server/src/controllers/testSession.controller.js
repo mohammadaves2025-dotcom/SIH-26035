@@ -419,3 +419,87 @@ export const deleteObservation = asyncHandler(async (req, res) => {
   });
 });
 
+const processedSyncClientIds = new Set();
+
+export const batchSyncTestSessions = asyncHandler(async (req, res) => {
+  const { batch } = req.body;
+  if (!Array.isArray(batch)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Batch array is required');
+  }
+
+  const processed = [];
+  const conflicts = [];
+
+  for (const item of batch) {
+    const { clientId, type, sessionId, obsId, data, updatedAt } = item;
+    if (!clientId) continue;
+
+    if (processedSyncClientIds.has(clientId)) {
+      processed.push(clientId);
+      continue;
+    }
+
+    try {
+      if (type === 'ADD_OBSERVATION') {
+        const session = await TestSession.findById(sessionId);
+        if (!session) {
+          conflicts.push({ clientId, reason: 'Test session not found' });
+          continue;
+        }
+        await assertSessionAccess(req, session);
+
+        if (session.status !== 'draft') {
+          conflicts.push({ clientId, reason: 'Session is locked', currentStatus: session.status });
+          continue;
+        }
+
+        const obsDoc = await Observation.create({
+          testSessionId: session._id,
+          ...data,
+        });
+        await appendAuditLog({ entityType: 'Observation', entityId: obsDoc._id, action: 'create:sync', userId: req.user.sub });
+        processedSyncClientIds.add(clientId);
+        processed.push(clientId);
+      } else if (type === 'UPDATE_OBSERVATION') {
+        const observation = await Observation.findById(obsId);
+        if (!observation) {
+          conflicts.push({ clientId, reason: 'Observation not found' });
+          continue;
+        }
+        const session = await TestSession.findById(observation.testSessionId);
+        if (!session || session.status !== 'draft') {
+          conflicts.push({ clientId, reason: 'Session locked or not found' });
+          continue;
+        }
+        await assertSessionAccess(req, session);
+
+        if (updatedAt && observation.updatedAt && new Date(observation.updatedAt).getTime() > new Date(updatedAt).getTime()) {
+          conflicts.push({ clientId, reason: 'Server observation has newer edits', serverUpdatedAt: observation.updatedAt });
+          continue;
+        }
+
+        const allowedFields = ['annexRef', 'evaluationMethod', 'referenceLoad', 'indicatedValue', 'zeroCorrection', 'checklistPassed', 'reviewerNotes'];
+        for (const field of allowedFields) {
+          if (data && data[field] !== undefined) observation[field] = data[field];
+        }
+        await observation.save();
+        await appendAuditLog({ entityType: 'Observation', entityId: observation._id, action: 'update:sync', userId: req.user.sub });
+        processedSyncClientIds.add(clientId);
+        processed.push(clientId);
+      } else {
+        conflicts.push({ clientId, reason: 'Unsupported sync action type' });
+      }
+    } catch (err) {
+      conflicts.push({ clientId, reason: err.message });
+    }
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      processed,
+      conflicts,
+    },
+  });
+});
+

@@ -40,10 +40,10 @@ export default function TestTypesPage() {
               ) : (
                 typesList.map((t) => (
                   <tr key={t._id}>
-                    <td><strong className="text-mono">{t.code}</strong></td>
-                    <td style={{ fontWeight: 600 }}>{t.name}</td>
-                    <td><span className="gov-badge gov-badge-info">{t.oimlClause || 'A.4'}</span></td>
-                    <td className="text-mono">{t.evaluationStrategy || 'MPE Band Evaluation'}</td>
+                    <td><strong className="text-mono">{t.testTypeId || t.code}</strong></td>
+                    <td style={{ fontWeight: 600 }}>{t.testName || t.name}</td>
+                    <td><span className="gov-badge gov-badge-info">{t.oimlAnnexRef || t.oimlClause || 'A.4'}</span></td>
+                    <td className="text-mono">{t.formulaRef || t.evaluationStrategy || 'E = I - L'}</td>
                   </tr>
                 ))
               )}

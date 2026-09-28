@@ -24,10 +24,11 @@ export const listReports = asyncHandler(async (req, res) => {
   }
 
   if (search) {
+    const escapedSearch = String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     query.$or = [
-      { reportNumber: { $regex: search, $options: 'i' } },
-      { contentHash: { $regex: search, $options: 'i' } },
-      { docxContentHash: { $regex: search, $options: 'i' } },
+      { reportNumber: { $regex: escapedSearch, $options: 'i' } },
+      { contentHash: { $regex: escapedSearch, $options: 'i' } },
+      { docxContentHash: { $regex: escapedSearch, $options: 'i' } },
     ];
   }
 
@@ -36,6 +37,18 @@ export const listReports = asyncHandler(async (req, res) => {
   if (labScoped) sessionQuery.labId = req.user.labId || null;
   else if (labId) sessionQuery.labId = labId;
   if (accuracyClass) sessionQuery.accuracyClass = accuracyClass;
+
+  if (req.query.serialNumber) {
+    const escapedSerial = String(req.query.serialNumber).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    sessionQuery.serialNumber = { $regex: escapedSerial, $options: 'i' };
+  }
+  if (req.query.modelName) {
+    const escapedModel = String(req.query.modelName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    sessionQuery.modelName = { $regex: escapedModel, $options: 'i' };
+  }
+  if (req.query.overallResult || req.query.result) {
+    sessionQuery.overallResult = req.query.overallResult || req.query.result;
+  }
 
   if (req.user.role === 'manufacturer') {
     const ownManufacturer = await getManufacturerForUser(req.user.sub);

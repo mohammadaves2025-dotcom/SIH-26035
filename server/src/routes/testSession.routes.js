@@ -9,6 +9,7 @@ import {
   rejectTestSession,
   getTestSessions,
   getTestSessionById,
+  batchSyncTestSessions,
 } from '../controllers/testSession.controller.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
@@ -67,6 +68,8 @@ router.post(
 
 router.get('/', getTestSessions);
 router.get('/:id', getTestSessionById);
+
+router.post('/sync/batch', authorize('admin', 'lab_technician', 'lab_admin'), batchSyncTestSessions);
 
 export default router;
 

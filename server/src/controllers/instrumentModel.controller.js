@@ -6,6 +6,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { getManufacturerForUser } from '../utils/tenantAccess.js';
 import { appendAuditLog } from '../services/auditLogger.service.js';
 import { TestSession } from '../models/TestSession.js';
+import { Report } from '../models/Report.js';
 
 export const createInstrumentModel = asyncHandler(async (req, res) => {
   const { manufacturerId, modelName, accuracyClass, maxCapacity, e, minCapacity } = req.body;
@@ -180,4 +181,56 @@ export const deleteInstrumentModel = asyncHandler(async (req, res) => {
   await model.deleteOne();
   await appendAuditLog({ entityType: 'InstrumentModel', entityId: model._id, action: 'delete', userId: req.user.sub });
   res.status(200).json({ success: true, message: 'Instrument model deleted successfully' });
+});
+
+export const getInstrumentModelHistory = asyncHandler(async (req, res) => {
+  const model = await InstrumentModel.findById(req.params.id);
+  if (!model) {
+    throw new AppError(404, 'NOT_FOUND', 'Instrument model not found');
+  }
+
+  if (req.user.role === 'manufacturer') {
+    const ownManufacturer = await getManufacturerForUser(req.user.sub);
+    if (!ownManufacturer || ownManufacturer._id.toString() !== model.manufacturerId.toString()) {
+      throw new AppError(403, 'FORBIDDEN', 'Cannot access models of another manufacturer');
+    }
+  }
+
+  const page = parseInt(req.query.page || '1', 10);
+  const limit = Math.min(parseInt(req.query.limit || '20', 10), 100);
+  const skip = (page - 1) * limit;
+
+  const query = { instrumentModelId: model._id };
+  if (['lab_technician', 'lab_admin', 'reviewer'].includes(req.user.role)) {
+    query.labId = req.user.labId || null;
+  }
+
+  const [sessions, total] = await Promise.all([
+    TestSession.find(query)
+      .populate('createdBy', 'name email role')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    TestSession.countDocuments(query),
+  ]);
+
+  const sessionIds = sessions.map((s) => s._id);
+  const reports = await Report.find({ testSessionId: { $in: sessionIds } });
+  const reportsBySession = new Map(reports.map((r) => [r.testSessionId.toString(), r]));
+
+  const history = sessions.map((s) => ({
+    session: s,
+    report: reportsBySession.get(s._id.toString()) || null,
+  }));
+
+  res.status(200).json({
+    success: true,
+    data: history,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 1,
+    },
+  });
 });

@@ -3,6 +3,7 @@ import {
   createInstrumentModel,
   getInstrumentModels,
   getInstrumentModelById,
+  getInstrumentModelHistory,
   updateInstrumentModel,
   deleteInstrumentModel,
 } from '../controllers/instrumentModel.controller.js';
@@ -23,6 +24,7 @@ router.post(
 );
 router.get('/', getInstrumentModels);
 router.get('/:id', getInstrumentModelById);
+router.get('/:id/history', getInstrumentModelHistory);
 router.patch('/:id', authorize('admin', 'lab_admin', 'manufacturer'), updateInstrumentModel);
 router.delete('/:id', authorize('admin', 'lab_admin', 'manufacturer'), deleteInstrumentModel);
 

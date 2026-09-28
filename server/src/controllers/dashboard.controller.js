@@ -45,8 +45,16 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
   const byAccuracyClass = { I: 0, II: 0, III: 0, IIII: 0 };
   const sessionsByLab = {};
 
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const monthCounts = Array(12).fill(0);
+  const now = new Date();
+  const rollingMonths = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const yearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const monthLabel = d.toLocaleString('en-US', { month: 'short' });
+    rollingMonths.push({ yearMonth, label: `${monthLabel} ${d.getFullYear()}`, count: 0 });
+  }
+
+  const rollingMap = new Map(rollingMonths.map((item) => [item.yearMonth, item]));
 
   for (const s of sessions) {
     if (statusBreakdown[s.status] !== undefined) {
@@ -60,16 +68,18 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       sessionsByLab[s.labId] = (sessionsByLab[s.labId] || 0) + 1;
     }
     if (s.createdAt) {
-      const mIdx = new Date(s.createdAt).getMonth();
-      monthCounts[mIdx]++;
+      const dt = new Date(s.createdAt);
+      const ym = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+      if (rollingMap.has(ym)) {
+        rollingMap.get(ym).count++;
+      }
     }
   }
 
-  const currentMonthIdx = new Date().getMonth();
-  const startIdx = Math.max(0, currentMonthIdx - 5);
-  const monthlyTrend = monthNames.slice(startIdx, currentMonthIdx + 1).map((m, idx) => ({
-    month: m,
-    count: monthCounts[startIdx + idx],
+  const monthlyTrend = rollingMonths.map((item) => ({
+    yearMonth: item.yearMonth,
+    month: item.label,
+    count: item.count,
   }));
 
   res.status(200).json({

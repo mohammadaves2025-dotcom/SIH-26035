@@ -1,22 +1,24 @@
+import mongoose from 'mongoose';
 import { Report } from '../models/Report.js';
 import { TestSession } from '../models/TestSession.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { AppError } from '../utils/AppError.js';
+import { appendAuditLog } from '../services/auditLogger.service.js';
 
-export const exportLegalMetrologyData = asyncHandler(async (req, res) => {
+const exportJobs = new Map();
+
+async function generateExportData(req, startDate, endDate) {
   const now = new Date();
-  const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
-
-  const fromParam = req.query.from || req.query.startDate;
-  const toParam = req.query.to || req.query.endDate;
-
-  const from = fromParam ? new Date(fromParam) : defaultFrom;
-  const to = toParam ? new Date(toParam) : now;
+  const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const from = startDate ? new Date(startDate) : defaultFrom;
+  const to = endDate ? new Date(endDate) : now;
 
   const query = {
     status: 'integrity_tagged',
     generatedAt: { $gte: from, $lte: to },
   };
-  if (req.user.role === 'lab_admin') {
+
+  if (['lab_admin', 'reviewer', 'lab_technician'].includes(req.user.role)) {
     const sessionIds = await TestSession.find({ labId: req.user.labId || null }).distinct('_id');
     query.testSessionId = { $in: sessionIds };
   }
@@ -29,7 +31,7 @@ export const exportLegalMetrologyData = asyncHandler(async (req, res) => {
     },
   });
 
-  const exportData = reports.map((report) => {
+  return reports.map((report) => {
     const session = report.testSessionId;
     const model = session?.instrumentModelId;
     const manufacturer = model?.manufacturerId;
@@ -43,14 +45,126 @@ export const exportLegalMetrologyData = asyncHandler(async (req, res) => {
       generatedAt: report.generatedAt,
     };
   });
+}
 
+export const exportLegalMetrologyData = asyncHandler(async (req, res) => {
+  const exportData = await generateExportData(req, req.query.from || req.query.startDate, req.query.to || req.query.endDate);
   res.status(200).json({
     success: true,
     data: exportData,
     meta: {
-      from,
-      to,
       count: exportData.length,
     },
   });
+});
+
+export const createExportJob = asyncHandler(async (req, res) => {
+  const { format = 'json', startDate, endDate } = req.body;
+  if (!['json', 'csv'].includes(format)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Format must be json or csv');
+  }
+
+  const jobObjectId = new mongoose.Types.ObjectId();
+  const jobId = jobObjectId.toString();
+  const exportData = await generateExportData(req, startDate, endDate);
+
+  const job = {
+    jobId,
+    status: 'completed',
+    format,
+    count: exportData.length,
+    data: exportData,
+    createdBy: req.user.sub,
+    createdAt: new Date().toISOString(),
+  };
+
+  exportJobs.set(jobId, job);
+
+  await appendAuditLog({
+    entityType: 'ExportJob',
+    entityId: jobObjectId,
+    action: `create_export_job:${format}`,
+    userId: req.user.sub,
+  });
+
+  res.status(201).json({
+    success: true,
+    data: {
+      jobId,
+      status: job.status,
+      format: job.format,
+      count: job.count,
+      createdAt: job.createdAt,
+    },
+  });
+});
+
+export const getExportJobStatus = asyncHandler(async (req, res) => {
+  const job = exportJobs.get(req.params.jobId);
+  if (!job) {
+    throw new AppError(404, 'NOT_FOUND', 'Export job not found');
+  }
+
+  if (job.createdBy !== req.user.sub && !['admin', 'auditor'].includes(req.user.role)) {
+    throw new AppError(403, 'FORBIDDEN', 'Cannot access export job created by another user');
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      jobId: job.jobId,
+      status: job.status,
+      format: job.format,
+      count: job.count,
+      createdAt: job.createdAt,
+    },
+  });
+});
+
+export const downloadExportJob = asyncHandler(async (req, res) => {
+  const job = exportJobs.get(req.params.jobId);
+  if (!job) {
+    throw new AppError(404, 'NOT_FOUND', 'Export job not found');
+  }
+
+  if (job.createdBy !== req.user.sub && !['admin', 'auditor'].includes(req.user.role)) {
+    throw new AppError(403, 'FORBIDDEN', 'Cannot download export job created by another user');
+  }
+
+  await appendAuditLog({
+    entityType: 'ExportJob',
+    entityId: new mongoose.Types.ObjectId(job.jobId),
+    action: `download_export:${job.format}`,
+    userId: req.user.sub,
+  });
+
+  if (job.format === 'csv') {
+    const rows = job.data || [];
+    if (rows.length === 0) {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${job.jobId}.csv"`);
+      return res.status(200).send('reportNumber,instrumentModelName,manufacturerName,accuracyClass,overallResult,generatedAt\n');
+    }
+
+    const headers = Object.keys(rows[0]);
+    const csvLines = [
+      headers.join(','),
+      ...rows.map((row) =>
+        headers.map((h) => {
+          const str = String(row[h] ?? '');
+          return str.includes(',') || str.includes('"') || str.includes('\n')
+            ? `"${str.replace(/"/g, '""')}"`
+            : str;
+        }).join(',')
+      ),
+    ];
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${job.jobId}.csv"`);
+    return res.status(200).send(csvLines.join('\n'));
+  }
+
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="${job.jobId}.json"`);
+  res.status(200).json(job.data);
 });
