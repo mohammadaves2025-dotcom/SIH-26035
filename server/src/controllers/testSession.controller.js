@@ -330,6 +330,10 @@ export const updateObservation = asyncHandler(async (req, res) => {
     throw new AppError(404, 'NOT_FOUND', 'Observation not found');
   }
 
+  if (req.params.id && observation.testSessionId.toString() !== req.params.id) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Observation does not belong to the specified test session');
+  }
+
   const session = await TestSession.findById(observation.testSessionId);
   if (!session) {
     throw new AppError(404, 'NOT_FOUND', 'Parent test session not found');
@@ -344,6 +348,10 @@ export const updateObservation = asyncHandler(async (req, res) => {
   }
   await assertSessionAccess(req, session);
 
+  if (req.body.annexRef && !(session.selectedAnnexes || []).includes(req.body.annexRef)) {
+    throw new AppError(422, 'UNSELECTED_PROCEDURE', `${req.body.annexRef} was not selected for this test session`);
+  }
+
   // Only allow updating data fields, not computed fields
   const allowedFields = ['annexRef', 'evaluationMethod', 'referenceLoad', 'indicatedValue', 'zeroCorrection', 'checklistPassed', 'reviewerNotes'];
   for (const field of allowedFields) {
@@ -355,6 +363,8 @@ export const updateObservation = asyncHandler(async (req, res) => {
   // Clear computed fields — they'll be recalculated on next submit
   observation.computedError = undefined;
   observation.appliedMpe = undefined;
+  observation.marginToMpe = undefined;
+  observation.errorRatioE = undefined;
   observation.ruleConfigId = undefined;
   observation.outcome = null;
 

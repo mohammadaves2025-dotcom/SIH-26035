@@ -70,9 +70,10 @@ export function evaluateObservation(observation, instrumentModel, ruleConfig, ve
     );
   }
 
-  // OIML R 76 §3.5: In-service / subsequent verification MPE limits are 2x initial limits
-  const stageMultiplier = verificationStage === 'subsequent' ? 2n : 1n;
-  const factorScaled = toScaledInteger(band.mpeFactor, 'MPE factor') * stageMultiplier;
+  // OIML R 76 §3.5 & RuleConfig: In-service / subsequent verification MPE multiplier from RuleConfig
+  const multValue = verificationStage === 'subsequent' ? (ruleConfig.subsequentMpeMultiplier ?? 2.0) : 1.0;
+  const stageMultiplier = toScaledInteger(multValue, 'subsequent MPE multiplier');
+  const factorScaled = (toScaledInteger(band.mpeFactor, 'MPE factor') * stageMultiplier) / DECIMAL_SCALE;
   const errorScaled = indicatedValueScaled - referenceLoadScaled - zeroCorrectionScaled;
   const withinMpe = (errorScaled < 0n ? -errorScaled : errorScaled) * DECIMAL_SCALE <= factorScaled * eScaled;
   const appliedMpe = Number(factorScaled * eScaled) / (DECIMAL_SCALE_NUMBER * DECIMAL_SCALE_NUMBER);

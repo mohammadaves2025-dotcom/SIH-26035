@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getAuditLogs, verifyAuditIntegrity } from '../../services/admin.service.js';
+import { useAuthStore } from '../../store/useAuthStore.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { ScrollText, ShieldCheck, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle } from 'lucide-react';
 
 export default function AuditLogPage() {
   const [page, setPage] = useState(1);
   const limit = 20;
+  const { user } = useAuthStore();
   const addToast = useNotificationStore((s) => s.addToast);
   const [integrityResult, setIntegrityResult] = useState(null);
+  const canVerifyChain = ['admin', 'auditor'].includes(user?.role);
 
   const { data, isLoading } = useQuery({
     queryKey: ['audit-logs', page],
@@ -44,13 +47,15 @@ export default function AuditLogPage() {
           <h1><ScrollText size={22} style={{ marginRight: 8, verticalAlign: -3 }} />Audit Trail</h1>
           <p className="page-header-subtitle">Immutable SHA-256 hash-chained compliance audit log</p>
         </div>
-        <button
-          className="gov-btn gov-btn-primary"
-          onClick={() => verifyMutation.mutate()}
-          disabled={verifyMutation.isPending}
-        >
-          <ShieldCheck size={16} /> {verifyMutation.isPending ? 'Verifying chain…' : 'Verify Chain Integrity'}
-        </button>
+        {canVerifyChain && (
+          <button
+            className="gov-btn gov-btn-primary"
+            onClick={() => verifyMutation.mutate()}
+            disabled={verifyMutation.isPending}
+          >
+            <ShieldCheck size={16} /> {verifyMutation.isPending ? 'Verifying chain…' : 'Verify Chain Integrity'}
+          </button>
+        )}
       </div>
 
       {integrityResult && (

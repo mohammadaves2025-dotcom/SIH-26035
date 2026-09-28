@@ -27,6 +27,7 @@ const ruleConfigSchema = new mongoose.Schema(
       enum: ['draft', 'active', 'archived'],
       default: 'draft',
     },
+    subsequentMpeMultiplier: { type: Number, default: 2.0 },
     bands: { type: [bandSchema], required: true },
   },
   { timestamps: true }

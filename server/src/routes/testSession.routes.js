@@ -14,8 +14,7 @@ import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import { createTestSessionSchema } from '../validators/testSession.schema.js';
-import { addObservationsSchema } from '../validators/observation.schema.js';
-import { singleObservationSchema } from '../validators/observation.schema.js';
+import { addObservationsSchema, singleObservationSchema, updateObservationSchema } from '../validators/observation.schema.js';
 
 const router = Router();
 
@@ -38,7 +37,7 @@ router.post(
 router.patch(
   '/:id/observations/:obsId',
   authorize('admin', 'lab_technician', 'lab_admin'),
-  validate(singleObservationSchema),
+  validate(updateObservationSchema),
   updateObservation
 );
 

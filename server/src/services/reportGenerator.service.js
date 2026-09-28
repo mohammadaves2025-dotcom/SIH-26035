@@ -22,6 +22,7 @@ import { Report, Counter } from '../models/Report.js';
 import { sha256, signData } from '../utils/hash.js';
 import { appendAuditLog } from './auditLogger.service.js';
 import { AppError } from '../utils/AppError.js';
+import { generateQrSvg } from '../utils/qrGenerator.js';
 
 const reportsDir = path.join(process.cwd(), 'uploads', 'reports');
 if (!fs.existsSync(reportsDir)) {
@@ -66,7 +67,9 @@ async function getNextReportNumber() {
 function generateHtmlTemplate({ reportNumber, session, model, manufacturer, observations, attachments, generatedAt }) {
   const verificationUrl = process.env.PUBLIC_APP_URL
     ? `${process.env.PUBLIC_APP_URL.replace(/\/$/, '')}/verify?q=${encodeURIComponent(reportNumber)}`
-    : null;
+    : `https://nawi.gov.in/verify?q=${encodeURIComponent(reportNumber)}`;
+  const qrSvg = generateQrSvg(verificationUrl, 110);
+
   const obsRows = observations
     .map(
       (obs, idx) => `
@@ -77,8 +80,9 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
       <td>${obs.referenceLoad ?? '-'}</td>
       <td>${obs.indicatedValue ?? '-'}</td>
       <td>${obs.zeroCorrection ?? '-'}</td>
-      <td>${obs.computedError !== undefined ? obs.computedError.toFixed(4) : '-'}</td>
-      <td>${obs.appliedMpe !== undefined ? obs.appliedMpe.toFixed(4) : '-'}</td>
+      <td>${obs.computedError !== undefined && obs.computedError !== null ? (obs.computedError > 0 ? `+${obs.computedError.toFixed(4)}` : obs.computedError.toFixed(4)) : '-'}</td>
+      <td>${obs.appliedMpe !== undefined && obs.appliedMpe !== null ? `±${obs.appliedMpe.toFixed(4)}` : '-'}</td>
+      <td>${obs.marginToMpe !== undefined && obs.marginToMpe !== null ? (obs.marginToMpe >= 0 ? `+${obs.marginToMpe.toFixed(4)}` : obs.marginToMpe.toFixed(4)) : '-'}</td>
       <td>${escapeHtml(obs.ruleConfigId?.oimlEdition || 'Checklist')}${obs.ruleConfigId?.sourceReference ? ` — ${escapeHtml(obs.ruleConfigId.sourceReference)}` : ''}</td>
       <td><strong style="color: ${obs.outcome === 'pass' ? '#16a34a' : '#dc2626'}">${(obs.outcome || '').toUpperCase()}</strong></td>
       <td>${escapeHtml(obs.reviewerNotes || '')}</td>
@@ -122,7 +126,8 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
           <h3>Report Number: ${escapeHtml(reportNumber)}</h3>
         </div>
         <div class="qr-box">
-          ${verificationUrl ? `<div><a href="${escapeHtml(verificationUrl)}">Verify report</a></div>` : '<div>Use the public verification portal and report number.</div>'}
+          ${qrSvg}
+          <div style="margin-top:4px;"><a href="${escapeHtml(verificationUrl)}" style="color:#2563eb;text-decoration:none;">Verify online</a></div>
         </div>
       </div>
 
@@ -142,6 +147,7 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
         <div class="section-title">2. Laboratory & Environmental Test Conditions</div>
         <div class="grid">
           <div class="field"><strong>Laboratory:</strong> ${escapeHtml(session.laboratoryName || session.labId)} (${escapeHtml(session.labId)})</div>
+          <div class="field"><strong>Verification Stage:</strong> ${session.verificationStage === 'subsequent' ? 'Subsequent Inspection (In-Service, 2× MPE)' : 'Initial Verification (Standard MPE)'}</div>
           <div class="field"><strong>Test Date:</strong> ${new Date(session.testDate).toISOString().split('T')[0]}</div>
           <div class="field"><strong>Temperature:</strong> ${session.environmentalConditions?.temperatureC ?? 'Not recorded'} °C</div>
           <div class="field"><strong>Humidity:</strong> ${session.environmentalConditions?.humidityPercent ?? 'Not recorded'} %</div>
@@ -161,7 +167,8 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
               <th>Indication (kg)</th>
               <th>Zero correction (kg)</th>
               <th>Error (kg)</th>
-              <th>MPE</th>
+              <th>MPE (kg)</th>
+              <th>Margin (kg)</th>
               <th>Rule edition</th>
               <th>Outcome</th>
               <th>Evidence / notes</th>
@@ -258,6 +265,7 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
         new TableCell({ children: [new Paragraph({ text: 'Zero correction', bold: true })] }),
         new TableCell({ children: [new Paragraph({ text: 'Error', bold: true })] }),
         new TableCell({ children: [new Paragraph({ text: 'MPE', bold: true })] }),
+        new TableCell({ children: [new Paragraph({ text: 'Margin', bold: true })] }),
         new TableCell({ children: [new Paragraph({ text: 'Rule edition', bold: true })] }),
         new TableCell({ children: [new Paragraph({ text: 'Outcome', bold: true })] }),
         new TableCell({ children: [new Paragraph({ text: 'Evidence / notes', bold: true })] }),
@@ -274,8 +282,9 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
             new TableCell({ children: [new Paragraph({ text: String(obs.referenceLoad ?? '-') })] }),
             new TableCell({ children: [new Paragraph({ text: String(obs.indicatedValue ?? '-') })] }),
             new TableCell({ children: [new Paragraph({ text: String(obs.zeroCorrection ?? '-') })] }),
-            new TableCell({ children: [new Paragraph({ text: obs.computedError !== undefined ? obs.computedError.toFixed(4) : '-' })] }),
-            new TableCell({ children: [new Paragraph({ text: obs.appliedMpe !== undefined ? obs.appliedMpe.toFixed(4) : '-' })] }),
+            new TableCell({ children: [new Paragraph({ text: obs.computedError !== undefined && obs.computedError !== null ? obs.computedError.toFixed(4) : '-' })] }),
+            new TableCell({ children: [new Paragraph({ text: obs.appliedMpe !== undefined && obs.appliedMpe !== null ? obs.appliedMpe.toFixed(4) : '-' })] }),
+            new TableCell({ children: [new Paragraph({ text: obs.marginToMpe !== undefined && obs.marginToMpe !== null ? obs.marginToMpe.toFixed(4) : '-' })] }),
             new TableCell({ children: [new Paragraph({ text: obs.ruleConfigId ? `${obs.ruleConfigId.oimlEdition} — ${obs.ruleConfigId.sourceReference || 'Source not recorded'}` : 'Checklist' })] }),
             new TableCell({ children: [new Paragraph({ text: (obs.outcome || '').toUpperCase(), bold: true })] }),
             new TableCell({ children: [new Paragraph({ text: obs.reviewerNotes || '' })] }),
@@ -314,6 +323,7 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
             new Paragraph({ text: '' }),
             new Paragraph({ text: '2. Laboratory & Environmental Test Conditions', heading: HeadingLevel.HEADING_3 }),
             new Paragraph({ text: `Laboratory: ${session.laboratoryName || session.labId} (${session.labId})` }),
+            new Paragraph({ text: `Verification Stage: ${session.verificationStage === 'subsequent' ? 'Subsequent Inspection (In-Service, 2× MPE)' : 'Initial Verification (Standard MPE)'}` }),
             new Paragraph({ text: `Test Date: ${new Date(session.testDate).toISOString().split('T')[0]}` }),
             new Paragraph({ text: `Temperature: ${session.environmentalConditions?.temperatureC ?? 'Not recorded'} °C | Humidity: ${session.environmentalConditions?.humidityPercent ?? 'Not recorded'} %` }),
             new Paragraph({ text: '' }),

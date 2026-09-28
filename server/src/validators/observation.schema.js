@@ -80,3 +80,13 @@ export const singleObservationSchema = z
 export const addObservationsSchema = z.object({
   observations: z.array(singleObservationSchema).min(1, 'At least one observation required'),
 });
+
+export const updateObservationSchema = z.object({
+  annexRef: z.enum(ANNEX_REFS).optional(),
+  evaluationMethod: z.enum(['mpe_band', 'manual_checklist']).optional(),
+  referenceLoad: z.number().finite().nonnegative().optional(),
+  indicatedValue: z.number().finite().optional(),
+  zeroCorrection: z.number().finite().optional(),
+  checklistPassed: z.boolean().optional(),
+  reviewerNotes: z.string().optional(),
+});
