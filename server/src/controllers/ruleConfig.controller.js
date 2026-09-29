@@ -27,8 +27,11 @@ export const activateRuleConfig = asyncHandler(async (req, res) => {
   if (!ruleConfig) {
     throw new AppError(404, 'NOT_FOUND', 'Rule configuration not found');
   }
-  if (ruleConfig.status !== 'draft') {
-    throw new AppError(409, 'INVALID_STATE', 'Only a draft rule configuration can be reviewed and approved');
+  if (ruleConfig.status !== 'in_review') {
+    throw new AppError(409, 'INVALID_STATE', 'Only rules that are in review can be approved and activated');
+  }
+  if (!ruleConfig.technicalReviewedBy) {
+    throw new AppError(409, 'REVIEW_REQUIRED', 'Rule must be technically reviewed before activation');
   }
   if (!ruleConfig.createdBy) {
     throw new AppError(422, 'RULE_REVIEW_REQUIRED', 'Seeded or unowned example rules cannot be activated; create a reviewed rule configuration first');
@@ -45,6 +48,9 @@ export const activateRuleConfig = asyncHandler(async (req, res) => {
   }
   if (ruleConfig.createdBy.toString() === req.user.sub) {
     throw new AppError(403, 'SEPARATION_OF_DUTIES', 'The rule author cannot provide the metrology expert approval');
+  }
+  if (ruleConfig.technicalReviewedBy.toString() === req.user.sub) {
+    throw new AppError(403, 'SEPARATION_OF_DUTIES', 'The technical reviewer cannot provide the metrology expert approval');
   }
   const conflictingRule = await RuleConfig.findOne({
     _id: { $ne: ruleConfig._id },
@@ -161,4 +167,91 @@ export const getRuleConfigs = asyncHandler(async (req, res) => {
     success: true,
     data: configs,
   });
+});
+
+export const getRuleConfigById = asyncHandler(async (req, res) => {
+  const ruleConfig = await RuleConfig.findById(req.params.id)
+    .populate('createdBy', 'name email role')
+    .populate('approvedBy', 'name email role')
+    .populate('technicalReviewedBy', 'name email role');
+  if (!ruleConfig) {
+    throw new AppError(404, 'NOT_FOUND', 'Rule configuration not found');
+  }
+  res.status(200).json({ success: true, data: ruleConfig });
+});
+
+export const submitReview = asyncHandler(async (req, res) => {
+  const ruleConfig = await RuleConfig.findById(req.params.id);
+  if (!ruleConfig) throw new AppError(404, 'NOT_FOUND', 'Rule config not found');
+  
+  if (ruleConfig.status !== 'draft') {
+    throw new AppError(409, 'INVALID_STATE', 'Only draft rules can be submitted for review');
+  }
+
+  ruleConfig.status = 'in_review';
+  await ruleConfig.save();
+
+  await appendAuditLog({
+    entityType: 'RuleConfig',
+    entityId: ruleConfig._id,
+    action: 'submit_review',
+    userId: req.user.sub
+  });
+
+  res.status(200).json({ success: true, data: ruleConfig });
+});
+
+export const technicalReview = asyncHandler(async (req, res) => {
+  const ruleConfig = await RuleConfig.findById(req.params.id);
+  if (!ruleConfig) throw new AppError(404, 'NOT_FOUND', 'Rule config not found');
+  
+  if (ruleConfig.status !== 'in_review') {
+    throw new AppError(409, 'INVALID_STATE', 'Only rules in review can be technically reviewed');
+  }
+
+  if (ruleConfig.createdBy?.toString() === req.user.sub) {
+    throw new AppError(403, 'SEPARATION_OF_DUTIES', 'The technical reviewer cannot be the rule author');
+  }
+
+  ruleConfig.technicalReviewedBy = req.user.sub;
+  ruleConfig.technicalReviewedAt = new Date();
+  await ruleConfig.save();
+
+  await appendAuditLog({
+    entityType: 'RuleConfig',
+    entityId: ruleConfig._id,
+    action: 'technical_review',
+    userId: req.user.sub
+  });
+
+  res.status(200).json({ success: true, data: ruleConfig });
+});
+
+export const retireRuleConfig = asyncHandler(async (req, res) => {
+  const { reason } = req.body;
+  if (!reason || !reason.trim()) {
+    throw new AppError(400, 'BAD_REQUEST', 'Retirement reason is mandatory');
+  }
+
+  const ruleConfig = await RuleConfig.findById(req.params.id);
+  if (!ruleConfig) throw new AppError(404, 'NOT_FOUND', 'Rule config not found');
+  
+  if (!['active', 'scheduled'].includes(ruleConfig.status)) {
+    throw new AppError(409, 'INVALID_STATE', 'Only active or scheduled rules can be retired');
+  }
+
+  ruleConfig.status = 'retired';
+  ruleConfig.effectiveUntil = new Date();
+  ruleConfig.retiredReason = reason.trim();
+  await ruleConfig.save();
+
+  await appendAuditLog({
+    entityType: 'RuleConfig',
+    entityId: ruleConfig._id,
+    action: 'retire',
+    userId: req.user.sub,
+    details: { reason }
+  });
+
+  res.status(200).json({ success: true, data: ruleConfig });
 });

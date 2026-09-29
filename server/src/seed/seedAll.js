@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { env } from '../config/env.js';
 import { seedUsers } from './seedUsers.js';
 import { seedRuleConfigs } from './seedRuleConfigs.js';
+import { seedTestTypes } from './seedTestTypes.js';
 import { activateDevRules } from './activateRules.js';
 import { seedDemoData } from './seedDemoData.js';
 
@@ -10,6 +11,7 @@ export async function seedAll() {
   await mongoose.connect(env.MONGO_URI);
   await seedUsers();
   await seedRuleConfigs();
+  await seedTestTypes();
   if (env.NODE_ENV !== 'production') {
     await activateDevRules();
   }

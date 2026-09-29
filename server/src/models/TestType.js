@@ -14,6 +14,25 @@ const testTypeSchema = new mongoose.Schema(
       },
     ],
     isActive: { type: Boolean, default: true },
+    status: {
+      type: String,
+      enum: ['draft', 'approved'],
+      default: 'draft',
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: false,
+    },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: false,
+    },
+    approvedAt: {
+      type: Date,
+      required: false,
+    },
   },
   { timestamps: true }
 );

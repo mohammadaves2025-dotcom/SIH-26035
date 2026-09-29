@@ -2,6 +2,7 @@ import { TestSession } from '../models/TestSession.js';
 import { Observation } from '../models/Observation.js';
 import { InstrumentModel } from '../models/InstrumentModel.js';
 import { Laboratory } from '../models/Laboratory.js';
+import { TestType } from '../models/TestType.js';
 import { resolveRuleConfig } from '../services/ruleResolver.service.js';
 import { evaluateObservation, evaluateSession } from '../services/complianceEngine.service.js';
 import { detectObservationAnomalies } from '../services/anomalyDetector.service.js';
@@ -151,6 +152,23 @@ export const submitTestSession = asyncHandler(async (req, res) => {
     );
   }
 
+async function checkMandatoryTests(session, observations, accuracyClass) {
+  const stage = session.verificationStage || 'initial';
+  const mandatoryTypes = await TestType.find({
+    status: 'approved',
+    isActive: true,
+    'mandatoryFor.accuracyClass': accuracyClass,
+    'mandatoryFor.verificationStage': { $in: ['all', stage] }
+  });
+
+  const observedAnnexes = new Set(observations.map(o => o.annexRef));
+  const missingMandatory = mandatoryTypes.filter(t => !observedAnnexes.has(t.oimlAnnexRef));
+
+  if (missingMandatory.length > 0) {
+    throw new AppError(422, 'MANDATORY_TEST_MISSING', `Missing mandatory test types for class ${accuracyClass} stage ${stage}: ${missingMandatory.map(t => t.testName).join(', ')}`);
+  }
+}
+
   const selected = new Set(session.selectedAnnexes || []);
   const observed = new Set(observations.map((observation) => observation.annexRef));
   const missingAnnexes = [...selected].filter((annex) => !observed.has(annex));
@@ -169,6 +187,8 @@ export const submitTestSession = asyncHandler(async (req, res) => {
   if (!accuracyClass || !Number.isFinite(maxCapacity) || !Number.isFinite(scaleInterval) || scaleInterval <= 0) {
     throw new AppError(422, 'INVALID_INSTRUMENT_PARAMETERS', 'A complete registered instrument specification is required to evaluate this session');
   }
+
+  await checkMandatoryTests(session, observations, accuracyClass);
 
   const instrumentModel = {
     accuracyClass,

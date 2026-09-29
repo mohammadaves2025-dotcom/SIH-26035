@@ -1,9 +1,12 @@
 import app from './app.js';
 import { connectDB } from './config/db.js';
 import { env } from './config/env.js';
+import { startActivationJob } from './jobs/activationJob.js';
 
 async function startServer() {
   await connectDB();
+  
+  startActivationJob();
 
   app.listen(env.PORT, () => {
     console.log(`==================================================`);

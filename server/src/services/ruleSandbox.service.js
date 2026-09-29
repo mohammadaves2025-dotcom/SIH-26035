@@ -18,10 +18,9 @@ export async function compareRuleConfigToHistory(candidate) {
   const sessionById = new Map(sessions.map((session) => [session._id.toString(), session]));
   const observations = await Observation.find({
     testSessionId: { $in: sessions.map((session) => session._id) },
-    annexRef: 'A4_accuracy',
-    evaluationMethod: 'mpe_band',
+    evaluationMethod: { $in: ['mpe_band', 'structured'] },
     deletedAt: null,
-  }).select('_id testSessionId referenceLoad indicatedValue zeroCorrection outcome');
+  }).select('_id testSessionId annexRef evaluationMethod referenceLoad indicatedValue zeroCorrection checklistPassed readings outcome');
 
   const changes = [];
   let compared = 0;
