@@ -69,10 +69,10 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       { $group: { _id: '$labId', count: { $sum: 1 } } },
     ]),
     TestSession.aggregate([
-      { $match: { ...sessionFilter, createdAt: { $gte: startDateTrend } } },
+      { $match: { ...sessionFilter, testDate: { $gte: startDateTrend } } },
       {
         $group: {
-          _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
+          _id: { $dateToString: { format: '%Y-%m', date: '$testDate' } },
           count: { $sum: 1 },
         },
       },

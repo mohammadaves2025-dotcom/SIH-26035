@@ -181,7 +181,7 @@ export default function OfflineSessionPage() {
           </div>
         )}
 
-        {method === 'mpe_band' && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {method === 'mpe_band' && <div className="responsive-form-grid offline-observation-grid">
           <div className="gov-form-group"><label className="gov-label">Reference load</label><input className="gov-input" type="number" step="any" value={referenceLoad} onChange={(event) => setReferenceLoad(event.target.value)} /></div>
           <div className="gov-form-group"><label className="gov-label">Instrument indication</label><input className="gov-input" type="number" step="any" value={indicatedValue} onChange={(event) => setIndicatedValue(event.target.value)} /></div>
         </div>}

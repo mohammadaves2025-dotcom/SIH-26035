@@ -11,6 +11,7 @@ import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { assertSessionAccess, getManufacturerForUser, manufacturerModelIds, sessionScopeForUser } from '../utils/tenantAccess.js';
 import { createTestSessionSchema } from '../validators/testSession.schema.js';
+import { verifyGeofence } from '../utils/geofence.js';
 
 
 async function createSessionRecord(req, body) {
@@ -21,6 +22,7 @@ async function createSessionRecord(req, body) {
     verificationStage,
     environmentalConditions,
     selectedAnnexes,
+    clientLocation,
   } = body;
 
   const isLabBoundUser = ['lab_technician', 'lab_admin'].includes(req.user.role);
@@ -28,6 +30,7 @@ async function createSessionRecord(req, body) {
   if (!labId) throw new AppError(400, 'VALIDATION_ERROR', 'A registered laboratory is required');
   const laboratory = await Laboratory.findOne({ labId, isActive: true });
   if (!laboratory) throw new AppError(422, 'INVALID_LABORATORY', 'The selected laboratory is not registered or is inactive');
+  const locationEvidence = verifyGeofence(laboratory, clientLocation);
 
   const model = await InstrumentModel.findById(instrumentModelId).populate('manufacturerId');
   if (!model || !model.manufacturerId) {
@@ -53,6 +56,13 @@ async function createSessionRecord(req, body) {
     status: 'draft',
     clientSyncId: body.clientSyncId || null,
     environmentalConditions,
+    locationEvidence: {
+      ...locationEvidence,
+      latitude: clientLocation?.latitude ?? null,
+      longitude: clientLocation?.longitude ?? null,
+      accuracyM: clientLocation?.accuracyM ?? null,
+      verifiedAt: locationEvidence.status === 'verified' ? new Date() : null,
+    },
   });
 
   await appendAuditLog({

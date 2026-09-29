@@ -49,7 +49,7 @@ export default function InstrumentModelDetailPage() {
         </div>
         <div className="gov-card-body">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16, fontSize: 14 }}>
-            <div><span className="text-muted" style={{ fontSize: 12 }}>Manufacturer</span><br /><strong>{model.manufacturerId?.name || model.manufacturer?.name || 'Avery India Ltd'}</strong></div>
+            <div><span className="text-muted" style={{ fontSize: 12 }}>Manufacturer</span><br /><strong>{model.manufacturerId?.name || model.manufacturer?.name || '—'}</strong></div>
             <div><span className="text-muted" style={{ fontSize: 12 }}>Accuracy Class</span><br /><strong>Class {model.accuracyClass}</strong></div>
             <div><span className="text-muted" style={{ fontSize: 12 }}>Maximum Capacity (Max)</span><br /><strong className="text-mono">{model.maxCapacity} kg</strong></div>
             <div><span className="text-muted" style={{ fontSize: 12 }}>Minimum Capacity (Min)</span><br /><strong className="text-mono">{model.minCapacity} kg</strong></div>

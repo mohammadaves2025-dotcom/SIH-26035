@@ -69,10 +69,10 @@ export default function TestSessionsPage() {
               <table className="gov-table">
                 <thead>
                   <tr>
-                    <th scope="col">Instrument Model</th>
-                    <th scope="col">Serial No.</th>
+                    <th scope="col">{t('instrument_model')}</th>
+                    <th scope="col">{t('serial_number')}</th>
                     <th scope="col">Sync Status</th>
-                    <th scope="col">Created</th>
+                    <th scope="col">{t('created')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -140,12 +140,12 @@ export default function TestSessionsPage() {
             <table className="gov-table">
               <thead>
                 <tr>
-                  <th scope="col">Session ID</th>
-                  <th scope="col">Instrument Model</th>
-                  <th scope="col">Serial No.</th>
-                  <th scope="col">Accuracy Class</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Created</th>
+                  <th scope="col">{t('session_id')}</th>
+                  <th scope="col">{t('instrument_model')}</th>
+                  <th scope="col">{t('serial_number')}</th>
+                  <th scope="col">{t('accuracy_class')}</th>
+                  <th scope="col">{t('status')}</th>
+                  <th scope="col">{t('created')}</th>
                 </tr>
               </thead>
               <tbody>

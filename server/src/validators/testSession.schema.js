@@ -9,6 +9,12 @@ export const createTestSessionSchema = z
     testDate: z.string().date('testDate must be a valid calendar date').transform((val) => new Date(`${val}T00:00:00.000Z`)),
     verificationStage: z.enum(['initial', 'subsequent']).default('initial').optional(),
     labId: z.string().trim().min(1).optional(),
+    clientLocation: z.object({
+      latitude: z.number().finite(),
+      longitude: z.number().finite(),
+      accuracyM: z.number().finite().nonnegative(),
+      capturedAt: z.string().datetime(),
+    }).optional(),
     environmentalConditions: z
       .object({
         temperatureC: z.number().finite(),

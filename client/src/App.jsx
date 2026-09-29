@@ -75,6 +75,32 @@ function ProtectedLayout({ isMobileOpen, setIsMobileOpen }) {
   );
 }
 
+function VerifyLayout({ isMobileOpen, setIsMobileOpen, children }) {
+  const { isAuthenticated } = useAuthStore();
+
+  if (isAuthenticated) {
+    return (
+      <div className="app-layout">
+        <Sidebar
+          isMobileOpen={isMobileOpen}
+          onCloseMobileMenu={() => setIsMobileOpen(false)}
+        />
+        <main id="main-content" className="app-main">
+          {children}
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-layout" style={{ paddingTop: 'calc(var(--topbar-height) + var(--header-height))' }}>
+      <main id="main-content" className="app-main" style={{ marginLeft: 0, padding: '20px 16px' }}>
+        {children}
+      </main>
+    </div>
+  );
+}
+
 export default function App() {
   const { fontSizeStep, highContrast } = useThemeStore();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -90,7 +116,7 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <TopGovtBar />
         <Header
           isMobileOpen={isMobileOpen}
@@ -103,22 +129,17 @@ export default function App() {
           <Route
             path="/verify"
             element={
-              <div
-                className="app-layout"
-                style={{ paddingTop: 'calc(var(--topbar-height) + var(--header-height))' }}
-              >
-                <main className="app-main" style={{ marginLeft: 0, padding: '20px 16px' }}>
-                  <VerifyPage />
-                </main>
-              </div>
+              <VerifyLayout isMobileOpen={isMobileOpen} setIsMobileOpen={setIsMobileOpen}>
+                <VerifyPage />
+              </VerifyLayout>
             }
           />
           <Route
             path="/verify/:reportNumberOrHash"
             element={
-              <div className="app-layout" style={{ paddingTop: 'calc(var(--topbar-height) + var(--header-height))' }}>
-                <main className="app-main" style={{ marginLeft: 0, padding: '20px 16px' }}><VerifyPage /></main>
-              </div>
+              <VerifyLayout isMobileOpen={isMobileOpen} setIsMobileOpen={setIsMobileOpen}>
+                <VerifyPage />
+              </VerifyLayout>
             }
           />
 

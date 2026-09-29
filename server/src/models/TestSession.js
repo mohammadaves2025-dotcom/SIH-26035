@@ -55,6 +55,15 @@ const testSessionSchema = new mongoose.Schema(
     rejectedAt: { type: Date, default: null },
     submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     submittedAt: { type: Date, default: null },
+    locationEvidence: {
+      latitude: { type: Number, default: null },
+      longitude: { type: Number, default: null },
+      accuracyM: { type: Number, default: null },
+      distanceM: { type: Number, default: null },
+      status: { type: String, enum: ['verified', 'not_configured', 'offline_pending'], default: 'not_configured' },
+      capturedAt: { type: Date, default: null },
+      verifiedAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );

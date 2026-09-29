@@ -7,7 +7,6 @@ import { RuleConfig } from '../models/RuleConfig.js';
 import { TestSession } from '../models/TestSession.js';
 import { Observation } from '../models/Observation.js';
 import { Report, Counter } from '../models/Report.js';
-import { AuditLog } from '../models/AuditLog.js';
 import { Laboratory } from '../models/Laboratory.js';
 import { TestType } from '../models/TestType.js';
 import { appendAuditLog } from '../services/auditLogger.service.js';
@@ -16,21 +15,20 @@ import { env } from '../config/env.js';
 export async function seedDemoData() {
   console.log('Seeding rich Legal Metrology & OIML R-76 demo datasets (All 7 Roles & ERD Entities)...');
 
-  // 1. Clean test sessions, observations, reports, counters & audit logs
+  // 1. Clean test sessions, observations, reports & counters; audit logs are append-only
   await Promise.all([
     TestSession.deleteMany({}),
     Observation.deleteMany({}),
     Report.deleteMany({}),
     Counter.deleteMany({}),
-    AuditLog.deleteMany({}),
   ]);
 
   // 2. Seed Laboratories (Section 7.1 ERD Entity)
   const initialLabs = [
-    { labId: 'LAB-DELHI-01', labName: 'National Physical Laboratory (NPL New Delhi)', accreditationNo: 'NABL-TC-8891', location: 'New Delhi, Delhi', contactEmail: 'metrology@npl.res.in' },
-    { labId: 'LAB-AHM-02', labName: 'Regional Reference Standards Laboratory (RRSL Ahmedabad)', accreditationNo: 'NABL-TC-4412', location: 'Ahmedabad, Gujarat', contactEmail: 'rrsl.ahm@nawi.gov.in' },
-    { labId: 'LAB-BLR-03', labName: 'Regional Reference Standards Laboratory (RRSL Bengaluru)', accreditationNo: 'NABL-TC-5520', location: 'Bengaluru, Karnataka', contactEmail: 'rrsl.blr@nawi.gov.in' },
-    { labId: 'LAB-MUM-04', labName: 'Regional Reference Standards Laboratory (RRSL Mumbai)', accreditationNo: 'NABL-TC-7711', location: 'Mumbai, Maharashtra', contactEmail: 'rrsl.mum@nawi.gov.in' },
+    { labId: 'LAB-DELHI-01', labName: 'National Physical Laboratory (NPL New Delhi)', accreditationNo: 'NABL-TC-8891', location: 'New Delhi, Delhi', contactEmail: 'metrology@npl.res.in', isActive: true },
+    { labId: 'LAB-AHM-02', labName: 'Regional Reference Standards Laboratory (RRSL Ahmedabad)', accreditationNo: 'NABL-TC-4412', location: 'Ahmedabad, Gujarat', contactEmail: 'rrsl.ahm@nawi.gov.in', isActive: true },
+    { labId: 'LAB-BLR-03', labName: 'Regional Reference Standards Laboratory (RRSL Bengaluru)', accreditationNo: 'NABL-TC-5520', location: 'Bengaluru, Karnataka', contactEmail: 'rrsl.blr@nawi.gov.in', isActive: true },
+    { labId: 'LAB-MUM-04', labName: 'Regional Reference Standards Laboratory (RRSL Mumbai)', accreditationNo: 'NABL-TC-7711', location: 'Mumbai, Maharashtra', contactEmail: 'rrsl.mum@nawi.gov.in', isActive: true },
   ];
 
   const laboratories = [];
@@ -195,11 +193,11 @@ export async function seedDemoData() {
   const passwordHash = await bcrypt.hash('Password123!', env.BCRYPT_SALT_ROUNDS || 10);
   const initialUsers = [
     { name: 'System Admin', email: 'admin@nawi.gov.in', passwordHash, role: 'admin', labId: null },
-    { name: 'Shri V. K. Gupta (Reviewing Officer)', email: 'reviewer@doca.gov.in', passwordHash, role: 'reviewer', labId: 'LAB-DELHI-01' },
+    { name: 'Shri V. K. Gupta', email: 'reviewer@doca.gov.in', passwordHash, role: 'reviewer', labId: 'LAB-DELHI-01' },
     { name: 'Dr. Rajesh Kumar (NPL Metrologist)', email: 'tech@npl.res.in', passwordHash, role: 'lab_technician', labId: 'LAB-DELHI-01', laboratoryRef: laboratories[0]._id },
     { name: 'Smt. Anita Roy (Lab Administrator)', email: 'labadmin@npl.res.in', passwordHash, role: 'lab_admin', labId: 'LAB-DELHI-01', laboratoryRef: laboratories[0]._id },
     { name: 'Controller of Legal Metrology', email: 'doca.controller@doca.gov.in', passwordHash, role: 'doca_officer', labId: null },
-    { name: 'Avery India Representative', email: 'rep@averyindia.com', passwordHash, role: 'manufacturer', labId: null },
+    { name: 'Avery India Representative', email: 'rep@averyindia.com', passwordHash, role: 'manufacturer', labId: null, manufacturerRef: manufacturers[0]._id },
     { name: 'CAG Compliance Auditor', email: 'auditor@cag.gov.in', passwordHash, role: 'auditor', labId: null },
   ];
 
@@ -227,8 +225,8 @@ export async function seedDemoData() {
     laboratoryRef: laboratories[0]._id,
     laboratoryName: laboratories[0].labName,
     createdBy: techDelhi._id,
-    testDate: new Date('2026-09-15'),
-    status: 'published',
+    testDate: new Date('2026-04-15'),
+    status: 'passed',
     overallResult: 'pass',
     environmentalConditions: {
       temperatureC: 22.5,
@@ -304,7 +302,7 @@ export async function seedDemoData() {
     laboratoryRef: laboratories[2]._id,
     laboratoryName: laboratories[2].labName,
     createdBy: techDelhi._id,
-    testDate: new Date('2026-09-20'),
+    testDate: new Date('2026-05-20'),
     status: 'failed',
     overallResult: 'fail',
     environmentalConditions: {
@@ -343,7 +341,7 @@ export async function seedDemoData() {
     laboratoryRef: laboratories[0]._id,
     laboratoryName: laboratories[0].labName,
     createdBy: techDelhi._id,
-    testDate: new Date('2026-09-24'),
+    testDate: new Date('2026-06-24'),
     status: 'submitted',
     overallResult: null,
     environmentalConditions: {
@@ -393,20 +391,57 @@ export async function seedDemoData() {
     },
   });
 
-  // 9. Counter & Report
-  await Counter.findOneAndUpdate({ name: 'reportNumber' }, { seq: 1 }, { upsert: true });
-  const report1 = await Report.create({
-    testSessionId: session1._id,
-    reportNumber: 'NAWI-2026-000001',
-    contentHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    pdfPath: 'uploads/reports/NAWI-2026-000001.pdf',
-    docxPath: 'uploads/reports/NAWI-2026-000001.docx',
-    status: 'integrity_tagged',
-    generatedBy: reviewer._id,
-    generatedAt: new Date('2026-09-16'),
+  await TestSession.create({
+    instrumentModelId: models[0]._id,
+    manufacturerName: manufacturers[0].name,
+    modelName: models[0].modelName,
+    selectedAnnexes: ['A4_accuracy'],
+    serialNumber: 'SN-2026-005',
+    accuracyClass: 'III',
+    maxCapacity: 1500,
+    minCapacity: 10,
+    scaleInterval: 0.5,
+    labId: 'LAB-DELHI-01',
+    laboratoryRef: laboratories[0]._id,
+    laboratoryName: laboratories[0].labName,
+    createdBy: techDelhi._id,
+    testDate: new Date('2026-07-15'),
+    status: 'passed',
+    overallResult: 'pass',
+    environmentalConditions: {
+      temperatureC: 22.0,
+      humidityPercent: 52,
+      inclinationDeg: 0.0,
+      notes: 'Reference load testing completed.',
+    },
   });
 
-  // 10. Audit Logs
+  await TestSession.create({
+    instrumentModelId: models[1]._id,
+    manufacturerName: manufacturers[1].name,
+    modelName: models[1].modelName,
+    selectedAnnexes: ['A4_accuracy'],
+    serialNumber: 'SN-2026-006',
+    accuracyClass: 'I',
+    maxCapacity: 220,
+    minCapacity: 0.01,
+    scaleInterval: 0.001,
+    labId: 'LAB-DELHI-01',
+    laboratoryRef: laboratories[0]._id,
+    laboratoryName: laboratories[0].labName,
+    createdBy: techDelhi._id,
+    testDate: new Date('2026-08-18'),
+    status: 'under_review',
+    overallResult: null,
+    environmentalConditions: {
+      temperatureC: 21.0,
+      humidityPercent: 48,
+      inclinationDeg: 0.0,
+      notes: 'Awaiting reviewing officer assessment.',
+    },
+  });
+
+  // 9. Audit Logs
   await appendAuditLog({
     entityType: 'TestSession',
     entityId: session1._id,
@@ -435,17 +470,10 @@ export async function seedDemoData() {
     userId: reviewer._id,
   });
 
-  await appendAuditLog({
-    entityType: 'Report',
-    entityId: report1._id,
-    action: 'GENERATE_REPORT',
-    userId: reviewer._id,
-  });
-
   console.log('Legal Metrology demo datasets seeded successfully with 7 roles and all ERD entities!');
   return {
-    sessionsCount: 4,
-    reportsCount: 1,
+    sessionsCount: 6,
+    reportsCount: 0,
     manufacturersCount: manufacturers.length,
     modelsCount: models.length,
     laboratoriesCount: laboratories.length,

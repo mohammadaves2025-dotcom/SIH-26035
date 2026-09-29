@@ -176,8 +176,8 @@ export default function RuleConfigsPage() {
                       {(r.bands || []).map((b) => `≤${b.uptoMultipleOfE}e (${b.mpeFactor}x)`).join(' | ') || 'Standard OIML Bands'}
                     </td>
                     <td>
-                      <span className={`gov-badge ${r.status === 'active' ? 'gov-badge-passed' : r.status === 'retired' ? 'gov-badge-failed' : 'gov-badge-info'}`}>{(r.status || 'draft').replace('_', ' ')}</span>
-                      {r.status === 'active' && <div style={{ fontSize: 11, marginTop: 4 }}>{r.sourceReference || 'Source not recorded'}{r.approvedAt ? ` · reviewed ${new Date(r.approvedAt).toLocaleDateString()}` : ''}</div>}
+                      <span className={`gov-badge ${r.status === 'active' ? 'gov-badge-passed' : r.status === 'retired' ? 'gov-badge-failed' : 'gov-badge-info'}`}>{r.status === 'active' && r.sourceReference?.includes('DEV SEED') ? 'ACTIVE (DEMO)' : (r.status || 'draft').replace('_', ' ')}</span>
+                      {r.status === 'active' && <div style={{ fontSize: 11, marginTop: 4 }}>{r.sourceReference || 'Source not recorded'}{r.sourceReference?.includes('DEV SEED') ? ' · demo-only activation; not expert approved' : r.approvedAt ? ` · reviewed ${new Date(r.approvedAt).toLocaleDateString()}` : ''}</div>}
                       {r.sandboxedAt && <div style={{ fontSize: 11, marginTop: 4 }}>
                         Regression check: {r.sandboxSummary?.compared || 0} compared, {r.sandboxSummary?.changed || 0} changed, {r.sandboxSummary?.uncomparable || 0} unresolved
                       </div>}
@@ -227,7 +227,7 @@ export default function RuleConfigsPage() {
               <button aria-label="Close rule draft form" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
             </div>
             <div className="modal-body">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div className="responsive-form-grid rule-form-grid">
                 <div className="gov-form-group">
                   <label className="gov-label">Accuracy Class</label>
                   <select className="gov-select" value={form.accuracyClass} onChange={(e) => setForm((f) => ({ ...f, accuracyClass: e.target.value }))}>
@@ -254,7 +254,7 @@ export default function RuleConfigsPage() {
               <h4 style={{ marginTop: 16, marginBottom: 10 }}>MPE tolerance bands</h4>
               <p>Enter values transcribed from the governing OIML edition and applicable Indian Gazette amendments. The form starts blank to prevent indicative examples being mistaken for approved rules. A saved draft does not affect compliance calculations.</p>
               {form.bands.map((band, idx) => (
-                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 12, marginBottom: 8, alignItems: 'end' }}>
+                <div key={idx} className="rule-band-row">
                   <div className="gov-form-group">
                     <label className="gov-label" style={{ fontSize: 11 }}>Upper band limit (m/e)</label>
                     <input className="gov-input" aria-label={`Band ${idx + 1} upper limit in e`} type="number" min="1" step="1" value={band.uptoMultipleOfE} onChange={(e) => updateBand(idx, 'uptoMultipleOfE', e.target.value)} required />
@@ -300,7 +300,7 @@ export default function RuleConfigsPage() {
               </div></div>}
               {sandboxResult && <div className="gov-card mb-16" role="status"><div className="gov-card-body">
                 <strong>Comparison result</strong>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, margin: '10px 0' }}>
+                <div className="rule-stats-grid" style={{ margin: '10px 0' }}>
                   <span>{sandboxResult.compared} compared</span><span>{sandboxResult.unchanged} unchanged</span><span>{sandboxResult.changed} changed</span><span>{sandboxResult.uncomparable} unresolved</span>
                 </div>
                 {sandboxResult.changes?.filter((item) => item.previousOutcome || item.proposedOutcome || item.error).length > 0 && <div style={{ maxHeight: 150, overflowY: 'auto', fontSize: 12 }}>

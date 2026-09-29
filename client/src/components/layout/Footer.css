@@ -8,3 +8,10 @@
   background: var(--gov-bg-surface);
   line-height: 1.7;
 }
+
+@media (max-width: 768px) {
+  .gov-footer {
+    margin-left: 0;
+    padding: 14px 12px;
+  }
+}

@@ -24,6 +24,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .mobile-menu-btn {
@@ -41,13 +42,17 @@
 
 .header-emblem {
   height: 36px;
-  width: auto;
-  filter: brightness(0) invert(1) opacity(0.85);
+  width: 46px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 3px;
+  padding: 2px;
 }
 
 .header-titles {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .header-title {
@@ -67,30 +72,29 @@
   display: flex;
   align-items: center;
   gap: 14px;
+  min-width: 0;
 }
 
-.header-language-toggle {
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+.header-language-select select {
+  min-width: 88px;
+  padding: 4px 20px 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 5px;
-}
-
-.header-language-toggle button {
-  border: 0;
-  border-radius: 3px;
-  padding: 3px 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.75);
+  background: var(--gov-navy-dark);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
 }
 
-.header-language-toggle button.active {
+.header-language-select select:focus-visible {
+  outline: 2px solid var(--gov-saffron);
+  outline-offset: 2px;
+}
+
+.header-language-select option {
   background: #fff;
-  color: var(--gov-navy-imperial);
+  color: var(--gov-text-heading);
 }
 
 /* Offline & Sync Status Badges */
@@ -110,13 +114,6 @@
   border: 1px solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
-}
-
-.header-status-badge.online {
-  background: rgba(19, 136, 8, 0.15);
-  border-color: rgba(74, 222, 128, 0.3);
-  color: #4ADE80;
-  cursor: default;
 }
 
 .header-status-badge.offline {
@@ -155,39 +152,30 @@
   to   { transform: rotate(360deg); }
 }
 
-.header-seed-btn {
+.header-demo-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 14px;
-  background: linear-gradient(135deg, #D97706 0%, #B45309 100%);
+  gap: 6px;
   color: #FFFFFF;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: var(--gov-radius);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
-  transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
-.header-seed-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
+.header-demo-toggle input {
+  appearance: auto;
+  display: inline-block;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--gov-saffron);
+  cursor: pointer;
 }
 
-.header-seed-btn.active-demo {
-  background: linear-gradient(135deg, #138808 0%, #0F6806 100%);
-  border-color: #4ADE80;
-}
-
-.header-seed-btn.active-demo:hover:not(:disabled) {
-  background: linear-gradient(135deg, #16A34A 0%, #138808 100%);
-}
-
-.header-seed-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.header-demo-toggle input:disabled {
+  cursor: wait;
 }
 
 .header-user {
@@ -264,16 +252,83 @@
   .header-user-name {
     display: none;
   }
-  .demo-btn-text {
-    display: none;
-  }
-  .header-seed-btn {
-    padding: 6px 8px;
-  }
   .header-inner {
     padding: 0 12px;
   }
   .header-actions {
     gap: 8px;
+  }
+  .header-brand {
+    gap: 8px;
+  }
+  .header-title {
+    max-width: 34vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .header-user {
+    gap: 6px;
+  }
+  .header-status-badge {
+    padding: 4px 7px;
+    gap: 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-inner {
+    padding: 0 8px;
+  }
+  .header-title {
+    max-width: 32vw;
+    font-size: 12px;
+  }
+  .header-emblem {
+    height: 24px;
+  }
+  .mobile-menu-btn {
+    padding: 2px;
+  }
+  .header-actions {
+    gap: 5px;
+  }
+  .header-status-badge.offline span:not(.pending-pill),
+  .header-status-badge.pending span {
+    display: none;
+  }
+  .header-language-select select {
+    min-width: 76px;
+    padding: 4px 16px 4px 6px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 600px) {
+  .header-demo-toggle {
+    gap: 4px;
+    font-size: 11px;
+  }
+
+  .header-demo-toggle input {
+    flex-basis: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+@media (max-width: 360px) {
+  .header-title {
+    max-width: 20vw;
+  }
+
+  .header-emblem {
+    width: 36px;
+  }
+
+  .header-demo-toggle span {
+    max-width: 68px;
+    white-space: normal;
+    line-height: 1.1;
   }
 }

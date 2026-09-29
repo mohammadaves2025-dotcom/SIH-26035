@@ -16,9 +16,9 @@ export default function InstrumentModelsPage() {
   const addToast = useNotificationStore((s) => s.addToast);
   const { t } = useTranslation();
   const role = useAuthStore((s) => s.user?.role);
-  const canCreate = ['admin', 'lab_admin'].includes(role);
-  const modalRef = useModalA11y(showModal, () => setShowModal(false));
+  const canCreate = ['admin', 'lab_admin', 'manufacturer'].includes(role);
   const [showModal, setShowModal] = useState(false);
+  const modalRef = useModalA11y(showModal, () => setShowModal(false));
   const [form, setForm] = useState({
     modelName: '',
     manufacturerId: '',
@@ -156,7 +156,7 @@ export default function InstrumentModelsPage() {
                       onClick={() => navigate(`/instrument-models/${m._id}`)}
                     >
                       <td style={{ fontWeight: 600, color: 'var(--gov-navy-imperial)' }}>{m.modelName}</td>
-                      <td>{m.manufacturer?.name || m.manufacturerId?.name || 'Avery India Ltd'}</td>
+                      <td>{m.manufacturer?.name || m.manufacturerId?.name || '—'}</td>
                       <td>Class {m.accuracyClass}</td>
                       <td className="text-mono">{m.maxCapacity ?? '—'}</td>
                       <td className="text-mono">{m.minCapacity ?? '—'}</td>

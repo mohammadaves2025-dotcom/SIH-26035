@@ -75,7 +75,7 @@ export default function ExportPage() {
           <h4>{t('export_parameters')}</h4>
         </div>
         <div className="gov-card-body">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+          <div className="responsive-form-grid export-date-grid" style={{ marginBottom: 20 }}>
             <div className="gov-form-group">
               <label className="gov-label" htmlFor="export-start-date"><Calendar size={14} style={{ marginRight: 4, verticalAlign: -2 }} /> {t('start_date')}</label>
               <input id="export-start-date" className="gov-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />

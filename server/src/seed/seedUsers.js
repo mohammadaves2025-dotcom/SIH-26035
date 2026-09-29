@@ -26,6 +26,9 @@ export async function seedUsers() {
       contactEmail: 'lab@npl.res.in',
       isActive: true,
     });
+  } else if (!lab.isActive) {
+    lab.isActive = true;
+    await lab.save();
   }
 
   // Create a default Manufacturer

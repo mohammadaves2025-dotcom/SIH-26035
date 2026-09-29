@@ -6,7 +6,7 @@ import { useTranslation } from '../../config/i18n.js';
 import { useOfflineStatus } from '../../services/useOfflineStatus.js';
 import { seedDemoData, clearDemoData, getDemoStatus } from '../../services/admin.service.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { LogOut, User, CheckCircle2, Database, Menu, X, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { LogOut, User, Menu, X, WifiOff, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import OfflineOutboxModal from '../common/OfflineOutboxModal.jsx';
 import './Header.css';
@@ -34,6 +34,11 @@ export default function Header({ isMobileOpen, onToggleMobileMenu }) {
   const [isDemoActive, setIsDemoActive] = useState(true);
   const [loading, setLoading] = useState(false);
   const [isOutboxModalOpen, setIsOutboxModalOpen] = useState(false);
+  const roleLabel = user ? ROLE_LABELS[user.role] : null;
+  const designationSuffix = roleLabel ? ` (${roleLabel})` : '';
+  const displayName = designationSuffix && user?.name?.endsWith(designationSuffix)
+    ? user.name.slice(0, -designationSuffix.length)
+    : user?.name;
 
   const {
     isOnline,
@@ -104,8 +109,8 @@ export default function Header({ isMobileOpen, onToggleMobileMenu }) {
             </button>
 
             <img
-              src="/emblem-india.svg"
-              alt="National Emblem"
+              src="/ascension-logo.png"
+              alt="Ascension"
               className="header-emblem"
               onError={(e) => {
                 e.target.style.display = 'none';
@@ -126,13 +131,18 @@ export default function Header({ isMobileOpen, onToggleMobileMenu }) {
           </div>
 
           <div className="header-actions">
-            <div className="header-language-toggle" aria-label="Language">
-              <button type="button" className={language === 'EN' ? 'active' : ''} onClick={() => handleLanguageChange('EN')}>EN</button>
-              <button type="button" className={language === 'HI' ? 'active' : ''} onClick={() => handleLanguageChange('HI')}>हिं</button>
-            </div>
-            {/* Offline Status Badge & Sync trigger */}
-            <div className="header-offline-status">
-              {!isOnline ? (
+            <label className="header-language-select">
+              <select
+                value={language}
+                onChange={(event) => handleLanguageChange(event.target.value)}
+                aria-label="Language"
+              >
+                <option value="EN">English</option>
+                <option value="HI">हिन्दी</option>
+              </select>
+            </label>
+            {!isOnline && (
+              <div className="header-offline-status">
                 <button
                   className="header-status-badge offline"
                   onClick={() => setIsOutboxModalOpen(true)}
@@ -142,7 +152,10 @@ export default function Header({ isMobileOpen, onToggleMobileMenu }) {
                   <span>{t('offline_mode')}</span>
                   {pendingCount > 0 && <span className="pending-pill">{pendingCount}</span>}
                 </button>
-              ) : pendingCount > 0 ? (
+              </div>
+            )}
+            {isOnline && pendingCount > 0 && (
+              <div className="header-offline-status">
                 <button
                   className="header-status-badge pending"
                   onClick={() => setIsOutboxModalOpen(true)}
@@ -151,30 +164,23 @@ export default function Header({ isMobileOpen, onToggleMobileMenu }) {
                   <RefreshCw size={13} className={isSyncing ? 'spin' : ''} />
                   <span>{pendingCount} {t('pending_sync')}</span>
                 </button>
-              ) : (
-                <span className="header-status-badge online" title="Connected to server">
-                  <Wifi size={14} color="#4ADE80" />
-                  <span>{t('online_mode')}</span>
-                </span>
-              )}
-            </div>
+              </div>
+            )}
 
             {user && ['admin', 'lab_admin'].includes(user.role) && (
-              <button
-                className={`header-seed-btn ${isDemoActive ? 'active-demo' : ''}`}
-                onClick={handleToggleDemoData}
-                disabled={loading}
-                title={isDemoActive ? 'Click to clear demo sessions' : 'Click to include Legal Metrology demo datasets'}
+              <label
+                className="header-demo-toggle"
+                title={isDemoActive ? 'Uncheck to clear demo sessions' : 'Check to include Legal Metrology demo datasets'}
               >
-                {isDemoActive ? <CheckCircle2 size={15} color="#fff" /> : <Database size={15} color="#fff" />}
-                <span className="demo-btn-text">
-                  {loading
-                    ? 'Processing...'
-                    : isDemoActive
-                    ? '✓ Demo Data'
-                    : 'Include Demo Data'}
-                </span>
-              </button>
+                <input
+                  type="checkbox"
+                  checked={isDemoActive}
+                  onChange={handleToggleDemoData}
+                  disabled={loading}
+                  aria-label="Include demo data"
+                />
+                <span>{loading ? 'Processing...' : 'Include Demo Data'}</span>
+              </label>
             )}
 
             {user && (
@@ -182,7 +188,7 @@ export default function Header({ isMobileOpen, onToggleMobileMenu }) {
                 {user.labId && <span className="header-lab-tag">{user.labId}</span>}
                 <div className="header-user-info">
                   <User size={16} />
-                  <span className="header-user-name">{user.name}</span>
+                  <span className="header-user-name">{displayName}</span>
                   <span className="header-user-role">{ROLE_LABELS[user.role] || user.role}</span>
                 </div>
                 <button className="header-logout-btn" onClick={handleLogout} title="Logout" aria-label="Logout">

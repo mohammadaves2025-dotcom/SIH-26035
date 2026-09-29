@@ -1,0 +1,85 @@
+.new-session-page {
+  width: min(100%, 1080px);
+  min-width: 0;
+  margin-inline: auto;
+}
+
+.new-session-page > .gov-card {
+  min-width: 0;
+}
+
+.session-step-title {
+  margin: 0 0 20px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.session-env-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 16px;
+  align-items: start;
+}
+
+.session-env-field {
+  min-width: 0;
+}
+
+.session-env-field .gov-label {
+  display: block;
+  min-height: 2.8em;
+  line-height: 1.4;
+}
+
+.session-env-field .gov-input,
+.session-env-field .gov-select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.session-env-notes {
+  grid-column: 1 / -1;
+}
+
+.session-env-field .session-env-textarea {
+  min-height: 82px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.session-wizard-navigation {
+  gap: 12px;
+  margin-top: 24px;
+}
+
+@media (max-width: 760px) {
+  .session-env-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 14px;
+  }
+
+  .session-env-notes {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 520px) {
+  .session-env-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .session-env-notes {
+    grid-column: auto;
+  }
+
+  .session-env-field .gov-label {
+    min-height: 0;
+    margin-bottom: 6px;
+  }
+
+  .session-wizard-navigation {
+    justify-content: space-between;
+  }
+}

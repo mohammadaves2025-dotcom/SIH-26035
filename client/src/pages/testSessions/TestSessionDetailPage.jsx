@@ -10,6 +10,7 @@ import { useTranslation } from '../../config/i18n.js';
 import { buildReadingPayload, formatMetrologyValue, getRuleFieldLabel, hasRequiredReadings, minimumReadingCount } from '../../utils/metrology.js';
 import { ANNEX_REFS } from '../../config/constants.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
+import VirtualBalancePanel from '../../components/common/VirtualBalancePanel.jsx';
 import { ArrowLeft, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle2, ShieldCheck, XCircle, Trash2, Pencil, AlertTriangle } from 'lucide-react';
 
 const outcomeLabel = (outcome) => outcome === 'pass' ? 'pass' : outcome === 'fail' ? 'fail' : 'Not evaluated';
@@ -38,6 +39,7 @@ export default function TestSessionDetailPage() {
   const [sessionEditForm, setSessionEditForm] = useState({});
   const [editingObsId, setEditingObsId] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [showVirtualBalance, setShowVirtualBalance] = useState(false);
 
   const { data: session, isLoading, isError, error } = useQuery({
     queryKey: ['test-session', id],
@@ -488,6 +490,19 @@ export default function TestSessionDetailPage() {
                 <label className="gov-label">Zero correction (optional offset to indication; kg)</label>
                 <input className="gov-input" type="number" step="any" value={obsForm.zeroCorrection} onChange={(e) => setObsForm((f) => ({ ...f, zeroCorrection: e.target.value }))} />
               </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <button type="button" className="gov-btn gov-btn-outline" onClick={() => setShowVirtualBalance((visible) => !visible)}>
+                  {showVirtualBalance ? 'Close Virtual Balance' : 'Use Virtual Balance'}
+                </button>
+                {showVirtualBalance && (
+                  <VirtualBalancePanel
+                    onApply={({ referenceLoad, indicatedValue }) => {
+                      setObsForm((form) => ({ ...form, referenceLoad: String(referenceLoad), indicatedValue: String(indicatedValue) }));
+                      addToast({ type: 'success', message: 'Virtual balance reading copied into the observation form.' });
+                    }}
+                  />
+                )}
+              </div>
               </>}
             </div>
             <div className="flex-gap-8 mt-16">
@@ -745,9 +760,11 @@ export default function TestSessionDetailPage() {
                   </button>
                 </>
               )}
-              <button className="gov-btn gov-btn-accent" onClick={() => reportMutation.mutate()} disabled={reportMutation.isPending}>
-                <FileCheck size={14} /> {reportMutation.isPending ? 'Generating...' : 'Generate test report'}
-              </button>
+              {['passed', 'failed'].includes(session.status) && (
+                <button className="gov-btn gov-btn-accent" onClick={() => reportMutation.mutate()} disabled={reportMutation.isPending}>
+                  <FileCheck size={14} /> {reportMutation.isPending ? 'Generating...' : 'Generate test report'}
+                </button>
+              )}
             </div>
           </div>
         </div>

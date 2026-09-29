@@ -29,7 +29,7 @@ export default function Sidebar({ isMobileOpen, onCloseMobileMenu }) {
     { to: '/audit-log',         label: t('nav_audit_trail'),        icon: ScrollText,      roles: ['admin', 'reviewer', 'lab_admin', 'doca_officer', 'auditor'] },
     { to: '/export',            label: t('nav_egov_export'),        icon: Download,        roles: ['admin', 'lab_admin', 'doca_officer', 'auditor'] },
     { to: '/verify',            label: t('nav_public_verification'),icon: ShieldCheck,     roles: ALL_ROLES },
-    { to: '/users',            label: 'Users',                     icon: UsersIcon,       roles: ['admin', 'lab_admin'] },
+    { to: '/users',            label: t('nav_users'),               icon: UsersIcon,       roles: ['admin', 'lab_admin'] },
     { to: '/system-logs',       label: t('nav_system_logs'),        icon: Terminal,        roles: ['admin', 'lab_admin', 'auditor'] },
   ];
 
@@ -65,7 +65,7 @@ export default function Sidebar({ isMobileOpen, onCloseMobileMenu }) {
           })}
         </nav>
         <div className="sidebar-footer">
-          <span>PS 26035 — OIML R-76 Compliant</span>
+          <span>{t('sidebar_footer')}</span>
         </div>
       </aside>
     </>

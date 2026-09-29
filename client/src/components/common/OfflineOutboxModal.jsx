@@ -27,7 +27,7 @@ export default function OfflineOutboxModal({
             {isOnline ? <Wifi size={20} color="#138808" /> : <WifiOff size={20} color="#DC2626" />}
             <h3>{t('offline_outbox_title')}</h3>
           </div>
-          <button aria-label="Close offline outbox" className="topbar-btn" onClick={onClose} style={{ color: 'var(--gov-text-muted)', fontSize: 18 }}>
+          <button aria-label="Close offline outbox" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gov-text-muted)', fontSize: 18 }}>
             <X size={18} />
           </button>
         </div>

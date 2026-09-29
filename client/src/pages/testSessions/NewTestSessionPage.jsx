@@ -9,6 +9,7 @@ import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { ANNEX_REFS } from '../../config/constants.js';
 import { cacheInstrumentModels, cacheLaboratories, getCachedInstrumentModels, getCachedLaboratories, saveDraftSession } from '../../services/offlineSync.js';
 import { FlaskConical, ChevronRight, ChevronLeft } from 'lucide-react';
+import './NewTestSessionPage.css';
 
 export default function NewTestSessionPage() {
   const navigate = useNavigate();
@@ -37,10 +38,12 @@ export default function NewTestSessionPage() {
     queryFn: () => getInstrumentModels({ limit: 200 }),
     select: (r) => Array.isArray(r?.data) ? r.data : Array.isArray(r?.data?.models) ? r.data.models : Array.isArray(r?.data?.docs) ? r.data.docs : [],
   });
-  const { data: laboratories = [] } = useQuery({
+  const { data: laboratories = [], isLoading: laboratoriesLoading, isError: laboratoriesError } = useQuery({
     queryKey: ['laboratories-select'],
     queryFn: () => apiClient.get('/laboratories'),
-    select: (response) => response?.data?.data || [],
+    select: (response) => Array.isArray(response?.data)
+      ? response.data
+      : response?.data?.laboratories || response?.data?.docs || [],
   });
   const availableModels = modelsData?.length ? modelsData : cachedModels;
   const availableLabs = laboratories.length ? laboratories : cachedLabs;
@@ -111,7 +114,7 @@ export default function NewTestSessionPage() {
     const payload = {
       instrumentModelId: form.instrumentModelId,
       modelName: selectedModel?.modelName || '',
-      manufacturerName: selectedModel?.manufacturer?.name || selectedModel?.manufacturerName || '',
+      manufacturerName: selectedModel?.manufacturer?.name || selectedModel?.manufacturerId?.name || selectedModel?.manufacturerName || '',
       serialNumber: form.serialNumber.trim(),
       labId: form.labId,
       testDate: form.testDate,
@@ -133,11 +136,33 @@ export default function NewTestSessionPage() {
       }).catch(() => addToast({ type: 'error', message: 'Could not save the offline session on this device.' }));
       return;
     }
-    createMutation.mutate(payload);
+    const selectedLaboratory = availableLabs.find((laboratory) => (laboratory.labId || laboratory._id) === form.labId);
+    const requiresLocation = selectedLaboratory?.geofence?.latitude !== null && selectedLaboratory?.geofence?.latitude !== undefined;
+    if (!requiresLocation) {
+      createMutation.mutate(payload);
+      return;
+    }
+    if (!navigator.geolocation) {
+      addToast({ type: 'error', message: 'Device location is required to create an online session.' });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => createMutation.mutate({
+        ...payload,
+        clientLocation: {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracyM: position.coords.accuracy,
+          capturedAt: new Date(position.timestamp || Date.now()).toISOString(),
+        },
+      }),
+      () => addToast({ type: 'error', message: 'Allow device location access to create an online session.' }),
+      { enableHighAccuracy: true, maximumAge: 60000, timeout: 10000 }
+    );
   };
 
   return (
-    <div style={{ maxWidth: 740 }}>
+    <div className="new-session-page">
       <div className="page-header">
         <div>
           <h1><FlaskConical size={22} style={{ marginRight: 8, verticalAlign: -3 }} />New Test Session</h1>
@@ -169,7 +194,7 @@ export default function NewTestSessionPage() {
                 <select data-testid="session-model" className="gov-select" value={form.instrumentModelId} onChange={(e) => updateField('instrumentModelId', e.target.value)}>
                   <option value="">— Select model —</option>
                   {availableModels.map((m) => (
-                    <option key={m._id || m.id} value={m._id || m.id}>{m.modelName} ({m.manufacturer?.name || m.manufacturerName || '—'})</option>
+                    <option key={m._id || m.id} value={m._id || m.id}>{m.modelName} ({m.manufacturer?.name || m.manufacturerId?.name || m.manufacturerName || '—'})</option>
                   ))}
                 </select>
               </div>
@@ -183,44 +208,42 @@ export default function NewTestSessionPage() {
 
           {step === 2 && (
             <>
-              <h4 style={{ marginBottom: 16 }}>Step 2 — Environmental & Laboratory Conditions (FR-02)</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-                <div className="gov-form-group">
+              <h4 className="session-step-title">Step 2 — Environmental & Laboratory Conditions (FR-02)</h4>
+              <div className="session-env-grid">
+                <div className="gov-form-group session-env-field">
                   <label className="gov-label">Testing Laboratory Facility</label>
-                    <select data-testid="session-lab" className="gov-select" value={form.labId} onChange={(e) => updateField('labId', e.target.value)}>
-                    <option value="">— Select a registered laboratory —</option>
+                  <select data-testid="session-lab" className="gov-select" value={form.labId} onChange={(e) => updateField('labId', e.target.value)} disabled={laboratoriesLoading && !availableLabs.length}>
+                    <option value="">{laboratoriesLoading && !availableLabs.length ? 'Loading laboratories…' : laboratoriesError && !availableLabs.length ? 'Unable to load laboratories' : availableLabs.length ? '— Select a registered laboratory —' : 'No registered laboratories available'}</option>
                     {availableLabs.map((lab) => <option key={lab._id || lab.id} value={lab.labId}>{lab.labName} ({lab.location})</option>)}
                   </select>
                 </div>
-                <div className="gov-form-group">
+                <div className="gov-form-group session-env-field">
                   <label className="gov-label">Evaluation Test Date</label>
                   <input data-testid="session-date" className="gov-input" required type="date" value={form.testDate} onChange={(e) => updateField('testDate', e.target.value)} />
                 </div>
-                <div className="gov-form-group">
+                <div className="gov-form-group session-env-field">
                   <label className="gov-label">Verification Stage (OIML R 76 §3.5)</label>
                   <select className="gov-select" value={form.verificationStage} onChange={(e) => updateField('verificationStage', e.target.value)}>
                     <option value="initial">Initial Verification (Standard MPE)</option>
                     <option value="subsequent">Subsequent / In-Service Inspection (2× MPE)</option>
                   </select>
                 </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
-                <div className="gov-form-group">
+                <div className="gov-form-group session-env-field">
                   <label className="gov-label">Ambient Temp (°C)</label>
                   <input data-testid="session-temperature" className="gov-input" required type="number" step="0.1" value={form.temperatureC} onChange={(e) => updateField('temperatureC', e.target.value)} />
                 </div>
-                <div className="gov-form-group">
+                <div className="gov-form-group session-env-field">
                   <label className="gov-label">Relative Humidity (%)</label>
                   <input data-testid="session-humidity" className="gov-input" required type="number" min="0" max="100" step="1" value={form.humidityPercent} onChange={(e) => updateField('humidityPercent', e.target.value)} />
                 </div>
-                <div className="gov-form-group">
+                <div className="gov-form-group session-env-field">
                   <label className="gov-label">Inclination (°)</label>
                   <input data-testid="session-inclination" className="gov-input" required type="number" step="0.01" value={form.inclinationDeg} onChange={(e) => updateField('inclinationDeg', e.target.value)} />
                 </div>
-              </div>
-              <div className="gov-form-group">
-                <label className="gov-label">Environmental Control Notes</label>
-                <input data-testid="session-environment-notes" className="gov-input" required placeholder="Record the observed environmental conditions" value={form.envNotes} onChange={(e) => updateField('envNotes', e.target.value)} />
+                <div className="gov-form-group session-env-field session-env-notes">
+                  <label className="gov-label">Environmental Control Notes</label>
+                  <textarea data-testid="session-environment-notes" className="gov-input session-env-textarea" required rows={3} placeholder="Record the observed environmental conditions" value={form.envNotes} onChange={(e) => updateField('envNotes', e.target.value)} />
+                </div>
               </div>
             </>
           )}
@@ -263,7 +286,7 @@ export default function NewTestSessionPage() {
           )}
 
           {/* Navigation */}
-          <div className="flex-between" style={{ marginTop: 24 }}>
+          <div className="flex-between session-wizard-navigation">
             <button className="gov-btn gov-btn-outline" disabled={step <= 1} onClick={() => setStep(step - 1)}>
               <ChevronLeft size={14} /> Back
             </button>
