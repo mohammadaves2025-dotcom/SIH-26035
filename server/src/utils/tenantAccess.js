@@ -30,6 +30,15 @@ async function publicSessionIds() {
   return Report.distinct('testSessionId', { status: { $in: PUBLIC_REPORT_STATUSES } });
 }
 
+export async function publicSessionScope() {
+  return {
+    $or: [
+      { status: { $in: PUBLIC_REPORT_STATUSES } },
+      { _id: { $in: await publicSessionIds() } },
+    ],
+  };
+}
+
 async function sessionIsPublic(session) {
   if (PUBLIC_SESSION_STATUSES.has(session.status)) return true;
   // Archived/revoked reports return their session to passed/failed, so also look at the reports themselves.
@@ -85,10 +94,7 @@ export async function sessionScopeForUser(user, requestedLabId) {
     query.instrumentModelId = { $in: await manufacturerModelIds(manufacturer?._id) };
   }
   if (PUBLIC_ONLY_ROLES.includes(user.role)) {
-    query.$or = [
-      { status: { $in: PUBLIC_REPORT_STATUSES } },
-      { _id: { $in: await publicSessionIds() } },
-    ];
+    Object.assign(query, await publicSessionScope());
   }
   return query;
 }

@@ -3,7 +3,7 @@ import { User } from '../models/User.js';
 import { Manufacturer } from '../models/Manufacturer.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { getManufacturerForUser } from '../utils/tenantAccess.js';
+import { getManufacturerForUser, PUBLIC_ONLY_ROLES, publicSessionScope } from '../utils/tenantAccess.js';
 import { appendAuditLog } from '../services/auditLogger.service.js';
 import { TestSession } from '../models/TestSession.js';
 import { Report } from '../models/Report.js';
@@ -212,6 +212,9 @@ export const getInstrumentModelHistory = asyncHandler(async (req, res) => {
   const query = { instrumentModelId: model._id };
   if (['lab_technician', 'lab_admin', 'reviewer'].includes(req.user.role)) {
     query.labId = req.user.labId || null;
+  }
+  if (PUBLIC_ONLY_ROLES.includes(req.user.role)) {
+    Object.assign(query, await publicSessionScope());
   }
 
   const [sessions, total] = await Promise.all([

@@ -37,6 +37,19 @@ export const activateRuleConfig = asyncHandler(async (req, res) => {
   if (!ruleConfig.createdBy) {
     throw new AppError(422, 'RULE_REVIEW_REQUIRED', 'Seeded or unowned example rules cannot be activated; create a reviewed rule configuration first');
   }
+  const mandatoryTestTypes = await TestType.find({
+    status: 'approved',
+    isActive: true,
+    'mandatoryFor.accuracyClass': ruleConfig.accuracyClass
+  });
+
+  for (const tt of mandatoryTestTypes) {
+    const hasCriterion = ruleConfig.testCriteria?.some(c => c.annexRef === tt.oimlAnnexRef && c.criterion);
+    if (!hasCriterion) {
+      throw new AppError(422, 'MISSING_MANDATORY_CRITERION', `Rule configuration is missing a criterion for mandatory test type: ${tt.oimlAnnexRef}`);
+    }
+  }
+
   if (!ruleConfig.sandboxedAt || !ruleConfig.sandboxResultHash) {
     throw new AppError(409, 'SANDBOX_REQUIRED', 'Run the historical regression comparison before activating this rule');
   }
@@ -61,19 +74,6 @@ export const activateRuleConfig = asyncHandler(async (req, res) => {
   });
   if (conflictingRule) {
     throw new AppError(409, 'RULE_VERSION_CONFLICT', 'An active or scheduled rule already exists for this accuracy class and effective date');
-  }
-
-  const mandatoryTestTypes = await TestType.find({
-    status: 'approved',
-    isActive: true,
-    'mandatoryFor.accuracyClass': ruleConfig.accuracyClass
-  });
-
-  for (const tt of mandatoryTestTypes) {
-    const hasCriterion = ruleConfig.testCriteria?.some(c => c.annexRef === tt.oimlAnnexRef && c.criterion);
-    if (!hasCriterion) {
-      throw new AppError(422, 'MISSING_MANDATORY_CRITERION', `Rule configuration is missing a criterion for mandatory test type: ${tt.oimlAnnexRef}`);
-    }
   }
 
   const predecessor = await RuleConfig.findOne({
