@@ -1,6 +1,8 @@
 import { User } from '../models/User.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
+import { registerUser } from '../services/auth.service.js';
+import { appendAuditLog } from '../services/auditLogger.service.js';
 
 export const getUsers = asyncHandler(async (req, res) => {
   const query = {};
@@ -75,4 +77,22 @@ export const deleteUser = asyncHandler(async (req, res) => {
     success: true,
     message: 'User archived successfully',
   });
+});
+
+// Lab administrators may only create technicians and reviewers inside their own laboratory (§4).
+export function scopeUserCreation(req, res, next) {
+  if (req.user.role === 'lab_admin') {
+    if (!req.user.labId) return next(new AppError(403, 'FORBIDDEN', 'Your account has no laboratory assignment'));
+    if (!['lab_technician', 'reviewer'].includes(req.body?.role)) {
+      return next(new AppError(403, 'FORBIDDEN', 'A laboratory administrator can only create lab technician or reviewer accounts'));
+    }
+    req.body = { ...req.body, labId: req.user.labId };
+  }
+  next();
+}
+
+export const createUser = asyncHandler(async (req, res) => {
+  const user = await registerUser(req.body);
+  await appendAuditLog({ entityType: 'User', entityId: user._id, action: 'create_by_admin', userId: req.user.sub, details: { role: user.role, labId: user.labId } });
+  res.status(201).json({ success: true, data: user });
 });

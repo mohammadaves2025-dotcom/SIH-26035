@@ -11,10 +11,11 @@ export const registerSchema = z.object({
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])/,
       'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&#)'
     ),
-  role: z.enum(['lab_technician', 'reviewer', 'lab_admin', 'manufacturer'], {
-    errorMap: () => ({ message: 'Role must be lab_technician, reviewer, lab_admin, or manufacturer' }),
+  role: z.enum(['lab_technician', 'reviewer', 'lab_admin', 'manufacturer', 'doca_officer', 'auditor', 'metrology_expert'], {
+    errorMap: () => ({ message: 'Role must be lab_technician, reviewer, lab_admin, manufacturer, doca_officer, auditor, or metrology_expert' }),
   }),
   labId: z.string().trim().min(1).optional().nullable(),
+  manufacturerRef: z.string().trim().min(1).optional().nullable(),
 }).superRefine((data, ctx) => {
   if (['lab_technician', 'reviewer', 'lab_admin'].includes(data.role) && !data.labId) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'A laboratory assignment is required for this role', path: ['labId'] });

@@ -6,7 +6,7 @@ import { InstrumentModel } from '../models/InstrumentModel.js';
 import { generateReport } from '../services/reportGenerator.service.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { assertSessionAccess, assertReportAccess, getManufacturerForUser, manufacturerModelIds } from '../utils/tenantAccess.js';
+import { assertSessionAccess, assertReportAccess, getManufacturerForUser, manufacturerModelIds, PUBLIC_ONLY_ROLES, PUBLIC_REPORT_STATUSES } from '../utils/tenantAccess.js';
 import { sha256 } from '../utils/hash.js';
 import { verifyReportArtifact } from '../services/digitalSignature.service.js';
 import { appendAuditLog } from '../services/auditLogger.service.js';
@@ -17,6 +17,10 @@ export const listReports = asyncHandler(async (req, res) => {
 
   let query = {};
   if (status) query.status = status;
+  if (PUBLIC_ONLY_ROLES.includes(req.user.role)) {
+    // Only published, archived or revoked reports are visible outside the issuing laboratory.
+    query.status = !status ? { $in: PUBLIC_REPORT_STATUSES } : (PUBLIC_REPORT_STATUSES.includes(status) ? status : { $in: [] });
+  }
 
   if (startDate || endDate) {
     query.generatedAt = {};

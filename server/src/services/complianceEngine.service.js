@@ -47,12 +47,15 @@ export function evaluateAnnex(annexRef, observation, instrumentModel, ruleConfig
   let maxErrorRatioE = 0;
 
   if (type === 'manual') {
-    return { outcome: 'pass', ruleConfigId: ruleConfig._id }; 
+    // A manual criterion is never auto-passed: it needs an explicit positive confirmation.
+    return { outcome: observation.checklistPassed === true ? 'pass' : 'fail', ruleConfigId: ruleConfig._id };
   }
 
   if (type === 'max_abs_error_le_mpe_factor') {
+    let evaluated = 0;
     for (const r of readings) {
       if (r.reference == null || r.indicated == null) continue;
+      evaluated += 1;
       const refScaled = toScaledInteger(r.reference, 'reference');
       const indScaled = toScaledInteger(r.indicated, 'indicated');
       
@@ -85,20 +88,25 @@ export function evaluateAnnex(annexRef, observation, instrumentModel, ruleConfig
         isPass = false;
       }
     }
+    if (evaluated === 0) {
+      throw new AppError(422, 'NO_EVALUABLE_READINGS', `No complete reference/indicated reading pairs to evaluate for ${annexRef}`);
+    }
     if (worstMargin === Infinity) worstMargin = null;
     return { outcome: isPass ? 'pass' : 'fail', computedErrors, worstMargin, errorRatioE: maxErrorRatioE, ruleConfigId: ruleConfig._id };
   }
   
   if (type === 'range_le_mpe_factor') {
     const loadGroups = {};
+    let evaluatedGroups = 0;
     for (const r of readings) {
       const l = r.load ?? r.reference;
-      if (l == null) continue;
+      if (l == null || r.indicated == null) continue;
       if (!loadGroups[l]) loadGroups[l] = [];
       loadGroups[l].push(toScaledInteger(r.indicated, 'indicated'));
     }
     for (const [lStr, inds] of Object.entries(loadGroups)) {
       if (inds.length < 2) continue;
+      evaluatedGroups += 1;
       const load = Number(lStr);
       const minInd = inds.reduce((a, b) => a < b ? a : b);
       const maxInd = inds.reduce((a, b) => a > b ? a : b);
@@ -115,6 +123,9 @@ export function evaluateAnnex(annexRef, observation, instrumentModel, ruleConfig
         isPass = false;
       }
     }
+    if (evaluatedGroups === 0) {
+      throw new AppError(422, 'NO_EVALUABLE_READINGS', `Repeatability for ${annexRef} needs at least two readings at the same load`);
+    }
     return { outcome: isPass ? 'pass' : 'fail', range: maxRange, ruleConfigId: ruleConfig._id };
   }
 
@@ -130,10 +141,11 @@ export function evaluateAnnex(annexRef, observation, instrumentModel, ruleConfig
       if (minInd === null || ind < minInd) minInd = ind;
       if (maxInd === null || ind > maxInd) maxInd = ind;
     }
-    if (minInd !== null && maxInd !== null) {
-      const changeScaled = maxInd - minInd;
-      if (changeScaled > targetScaled) isPass = false;
+    if (minInd === null || maxInd === null) {
+      throw new AppError(422, 'NO_EVALUABLE_READINGS', `No indicated values to evaluate for ${annexRef}`);
     }
+    const changeScaled = maxInd - minInd;
+    if (changeScaled > targetScaled) isPass = false;
     return { outcome: isPass ? 'pass' : 'fail', ruleConfigId: ruleConfig._id };
   }
 

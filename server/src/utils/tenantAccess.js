@@ -1,6 +1,7 @@
 import { InstrumentModel } from '../models/InstrumentModel.js';
 import { Manufacturer } from '../models/Manufacturer.js';
 import { User } from '../models/User.js';
+import { Report } from '../models/Report.js';
 import { AppError } from './AppError.js';
 
 export async function getManufacturerForUser(userId) {
@@ -19,11 +20,21 @@ export async function manufacturerModelIds(manufacturerId) {
   return models.map((model) => model._id);
 }
 
-// WP7 §11.1: Statuses visible to manufacturers — only post-evaluation sessions.
-// Draft and under_review sessions are internal lab work and must never be disclosed.
-const MANUFACTURER_VISIBLE_STATUSES = new Set([
-  'passed', 'failed', 'report_generated', 'published', 'archived', 'revoked',
-]);
+// §11.1: manufacturers, DoCA officers and auditors only see published (signed) records.
+// Draft / under_review / passed / failed sessions are internal lab work and are never disclosed to them.
+export const PUBLIC_REPORT_STATUSES = ['published', 'archived', 'revoked'];
+export const PUBLIC_ONLY_ROLES = ['manufacturer', 'doca_officer', 'auditor'];
+const PUBLIC_SESSION_STATUSES = new Set(PUBLIC_REPORT_STATUSES);
+
+async function publicSessionIds() {
+  return Report.distinct('testSessionId', { status: { $in: PUBLIC_REPORT_STATUSES } });
+}
+
+async function sessionIsPublic(session) {
+  if (PUBLIC_SESSION_STATUSES.has(session.status)) return true;
+  // Archived/revoked reports return their session to passed/failed, so also look at the reports themselves.
+  return Boolean(await Report.exists({ testSessionId: session._id, status: { $in: PUBLIC_REPORT_STATUSES } }));
+}
 
 export async function assertSessionAccess(req, session) {
   if (['lab_technician', 'lab_admin', 'reviewer'].includes(req.user.role)) {
@@ -38,14 +49,16 @@ export async function assertSessionAccess(req, session) {
     if (!modelIds.some((id) => id.toString() === sessionModelId?.toString())) {
       throw new AppError(403, 'FORBIDDEN', 'Access denied to a model outside your manufacturer account');
     }
-    // Manufacturers must not see sessions that are still in draft or under active lab review.
-    if (!MANUFACTURER_VISIBLE_STATUSES.has(session.status)) {
-      throw new AppError(403, 'FORBIDDEN', 'This session is not yet available for viewing');
-    }
+  }
+  if (PUBLIC_ONLY_ROLES.includes(req.user.role) && !(await sessionIsPublic(session))) {
+    throw new AppError(403, 'FORBIDDEN', 'This session is not yet available for viewing');
   }
 }
 
 export async function assertReportAccess(req, report) {
+  if (PUBLIC_ONLY_ROLES.includes(req.user.role) && !PUBLIC_REPORT_STATUSES.includes(report.status)) {
+    throw new AppError(403, 'FORBIDDEN', 'This report has not been published');
+  }
   if (!report.testSessionId) return;
   // If the session is already populated
   if (report.testSessionId.labId) {
@@ -70,8 +83,12 @@ export async function sessionScopeForUser(user, requestedLabId) {
   if (user.role === 'manufacturer') {
     const manufacturer = await getManufacturerForUser(user.sub);
     query.instrumentModelId = { $in: await manufacturerModelIds(manufacturer?._id) };
-    // Manufacturers only see sessions with an evaluation outcome, not active drafts/reviews.
-    query.status = { $in: [...MANUFACTURER_VISIBLE_STATUSES] };
+  }
+  if (PUBLIC_ONLY_ROLES.includes(user.role)) {
+    query.$or = [
+      { status: { $in: PUBLIC_REPORT_STATUSES } },
+      { _id: { $in: await publicSessionIds() } },
+    ];
   }
   return query;
 }

@@ -4,7 +4,8 @@ import { useAuthStore } from '../../store/useAuthStore.js';
 import { useTranslation } from '../../config/i18n.js';
 import {
   LayoutDashboard, FlaskConical, Factory, Scale, BookOpen,
-  FileCheck, ShieldCheck, ScrollText, Download, Terminal, Building2, ListChecks
+  FileCheck, ShieldCheck, ScrollText, Download, Terminal, Building2, ListChecks,
+  Users as UsersIcon,
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -26,8 +27,9 @@ export default function Sidebar({ isMobileOpen, onCloseMobileMenu }) {
     { to: '/rule-configs',      label: t('nav_rule_configs'),       icon: BookOpen,        roles: ['admin', 'metrology_expert', 'lab_admin', 'doca_officer', 'reviewer', 'auditor'] },
     { to: '/reports',           label: t('nav_test_reports'),       icon: FileCheck,       roles: ['admin', 'reviewer', 'lab_admin', 'doca_officer', 'auditor', 'manufacturer'] },
     { to: '/audit-log',         label: t('nav_audit_trail'),        icon: ScrollText,      roles: ['admin', 'reviewer', 'lab_admin', 'doca_officer', 'auditor'] },
-    { to: '/export',            label: t('nav_egov_export'),        icon: Download,        roles: ['admin', 'lab_admin', 'doca_officer'] },
+    { to: '/export',            label: t('nav_egov_export'),        icon: Download,        roles: ['admin', 'lab_admin', 'doca_officer', 'auditor'] },
     { to: '/verify',            label: t('nav_public_verification'),icon: ShieldCheck,     roles: ALL_ROLES },
+    { to: '/users',            label: 'Users',                     icon: UsersIcon,       roles: ['admin', 'lab_admin'] },
     { to: '/system-logs',       label: t('nav_system_logs'),        icon: Terminal,        roles: ['admin', 'lab_admin', 'auditor'] },
   ];
 

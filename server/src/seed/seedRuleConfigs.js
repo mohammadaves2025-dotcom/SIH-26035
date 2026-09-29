@@ -6,43 +6,43 @@ const exampleTestCriteria = [
   {
     annexRef: 'A4_accuracy',
     fields: [
-      { name: 'reference', labelEN: 'Reference Load', type: 'number', required: true },
-      { name: 'indicated', labelEN: 'Indicated Value', type: 'number', required: true },
-      { name: 'deltaL', labelEN: 'Delta L (for rounding correction)', type: 'number', required: false }
+      { name: 'reference', labelEn: 'Reference Load', type: 'number', required: true },
+      { name: 'indicated', labelEn: 'Indicated Value', type: 'number', required: true },
+      { name: 'deltaL', labelEn: 'Delta L (for rounding correction)', type: 'number', required: false }
     ],
     criterion: { type: 'max_abs_error_le_mpe_factor', params: { factor: 1.0 } }
   },
   {
     annexRef: 'A4_eccentricity',
     fields: [
-      { name: 'position', labelEN: 'Position', type: 'string', required: true },
-      { name: 'reference', labelEN: 'Reference Load', type: 'number', required: true },
-      { name: 'indicated', labelEN: 'Indicated Value', type: 'number', required: true }
+      { name: 'position', labelEn: 'Position', type: 'string', required: true },
+      { name: 'reference', labelEn: 'Reference Load', type: 'number', required: true },
+      { name: 'indicated', labelEn: 'Indicated Value', type: 'number', required: true }
     ],
     criterion: { type: 'max_abs_error_le_mpe_factor', params: { factor: 1.0 } }
   },
   {
     annexRef: 'A4_repeatability',
     fields: [
-      { name: 'load', labelEN: 'Load', type: 'number', required: true },
-      { name: 'indicated', labelEN: 'Indicated Value', type: 'number', required: true }
+      { name: 'load', labelEn: 'Load', type: 'number', required: true },
+      { name: 'indicated', labelEn: 'Indicated Value', type: 'number', required: true }
     ],
     criterion: { type: 'range_le_mpe_factor', params: { factor: 1.0 } } // Often range ≤ |MPE|
   },
   {
     annexRef: 'A4_discrimination',
     fields: [
-      { name: 'load', labelEN: 'Initial Load', type: 'number', required: true },
-      { name: 'indicated', labelEN: 'Indicated Value', type: 'number', required: true }
+      { name: 'load', labelEn: 'Initial Load', type: 'number', required: true },
+      { name: 'indicated', labelEn: 'Indicated Value', type: 'number', required: true }
     ],
     criterion: { type: 'change_le_factor_of_e', params: { factor: 1.4 } } // Usually requires a change ≥ something, wait the criterion is change_le_factor_of_e... Wait, the prompt says change_le_factor_of_e, maybe for testing something else. Let's just use what's asked.
   },
   {
     annexRef: 'B_electronic_additional',
     fields: [
-      { name: 'condition', labelEN: 'Test Condition (e.g. voltage)', type: 'string', required: true },
-      { name: 'reference', labelEN: 'Reference Load', type: 'number', required: true },
-      { name: 'indicated', labelEN: 'Indicated Value', type: 'number', required: true }
+      { name: 'condition', labelEn: 'Test Condition (e.g. voltage)', type: 'string', required: true },
+      { name: 'reference', labelEn: 'Reference Load', type: 'number', required: true },
+      { name: 'indicated', labelEn: 'Indicated Value', type: 'number', required: true }
     ],
     criterion: { type: 'max_abs_error_le_mpe_factor', params: { factor: 1.0 } }
   },

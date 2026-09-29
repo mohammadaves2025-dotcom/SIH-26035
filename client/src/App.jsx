@@ -28,6 +28,7 @@ import AuditLogPage from './pages/auditLog/AuditLogPage.jsx';
 import ExportPage from './pages/export/ExportPage.jsx';
 import VerifyPage from './pages/verify/VerifyPage.jsx';
 import SystemLogsPage from './pages/systemLogs/SystemLogsPage.jsx';
+import UsersPage from './pages/users/UsersPage.jsx';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -215,6 +216,14 @@ export default function App() {
               element={
                 <RoleGuard allowedRoles={['admin', 'lab_admin', 'doca_officer', 'auditor']}>
                   <ExportPage />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="/users"
+              element={
+                <RoleGuard allowedRoles={['admin', 'lab_admin']}>
+                  <UsersPage />
                 </RoleGuard>
               }
             />

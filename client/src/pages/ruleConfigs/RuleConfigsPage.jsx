@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { activateRuleConfig, getRuleConfigs, createRuleConfig, sandboxRuleConfig } from '../../services/ruleConfig.service.js';
+import { activateRuleConfig, getRuleConfigs, createRuleConfig, sandboxRuleConfig, submitRuleReview, recordTechnicalReview, retireRuleConfig } from '../../services/ruleConfig.service.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { ACCURACY_CLASSES } from '../../config/constants.js';
@@ -30,7 +30,11 @@ export default function RuleConfigsPage() {
     oimlEdition: '',
     effectiveDate: new Date().toISOString().split('T')[0],
     bands: [{ uptoMultipleOfE: '', mpeFactor: '' }],
+    copyCriteriaFrom: '',
   });
+  const [retireRule, setRetireRule] = useState(null);
+  const [retireReason, setRetireReason] = useState('');
+  const retireModalRef = useModalA11y(!!retireRule, () => setRetireRule(null));
   const createModalRef = useModalA11y(showModal, () => setShowModal(false));
   const reviewModalRef = useModalA11y(!!reviewRule, () => setReviewRule(null));
 
@@ -72,8 +76,43 @@ export default function RuleConfigsPage() {
     onError: (error) => addToast({ type: 'error', message: error.response?.data?.error?.message || 'Could not run rule regression comparison' }),
   });
 
+  const errMsg = (error, fallback) => error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || fallback;
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['rule-configs'] });
+
+  const submitMut = useMutation({
+    mutationFn: submitRuleReview,
+    onSuccess: () => { refresh(); addToast({ type: 'success', message: 'Rule submitted for technical review' }); },
+    onError: (error) => addToast({ type: 'error', message: errMsg(error, 'Unable to submit rule for review') }),
+  });
+  const techReviewMut = useMutation({
+    mutationFn: recordTechnicalReview,
+    onSuccess: () => { refresh(); addToast({ type: 'success', message: 'Technical review recorded. A different metrology expert must now approve activation.' }); },
+    onError: (error) => addToast({ type: 'error', message: errMsg(error, 'Unable to record technical review') }),
+  });
+  const retireMut = useMutation({
+    mutationFn: ({ id, reason }) => retireRuleConfig(id, reason),
+    onSuccess: () => { refresh(); addToast({ type: 'success', message: 'Rule configuration retired' }); setRetireRule(null); setRetireReason(''); },
+    onError: (error) => addToast({ type: 'error', message: errMsg(error, 'Unable to retire rule configuration') }),
+  });
+
   const handleCreate = () => {
+    const source = (Array.isArray(data) ? data : []).find((r) => r._id === form.copyCriteriaFrom);
+    const criteriaPayload = source?.testCriteria?.length
+      ? {
+          useRoundingCorrection: Boolean(source.useRoundingCorrection),
+          testCriteria: source.testCriteria.map((c) => ({
+            annexRef: c.annexRef,
+            fields: (c.fields || []).map(({ name, labelEn, labelHi, type, unit, min, max, required }) => ({
+              name, labelEn: labelEn || name, ...(labelHi ? { labelHi } : {}), type,
+              ...(unit ? { unit } : {}), ...(min != null ? { min } : {}), ...(max != null ? { max } : {}),
+              ...(required != null ? { required } : {}),
+            })),
+            criterion: { type: c.criterion?.type, params: c.criterion?.params || {} },
+          })),
+        }
+      : {};
     createMut.mutate({
+      ...criteriaPayload,
       oimlEdition: form.oimlEdition,
       accuracyClass: form.accuracyClass,
       effectiveDate: new Date(form.effectiveDate),
@@ -137,16 +176,32 @@ export default function RuleConfigsPage() {
                       {(r.bands || []).map((b) => `≤${b.uptoMultipleOfE}e (${b.mpeFactor}x)`).join(' | ') || 'Standard OIML Bands'}
                     </td>
                     <td>
-                      <span className={`gov-badge ${r.status === 'active' ? 'gov-badge-passed' : 'gov-badge-info'}`}>{r.status || 'draft'}</span>
+                      <span className={`gov-badge ${r.status === 'active' ? 'gov-badge-passed' : r.status === 'retired' ? 'gov-badge-failed' : 'gov-badge-info'}`}>{(r.status || 'draft').replace('_', ' ')}</span>
                       {r.status === 'active' && <div style={{ fontSize: 11, marginTop: 4 }}>{r.sourceReference || 'Source not recorded'}{r.approvedAt ? ` · reviewed ${new Date(r.approvedAt).toLocaleDateString()}` : ''}</div>}
                       {r.sandboxedAt && <div style={{ fontSize: 11, marginTop: 4 }}>
                         Regression check: {r.sandboxSummary?.compared || 0} compared, {r.sandboxSummary?.changed || 0} changed, {r.sandboxSummary?.uncomparable || 0} unresolved
                       </div>}
-                      {user?.role === 'metrology_expert' && r.status === 'draft' && r.createdBy && (
-                        <button className="gov-btn gov-btn-outline" style={{ marginTop: 6 }} onClick={() => { setReviewRule(r); setSandboxResult(null); }}>
-                          Open technical review
-                        </button>
-                      )}
+                      {(() => {
+                        const authorId = r.createdBy?._id || r.createdBy || null;
+                        const reviewerId = r.technicalReviewedBy?._id || r.technicalReviewedBy || null;
+                        const isExpert = user?.role === 'metrology_expert';
+                        const isAdmin = user?.role === 'admin';
+                        const isAuthor = authorId && authorId === user?._id;
+                        const isTechReviewer = reviewerId && reviewerId === user?._id;
+                        const actions = [];
+                        if (r.status === 'draft' && r.createdBy) {
+                          if (isExpert) actions.push(<button key="sb" className="gov-btn gov-btn-outline" onClick={() => { setReviewRule(r); setSandboxResult(null); }}>Run regression check</button>);
+                          if ((isAdmin || isExpert) && r.sandboxedAt) actions.push(<button key="sr" className="gov-btn gov-btn-primary" disabled={submitMut.isPending} onClick={() => submitMut.mutate(r._id)}>Submit for technical review</button>);
+                          if ((isAdmin || isExpert) && !r.sandboxedAt) actions.push(<div key="sh" className="text-muted" style={{ fontSize: 11 }}>A metrology expert must run the regression check before this draft can be submitted.</div>);
+                        }
+                        if (r.status === 'in_review') {
+                          if (isExpert && !r.technicalReviewedBy && !isAuthor) actions.push(<button key="tr" className="gov-btn gov-btn-primary" disabled={techReviewMut.isPending} onClick={() => techReviewMut.mutate(r._id)}>Record technical review</button>);
+                          if (isExpert && r.technicalReviewedBy && !isAuthor && !isTechReviewer) actions.push(<button key="ap" className="gov-btn gov-btn-primary" onClick={() => { setReviewRule(r); setSandboxResult(null); }}>Approve and activate…</button>);
+                          if (r.technicalReviewedBy) actions.push(<div key="tb" className="text-muted" style={{ fontSize: 11 }}>Technical review recorded{r.technicalReviewedAt ? ` ${new Date(r.technicalReviewedAt).toLocaleDateString()}` : ''}. Activation needs a different expert from the author and the technical reviewer.</div>);
+                        }
+                        if (['active', 'scheduled'].includes(r.status) && (isExpert || isAdmin)) actions.push(<button key="rt" className="gov-btn gov-btn-outline" onClick={() => { setRetireRule(r); setRetireReason(''); }}>Retire</button>);
+                        return actions.length ? <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, marginTop: 6 }}>{actions}</div> : null;
+                      })()}
                       {r.testCriteria?.length > 0 && <div style={{ marginTop: 8 }}>
                         <strong>Test criteria</strong>
                         {r.testCriteria.map((criterion) => <div key={criterion.annexRef} style={{ marginTop: 4, fontSize: 12 }}>
@@ -188,6 +243,13 @@ export default function RuleConfigsPage() {
                 <label className="gov-label">Effective Date</label>
                 <input className="gov-input" type="date" value={form.effectiveDate} onChange={(e) => setForm((f) => ({ ...f, effectiveDate: e.target.value }))} />
               </div>
+              <div className="gov-form-group">
+                <label className="gov-label" htmlFor="rule-copy-criteria">Copy test criteria from (optional)</label>
+                <select id="rule-copy-criteria" className="gov-select" value={form.copyCriteriaFrom} onChange={(e) => setForm((f) => ({ ...f, copyCriteriaFrom: e.target.value }))}>
+                  <option value="">None — bands only (structured tests will not evaluate)</option>
+                  {rulesList.filter((r) => r.testCriteria?.length > 0).map((r) => <option key={r._id} value={r._id}>Class {r.accuracyClass} · {r.oimlEdition} · {r.status}</option>)}
+                </select>
+              </div>
 
               <h4 style={{ marginTop: 16, marginBottom: 10 }}>MPE tolerance bands</h4>
               <p>Enter values transcribed from the governing OIML edition and applicable Indian Gazette amendments. The form starts blank to prevent indicative examples being mistaken for approved rules. A saved draft does not affect compliance calculations.</p>
@@ -220,7 +282,7 @@ export default function RuleConfigsPage() {
         <div className="modal-overlay" onClick={(event) => event.target === event.currentTarget && setReviewRule(null)}>
           <div ref={reviewModalRef} className="modal-content" role="dialog" aria-modal="true" aria-labelledby="rule-review-title" style={{ maxWidth: 720 }}>
             <div className="modal-header">
-              <div><h3 id="rule-review-title">Technical review and regression check</h3><p className="text-muted" style={{ marginTop: 4 }}>Class {reviewRule.accuracyClass} · {reviewRule.oimlEdition} · effective {new Date(reviewRule.effectiveDate).toLocaleDateString()}</p></div>
+              <div><h3 id="rule-review-title">{reviewRule.status === 'in_review' ? 'Approve and activate rule' : 'Regression check'}</h3><p className="text-muted" style={{ marginTop: 4 }}>Class {reviewRule.accuracyClass} · {reviewRule.oimlEdition} · effective {new Date(reviewRule.effectiveDate).toLocaleDateString()}</p></div>
               <button onClick={() => setReviewRule(null)} aria-label="Close review" style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
             </div>
             <div className="modal-body">
@@ -229,9 +291,13 @@ export default function RuleConfigsPage() {
                 {(reviewRule.bands || []).map((band, index) => <div key={index} className="text-mono" style={{ marginTop: 4 }}>≤ {band.uptoMultipleOfE}e — {band.mpeFactor} × MPE</div>)}
                 <p className="text-muted" style={{ marginTop: 10, fontSize: 12 }}>The comparison shows how this draft changes saved A4 accuracy outcomes from its effective date onward. It does not establish that the draft is legally correct.</p>
               </div></div>
-              <button className="gov-btn gov-btn-outline mb-16" onClick={() => sandboxMut.mutate(reviewRule._id)} disabled={sandboxMut.isPending}>
+              {reviewRule.status === 'draft' && <button className="gov-btn gov-btn-outline mb-16" onClick={() => sandboxMut.mutate(reviewRule._id)} disabled={sandboxMut.isPending}>
                 {sandboxMut.isPending ? 'Comparing historical observations…' : 'Run / refresh regression comparison'}
-              </button>
+              </button>}
+              {reviewRule.status === 'in_review' && reviewRule.sandboxSummary && <div className="gov-card mb-16" role="status"><div className="gov-card-body">
+                <strong>Stored regression result</strong>
+                <div style={{ margin: '8px 0' }}>{reviewRule.sandboxSummary.compared || 0} compared · {reviewRule.sandboxSummary.changed || 0} changed · {reviewRule.sandboxSummary.uncomparable || 0} unresolved</div>
+              </div></div>}
               {sandboxResult && <div className="gov-card mb-16" role="status"><div className="gov-card-body">
                 <strong>Comparison result</strong>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, margin: '10px 0' }}>
@@ -244,14 +310,33 @@ export default function RuleConfigsPage() {
                 </div>}
                 <code className="text-mono" style={{ display: 'block', marginTop: 8, fontSize: 10, overflowWrap: 'anywhere' }}>Result digest: {sandboxResult.resultHash}</code>
               </div></div>}
-              <div className="gov-form-group"><label className="gov-label" htmlFor="rule-source-reference">Authoritative source reference</label><input id="rule-source-reference" className="gov-input" value={reviewForm.sourceReference} onChange={(event) => setReviewForm((formState) => ({ ...formState, sourceReference: event.target.value }))} placeholder="Gazette rule / amendment / OIML clause and edition" /></div>
-              <div className="gov-form-group"><label className="gov-label" htmlFor="rule-validation-note">Technical review note</label><textarea id="rule-validation-note" className="gov-input" rows={4} value={reviewForm.validationNote} onChange={(event) => setReviewForm((formState) => ({ ...formState, validationNote: event.target.value }))} placeholder="Record the source clauses checked, known-answer cases, changed outcomes and rationale" /></div>
+              {reviewRule.status === 'in_review' && <><div className="gov-form-group"><label className="gov-label" htmlFor="rule-source-reference">Authoritative source reference</label><input id="rule-source-reference" className="gov-input" value={reviewForm.sourceReference} onChange={(event) => setReviewForm((formState) => ({ ...formState, sourceReference: event.target.value }))} placeholder="Gazette rule / amendment / OIML clause and edition" /></div>
+              <div className="gov-form-group"><label className="gov-label" htmlFor="rule-validation-note">Technical review note</label><textarea id="rule-validation-note" className="gov-input" rows={4} value={reviewForm.validationNote} onChange={(event) => setReviewForm((formState) => ({ ...formState, validationNote: event.target.value }))} placeholder="Record the source clauses checked, known-answer cases, changed outcomes and rationale" /></div></>}
             </div>
             <div className="modal-footer">
               <button className="gov-btn gov-btn-outline" onClick={() => setReviewRule(null)}>Close</button>
-              <button className="gov-btn gov-btn-primary" onClick={() => activateMut.mutate({ id: reviewRule._id, ...reviewForm })} disabled={!sandboxResult || sandboxResult.uncomparable > 0 || !reviewForm.sourceReference.trim() || !reviewForm.validationNote.trim() || activateMut.isPending}>
+              {reviewRule.status === 'in_review' && <button className="gov-btn gov-btn-primary" onClick={() => activateMut.mutate({ id: reviewRule._id, ...reviewForm })} disabled={(reviewRule.sandboxSummary?.uncomparable ?? 1) > 0 || !reviewForm.sourceReference.trim() || !reviewForm.validationNote.trim() || activateMut.isPending}>
                 {activateMut.isPending ? 'Activating…' : 'Approve and activate rule'}
-              </button>
+              </button>}
+            </div>
+          </div>
+        </div>
+      )}
+      {retireRule && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setRetireRule(null)}>
+          <div ref={retireModalRef} className="modal-content" role="dialog" aria-modal="true" aria-labelledby="rule-retire-title" style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <h3 id="rule-retire-title">Retire rule configuration</h3>
+              <button aria-label="Close" onClick={() => setRetireRule(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <p>Class {retireRule.accuracyClass} · {retireRule.oimlEdition}. Reports already issued stay reproducible against this version.</p>
+              <div className="gov-form-group"><label className="gov-label" htmlFor="rule-retire-reason">Reason (mandatory)</label>
+                <textarea id="rule-retire-reason" className="gov-input" rows={3} value={retireReason} onChange={(e) => setRetireReason(e.target.value)} /></div>
+            </div>
+            <div className="modal-footer">
+              <button className="gov-btn gov-btn-outline" onClick={() => setRetireRule(null)}>Cancel</button>
+              <button className="gov-btn gov-btn-primary" disabled={!retireReason.trim() || retireMut.isPending} onClick={() => retireMut.mutate({ id: retireRule._id, reason: retireReason })}>{retireMut.isPending ? 'Retiring…' : 'Retire rule'}</button>
             </div>
           </div>
         </div>
