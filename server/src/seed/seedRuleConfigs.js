@@ -2,17 +2,70 @@ import mongoose from 'mongoose';
 import { RuleConfig } from '../models/RuleConfig.js';
 import { env } from '../config/env.js';
 
+const exampleTestCriteria = [
+  {
+    annexRef: 'A4_accuracy',
+    fields: [
+      { name: 'reference', labelEN: 'Reference Load', type: 'number', required: true },
+      { name: 'indicated', labelEN: 'Indicated Value', type: 'number', required: true },
+      { name: 'deltaL', labelEN: 'Delta L (for rounding correction)', type: 'number', required: false }
+    ],
+    criterion: { type: 'max_abs_error_le_mpe_factor', params: { factor: 1.0 } }
+  },
+  {
+    annexRef: 'A4_eccentricity',
+    fields: [
+      { name: 'position', labelEN: 'Position', type: 'string', required: true },
+      { name: 'reference', labelEN: 'Reference Load', type: 'number', required: true },
+      { name: 'indicated', labelEN: 'Indicated Value', type: 'number', required: true }
+    ],
+    criterion: { type: 'max_abs_error_le_mpe_factor', params: { factor: 1.0 } }
+  },
+  {
+    annexRef: 'A4_repeatability',
+    fields: [
+      { name: 'load', labelEN: 'Load', type: 'number', required: true },
+      { name: 'indicated', labelEN: 'Indicated Value', type: 'number', required: true }
+    ],
+    criterion: { type: 'range_le_mpe_factor', params: { factor: 1.0 } } // Often range ≤ |MPE|
+  },
+  {
+    annexRef: 'A4_discrimination',
+    fields: [
+      { name: 'load', labelEN: 'Initial Load', type: 'number', required: true },
+      { name: 'indicated', labelEN: 'Indicated Value', type: 'number', required: true }
+    ],
+    criterion: { type: 'change_le_factor_of_e', params: { factor: 1.4 } } // Usually requires a change ≥ something, wait the criterion is change_le_factor_of_e... Wait, the prompt says change_le_factor_of_e, maybe for testing something else. Let's just use what's asked.
+  },
+  {
+    annexRef: 'B_electronic_additional',
+    fields: [
+      { name: 'condition', labelEN: 'Test Condition (e.g. voltage)', type: 'string', required: true },
+      { name: 'reference', labelEN: 'Reference Load', type: 'number', required: true },
+      { name: 'indicated', labelEN: 'Indicated Value', type: 'number', required: true }
+    ],
+    criterion: { type: 'max_abs_error_le_mpe_factor', params: { factor: 1.0 } }
+  },
+  {
+    annexRef: 'A1_administrative',
+    fields: [],
+    criterion: { type: 'manual', params: {} }
+  }
+];
+
 export const initialRules = [
   {
     oimlEdition: 'R76-1:2006',
     status: 'draft',
     sourceReference: null,
-    validationNote: null,
+    validationNote: 'UNVERIFIED EXAMPLE CRITERIA - FOR DEMONSTRATION ONLY',
     createdBy: null,
     approvedBy: null,
     approvedAt: null,
     accuracyClass: 'I',
     effectiveDate: new Date('2006-01-01'),
+    useRoundingCorrection: false,
+    testCriteria: exampleTestCriteria,
     bands: [
       { uptoMultipleOfE: 50000, mpeFactor: 0.5 },
       { uptoMultipleOfE: 200000, mpeFactor: 1.0 },
@@ -23,12 +76,14 @@ export const initialRules = [
     oimlEdition: 'R76-1:2006',
     status: 'draft',
     sourceReference: null,
-    validationNote: null,
+    validationNote: 'UNVERIFIED EXAMPLE CRITERIA - FOR DEMONSTRATION ONLY',
     createdBy: null,
     approvedBy: null,
     approvedAt: null,
     accuracyClass: 'II',
     effectiveDate: new Date('2006-01-01'),
+    useRoundingCorrection: false,
+    testCriteria: exampleTestCriteria,
     bands: [
       { uptoMultipleOfE: 5000, mpeFactor: 0.5 },
       { uptoMultipleOfE: 20000, mpeFactor: 1.0 },
@@ -39,12 +94,14 @@ export const initialRules = [
     oimlEdition: 'R76-1:2006',
     status: 'draft',
     sourceReference: null,
-    validationNote: null,
+    validationNote: 'UNVERIFIED EXAMPLE CRITERIA - FOR DEMONSTRATION ONLY',
     createdBy: null,
     approvedBy: null,
     approvedAt: null,
     accuracyClass: 'III',
     effectiveDate: new Date('2006-01-01'),
+    useRoundingCorrection: false,
+    testCriteria: exampleTestCriteria,
     bands: [
       { uptoMultipleOfE: 500, mpeFactor: 0.5 },
       { uptoMultipleOfE: 2000, mpeFactor: 1.0 },
@@ -55,12 +112,14 @@ export const initialRules = [
     oimlEdition: 'R76-1:2006',
     status: 'draft',
     sourceReference: null,
-    validationNote: null,
+    validationNote: 'UNVERIFIED EXAMPLE CRITERIA - FOR DEMONSTRATION ONLY',
     createdBy: null,
     approvedBy: null,
     approvedAt: null,
     accuracyClass: 'IIII',
     effectiveDate: new Date('2006-01-01'),
+    useRoundingCorrection: false,
+    testCriteria: exampleTestCriteria,
     bands: [
       { uptoMultipleOfE: 50, mpeFactor: 0.5 },
       { uptoMultipleOfE: 200, mpeFactor: 1.0 },

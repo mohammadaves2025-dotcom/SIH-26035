@@ -32,7 +32,7 @@ const observationSchema = new mongoose.Schema(
     },
     evaluationMethod: {
       type: String,
-      enum: ['mpe_band', 'manual_checklist'],
+      enum: ['mpe_band', 'manual_checklist', 'structured'],
       required: true,
     },
     // mpe_band fields
@@ -44,6 +44,28 @@ const observationSchema = new mongoose.Schema(
     marginToMpe: { type: Number },
     errorRatioE: { type: Number },
     ruleConfigId: { type: mongoose.Schema.Types.ObjectId, ref: 'RuleConfig' },
+
+    // structured test criteria fields
+    readings: [
+      {
+        position: { type: mongoose.Schema.Types.Mixed },
+        load: { type: Number },
+        condition: { type: mongoose.Schema.Types.Mixed },
+        indicated: { type: Number },
+        reference: { type: Number },
+        timestamp: { type: Date }
+      }
+    ],
+    computedErrors: [
+      {
+        load: { type: Number },
+        error: { type: Number },
+        mpe: { type: Number },
+        margin: { type: Number }
+      }
+    ],
+    range: { type: Number },
+    worstMargin: { type: Number },
 
     // manual_checklist fields
     checklistPassed: { type: Boolean },

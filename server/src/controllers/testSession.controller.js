@@ -64,6 +64,8 @@ async function createSessionRecord(req, body) {
   return session;
 }
 
+import { addObservationsSchema, createObservationValidator, createSingleObservationValidator } from '../validators/observation.schema.js';
+
 export const createTestSession = asyncHandler(async (req, res) => {
   const session = await createSessionRecord(req, req.body);
   res.status(201).json({
@@ -73,7 +75,7 @@ export const createTestSession = asyncHandler(async (req, res) => {
 });
 
 export const addObservations = asyncHandler(async (req, res) => {
-  const session = await TestSession.findById(req.params.id);
+  const session = await TestSession.findById(req.params.id).populate('instrumentModelId');
   if (!session) {
     throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   }
@@ -87,9 +89,22 @@ export const addObservations = asyncHandler(async (req, res) => {
   }
   await assertSessionAccess(req, session);
 
-  const rawObservations = Array.isArray(req.body.observations)
-    ? req.body.observations
-    : [req.body];
+  let model = session.instrumentModelId;
+  if (!model || !model.accuracyClass) {
+    model = await InstrumentModel.findById(session.instrumentModelId);
+  }
+  const accuracyClass = session.accuracyClass || model?.accuracyClass;
+  if (!accuracyClass) throw new AppError(422, 'INVALID_INSTRUMENT', 'Accuracy class is required');
+  
+  const ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
+  const validator = createObservationValidator(ruleConfig);
+  
+  const validationResult = validator.safeParse({ observations: Array.isArray(req.body.observations) ? req.body.observations : [req.body] });
+  if (!validationResult.success) {
+    throw new AppError(400, 'VALIDATION_ERROR', validationResult.error.issues.map(i => i.message).join('; '));
+  }
+
+  const rawObservations = validationResult.data.observations;
   const unselected = rawObservations.find((obs) => !(session.selectedAnnexes || []).includes(obs.annexRef));
   if (unselected) {
     throw new AppError(422, 'UNSELECTED_PROCEDURE', `${unselected.annexRef} was not selected for this test session`);
@@ -361,11 +376,26 @@ export const getTestSessionById = asyncHandler(async (req, res) => {
 
   const observations = await Observation.find({ testSessionId: session._id, deletedAt: null });
 
+  let ruleConfig = null;
+  try {
+    let model = session.instrumentModelId;
+    if (!model || !model.accuracyClass) {
+      model = await InstrumentModel.findById(session.instrumentModelId);
+    }
+    const accuracyClass = session.accuracyClass || model?.accuracyClass;
+    if (accuracyClass) {
+      ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
+    }
+  } catch (err) {
+    // ignore if rule config doesn't exist
+  }
+
   res.status(200).json({
     success: true,
     data: {
       ...session.toObject(),
       observations,
+      ruleConfig,
     },
   });
 });
@@ -381,7 +411,7 @@ export const updateObservation = asyncHandler(async (req, res) => {
     throw new AppError(400, 'VALIDATION_ERROR', 'Observation does not belong to the specified test session');
   }
 
-  const session = await TestSession.findById(observation.testSessionId);
+  const session = await TestSession.findById(observation.testSessionId).populate('instrumentModelId');
   if (!session) {
     throw new AppError(404, 'NOT_FOUND', 'Parent test session not found');
   }
@@ -395,11 +425,34 @@ export const updateObservation = asyncHandler(async (req, res) => {
   }
   await assertSessionAccess(req, session);
 
-  const allowedFields = ['annexRef', 'evaluationMethod', 'referenceLoad', 'indicatedValue', 'zeroCorrection', 'checklistPassed', 'reviewerNotes'];
+  const allowedFields = ['annexRef', 'evaluationMethod', 'referenceLoad', 'indicatedValue', 'zeroCorrection', 'checklistPassed', 'reviewerNotes', 'readings'];
   const before = Object.fromEntries(allowedFields.map((field) => [field, observation[field] ?? null]));
 
   if (req.body.annexRef && !(session.selectedAnnexes || []).includes(req.body.annexRef)) {
     throw new AppError(422, 'UNSELECTED_PROCEDURE', `${req.body.annexRef} was not selected for this test session`);
+  }
+
+  // Create merged object to validate
+  const mergedObs = { ...observation.toObject() };
+  for (const field of allowedFields) {
+    if (req.body[field] !== undefined) {
+      mergedObs[field] = req.body[field];
+    }
+  }
+
+  let model = session.instrumentModelId;
+  if (!model || !model.accuracyClass) {
+    model = await InstrumentModel.findById(session.instrumentModelId);
+  }
+  const accuracyClass = session.accuracyClass || model?.accuracyClass;
+  if (!accuracyClass) throw new AppError(422, 'INVALID_INSTRUMENT', 'Accuracy class is required');
+  
+  const ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
+  const validator = createSingleObservationValidator(ruleConfig);
+  
+  const validationResult = validator.safeParse(mergedObs);
+  if (!validationResult.success) {
+    throw new AppError(400, 'VALIDATION_ERROR', validationResult.error.issues.map(i => i.message).join('; '));
   }
 
   // Only allow updating data fields, not computed fields
@@ -416,6 +469,9 @@ export const updateObservation = asyncHandler(async (req, res) => {
   observation.errorRatioE = undefined;
   observation.ruleConfigId = undefined;
   observation.outcome = null;
+  observation.computedErrors = undefined;
+  observation.range = undefined;
+  observation.worstMargin = undefined;
 
   await observation.save();
 
@@ -484,6 +540,7 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
   const processed = [];
   const conflicts = [];
   const sessionIdsByClientId = new Map();
+  const ruleConfigBySessionId = new Map(); // Cache rule configs for sync loop
 
   for (const item of batch) {
     const { clientId, type, sessionId, obsId, data, updatedAt } = item;
@@ -521,16 +578,8 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
         processedSyncClientIds.add(syncKey);
         processed.push({ clientId, sessionId: session._id.toString() });
       } else if (type === 'ADD_OBSERVATION') {
-        const validation = singleObservationSchema.safeParse(data);
-        if (!validation.success) {
-          conflicts.push({
-            clientId,
-            reason: validation.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '),
-          });
-          continue;
-        }
         const resolvedSessionId = sessionIdsByClientId.get(sessionId) || sessionId;
-        const session = await TestSession.findById(resolvedSessionId);
+        const session = await TestSession.findById(resolvedSessionId).populate('instrumentModelId');
         if (!session) {
           conflicts.push({ clientId, reason: 'Test session not found' });
           continue;
@@ -539,6 +588,28 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
 
         if (session.status !== 'draft') {
           conflicts.push({ clientId, reason: 'Session is locked', currentStatus: session.status });
+          continue;
+        }
+
+        let ruleConfig = ruleConfigBySessionId.get(session._id.toString());
+        if (!ruleConfig) {
+           let model = session.instrumentModelId;
+           if (!model || !model.accuracyClass) {
+             model = await InstrumentModel.findById(session.instrumentModelId);
+           }
+           const accuracyClass = session.accuracyClass || model?.accuracyClass;
+           if (!accuracyClass) throw new AppError(422, 'INVALID_INSTRUMENT', 'Accuracy class is required');
+           ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
+           ruleConfigBySessionId.set(session._id.toString(), ruleConfig);
+        }
+        
+        const singleObservationValidator = createSingleObservationValidator(ruleConfig);
+        const validation = singleObservationValidator.safeParse(data);
+        if (!validation.success) {
+          conflicts.push({
+            clientId,
+            reason: validation.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '),
+          });
           continue;
         }
 
@@ -564,7 +635,7 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
           conflicts.push({ clientId, reason: 'Observation not found' });
           continue;
         }
-        const session = await TestSession.findById(observation.testSessionId);
+        const session = await TestSession.findById(observation.testSessionId).populate('instrumentModelId');
         if (!session || session.status !== 'draft') {
           conflicts.push({ clientId, reason: 'Session locked or not found' });
           continue;
@@ -576,10 +647,50 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
           continue;
         }
 
-        const allowedFields = ['annexRef', 'evaluationMethod', 'referenceLoad', 'indicatedValue', 'zeroCorrection', 'checklistPassed', 'reviewerNotes'];
+        const allowedFields = ['annexRef', 'evaluationMethod', 'referenceLoad', 'indicatedValue', 'zeroCorrection', 'checklistPassed', 'reviewerNotes', 'readings'];
+        
+        const mergedObs = { ...observation.toObject() };
+        for (const field of allowedFields) {
+          if (data && data[field] !== undefined) {
+            mergedObs[field] = data[field];
+          }
+        }
+        
+        let ruleConfig = ruleConfigBySessionId.get(session._id.toString());
+        if (!ruleConfig) {
+           let model = session.instrumentModelId;
+           if (!model || !model.accuracyClass) {
+             model = await InstrumentModel.findById(session.instrumentModelId);
+           }
+           const accuracyClass = session.accuracyClass || model?.accuracyClass;
+           if (!accuracyClass) throw new AppError(422, 'INVALID_INSTRUMENT', 'Accuracy class is required');
+           ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
+           ruleConfigBySessionId.set(session._id.toString(), ruleConfig);
+        }
+
+        const singleObservationValidator = createSingleObservationValidator(ruleConfig);
+        const validationResult = singleObservationValidator.safeParse(mergedObs);
+        if (!validationResult.success) {
+          conflicts.push({
+            clientId,
+            reason: validationResult.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '),
+          });
+          continue;
+        }
+        
         for (const field of allowedFields) {
           if (data && data[field] !== undefined) observation[field] = data[field];
         }
+        observation.computedError = undefined;
+        observation.appliedMpe = undefined;
+        observation.marginToMpe = undefined;
+        observation.errorRatioE = undefined;
+        observation.ruleConfigId = undefined;
+        observation.outcome = null;
+        observation.computedErrors = undefined;
+        observation.range = undefined;
+        observation.worstMargin = undefined;
+
         await observation.save();
         await appendAuditLog({ entityType: 'Observation', entityId: observation._id, action: 'update:sync', userId: req.user.sub });
         processedSyncClientIds.add(syncKey);

@@ -11,10 +11,136 @@ function toScaledInteger(value, label) {
   return BigInt(Math.round(scaled));
 }
 
+export function getBandMpeScaled(referenceLoadScaled, eScaled, ruleConfig, verificationStage) {
+  const sortedBands = ruleConfig.bands.slice().sort((a, b) => a.uptoMultipleOfE - b.uptoMultipleOfE);
+  const band = sortedBands.find((b) => b.uptoMultipleOfE == null || referenceLoadScaled <= BigInt(b.uptoMultipleOfE) * eScaled);
+  if (!band) throw new AppError(422, 'LOAD_OUT_OF_RANGE', 'Reference load exceeds all defined bands for this rule configuration');
+  const multValue = verificationStage === 'subsequent' ? (ruleConfig.subsequentMpeMultiplier ?? 2.0) : 1.0;
+  const stageMultiplier = toScaledInteger(multValue, 'subsequent MPE multiplier');
+  return (toScaledInteger(band.mpeFactor, 'MPE factor') * stageMultiplier) / DECIMAL_SCALE;
+}
+
+export function evaluateAnnex(annexRef, observation, instrumentModel, ruleConfig, verificationStage = 'initial') {
+  const criteriaData = ruleConfig.testCriteria?.find(c => c.annexRef === annexRef);
+  if (!criteriaData || !criteriaData.criterion) {
+    throw new AppError(400, 'NO_CRITERIA', `No test criteria defined for annex ${annexRef}`);
+  }
+
+  const { criterion } = criteriaData;
+  const { type, params } = criterion;
+  const readings = observation.readings || [];
+
+  if (type !== 'manual' && readings.length === 0) {
+    throw new AppError(400, 'NO_READINGS', 'Observations require readings for structured test evaluation');
+  }
+
+  if (!Number.isFinite(instrumentModel.e) || instrumentModel.e <= 0 ||
+      !Number.isFinite(instrumentModel.maxCapacity) || instrumentModel.maxCapacity <= 0) {
+    throw new AppError(422, 'INVALID_INSTRUMENT_PARAMETERS', 'Instrument capacity and verification interval must be positive');
+  }
+
+  const eScaled = toScaledInteger(instrumentModel.e, 'verification interval');
+  let computedErrors = [];
+  let worstMargin = Infinity;
+  let maxRange = 0;
+  let isPass = true;
+
+  if (type === 'manual') {
+    return { outcome: 'pass', ruleConfigId: ruleConfig._id }; 
+  }
+
+  if (type === 'max_abs_error_le_mpe_factor') {
+    for (const r of readings) {
+      if (r.reference == null || r.indicated == null) continue;
+      const refScaled = toScaledInteger(r.reference, 'reference');
+      const indScaled = toScaledInteger(r.indicated, 'indicated');
+      
+      let errorScaled = indScaled - refScaled;
+      if (ruleConfig.useRoundingCorrection && r.deltaL != null) {
+         const deltaLScaled = toScaledInteger(r.deltaL, 'deltaL');
+         const halfEScaled = eScaled / 2n;
+         errorScaled = (indScaled + halfEScaled - deltaLScaled) - refScaled;
+      }
+
+      const factorScaled = getBandMpeScaled(refScaled, eScaled, ruleConfig, verificationStage);
+      const factorParam = params?.factor || 1.0;
+      const appliedTargetMpeScaled = (factorScaled * eScaled * toScaledInteger(factorParam, 'factor')) / DECIMAL_SCALE;
+      const targetMpe = Number(appliedTargetMpeScaled) / (DECIMAL_SCALE_NUMBER * DECIMAL_SCALE_NUMBER);
+
+      const absErrorScaled = errorScaled < 0n ? -errorScaled : errorScaled;
+      const computedError = Number(errorScaled) / DECIMAL_SCALE_NUMBER;
+      const margin = targetMpe - Math.abs(computedError);
+      
+      if (margin < worstMargin) worstMargin = margin;
+      computedErrors.push({ load: r.reference, error: computedError, mpe: targetMpe, margin });
+      
+      if (absErrorScaled * DECIMAL_SCALE > appliedTargetMpeScaled) {
+        isPass = false;
+      }
+    }
+    if (worstMargin === Infinity) worstMargin = null;
+    return { outcome: isPass ? 'pass' : 'fail', computedErrors, worstMargin, ruleConfigId: ruleConfig._id };
+  }
+  
+  if (type === 'range_le_mpe_factor') {
+    const loadGroups = {};
+    for (const r of readings) {
+      const l = r.load ?? r.reference;
+      if (l == null) continue;
+      if (!loadGroups[l]) loadGroups[l] = [];
+      loadGroups[l].push(toScaledInteger(r.indicated, 'indicated'));
+    }
+    for (const [lStr, inds] of Object.entries(loadGroups)) {
+      if (inds.length < 2) continue;
+      const load = Number(lStr);
+      const minInd = inds.reduce((a, b) => a < b ? a : b);
+      const maxInd = inds.reduce((a, b) => a > b ? a : b);
+      const rangeScaled = maxInd - minInd;
+      const rangeValue = Number(rangeScaled) / DECIMAL_SCALE_NUMBER;
+      if (rangeValue > maxRange) maxRange = rangeValue;
+
+      const lScaled = toScaledInteger(load, 'load');
+      const factorScaled = getBandMpeScaled(lScaled, eScaled, ruleConfig, verificationStage);
+      const factorParam = params?.factor || 1.0;
+      const appliedTargetMpeScaled = (factorScaled * eScaled * toScaledInteger(factorParam, 'factor')) / DECIMAL_SCALE;
+      
+      if (rangeScaled * DECIMAL_SCALE > appliedTargetMpeScaled) {
+        isPass = false;
+      }
+    }
+    return { outcome: isPass ? 'pass' : 'fail', range: maxRange, ruleConfigId: ruleConfig._id };
+  }
+
+  if (type === 'change_le_factor_of_e') {
+    const factorParam = params?.factor || 1.0;
+    const targetScaled = (eScaled * toScaledInteger(factorParam, 'factor')) / DECIMAL_SCALE;
+    
+    let minInd = null;
+    let maxInd = null;
+    for (const r of readings) {
+      if (r.indicated == null) continue;
+      const ind = toScaledInteger(r.indicated, 'indicated');
+      if (minInd === null || ind < minInd) minInd = ind;
+      if (maxInd === null || ind > maxInd) maxInd = ind;
+    }
+    if (minInd !== null && maxInd !== null) {
+      const changeScaled = maxInd - minInd;
+      if (changeScaled > targetScaled) isPass = false;
+    }
+    return { outcome: isPass ? 'pass' : 'fail', ruleConfigId: ruleConfig._id };
+  }
+
+  throw new AppError(422, 'UNSUPPORTED_CRITERION', `Unsupported test criterion type ${type}`);
+}
+
 export function evaluateObservation(observation, instrumentModel, ruleConfig, verificationStage = 'initial') {
+  if (observation.evaluationMethod === 'structured') {
+    return evaluateAnnex(observation.annexRef, observation, instrumentModel, ruleConfig, verificationStage);
+  }
+
   if (observation.evaluationMethod === 'manual_checklist') {
     const outcome = observation.checklistPassed ? 'pass' : 'fail';
-    return { outcome };
+    return { outcome, ruleConfigId: ruleConfig._id };
   }
 
   const annexRef = observation.annexRef || 'A4_accuracy';
@@ -55,32 +181,13 @@ export function evaluateObservation(observation, instrumentModel, ruleConfig, ve
 
   const zeroCorrectionScaled = toScaledInteger(observation.zeroCorrection || 0, 'zeroCorrection');
 
-  // Sort bands by upper limit ascending
-  const sortedBands = ruleConfig.bands
-    .slice()
-    .sort((a, b) => a.uptoMultipleOfE - b.uptoMultipleOfE);
-
-  const band = sortedBands.find((b) => b.uptoMultipleOfE == null || referenceLoadScaled <= BigInt(b.uptoMultipleOfE) * eScaled);
-
-  if (!band) {
-    throw new AppError(
-      422,
-      'LOAD_OUT_OF_RANGE',
-      'Reference load exceeds all defined bands for this rule configuration'
-    );
-  }
-
-  // In-service / subsequent verification MPE multiplier from RuleConfig (UNVERIFIED - PENDING EXPERT)
-  const multValue = verificationStage === 'subsequent' ? (ruleConfig.subsequentMpeMultiplier ?? 2.0) : 1.0;
-  const stageMultiplier = toScaledInteger(multValue, 'subsequent MPE multiplier');
-  const factorScaled = (toScaledInteger(band.mpeFactor, 'MPE factor') * stageMultiplier) / DECIMAL_SCALE;
+  const factorScaled = getBandMpeScaled(referenceLoadScaled, eScaled, ruleConfig, verificationStage);
   const errorScaled = indicatedValueScaled - referenceLoadScaled - zeroCorrectionScaled;
   const withinMpe = (errorScaled < 0n ? -errorScaled : errorScaled) * DECIMAL_SCALE <= factorScaled * eScaled;
   const appliedMpe = Number(factorScaled * eScaled) / (DECIMAL_SCALE_NUMBER * DECIMAL_SCALE_NUMBER);
   const computedError = Number(errorScaled) / DECIMAL_SCALE_NUMBER;
   const outcome = withinMpe ? 'pass' : 'fail';
 
-  // Margin and error ratio computation
   const marginToMpe = appliedMpe - Math.abs(computedError);
   const eValue = Number(eScaled) / DECIMAL_SCALE_NUMBER;
   const errorRatioE = eValue !== 0 ? computedError / eValue : null;

@@ -8,6 +8,32 @@ const bandSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const criterionSchema = new mongoose.Schema({
+  type: {
+    type: String,
+    enum: ['max_abs_error_le_mpe_factor', 'range_le_mpe_factor', 'change_le_factor_of_e', 'manual'],
+    required: true
+  },
+  params: { type: mongoose.Schema.Types.Mixed }
+}, { _id: false });
+
+const fieldSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  labelEn: { type: String, required: true },
+  labelHi: { type: String },
+  type: { type: String, enum: ['number', 'boolean', 'string'], required: true },
+  unit: { type: String },
+  min: { type: Number },
+  max: { type: Number },
+  required: { type: Boolean, default: true }
+}, { _id: false });
+
+const testCriteriaSchema = new mongoose.Schema({
+  annexRef: { type: String, required: true },
+  fields: [fieldSchema],
+  criterion: criterionSchema
+}, { _id: false });
+
 const ruleConfigSchema = new mongoose.Schema(
   {
     oimlEdition: { type: String, required: true, trim: true },
@@ -40,6 +66,8 @@ const ruleConfigSchema = new mongoose.Schema(
     },
     subsequentMpeMultiplier: { type: Number, default: 2.0 },
     bands: { type: [bandSchema], required: true },
+    testCriteria: { type: [testCriteriaSchema], default: [] },
+    useRoundingCorrection: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

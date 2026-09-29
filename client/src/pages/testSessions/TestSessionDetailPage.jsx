@@ -326,13 +326,101 @@ export default function TestSessionDetailPage() {
                 <label className="gov-label">Annex Test Procedure</label>
                 <select className="gov-select" value={obsForm.annexRef} onChange={(e) => {
                   const ref = e.target.value;
-                  setObsForm((f) => ({ ...f, annexRef: ref, evaluationMethod: ANNEX_REFS.find((item) => item.value === ref)?.method || 'manual_checklist' }));
+                  const criteriaData = session.ruleConfig?.testCriteria?.find(c => c.annexRef === ref);
+                  let method = 'manual_checklist';
+                  if (criteriaData) {
+                    method = 'structured';
+                  } else {
+                    method = ANNEX_REFS.find((item) => item.value === ref)?.method || 'manual_checklist';
+                  }
+                  
+                  // Initialize readings form based on criteria
+                  const initReadings = criteriaData ? [Object.fromEntries(criteriaData.fields.map(f => [f.name, '']))] : [];
+                  
+                  setObsForm((f) => ({ 
+                    ...f, 
+                    annexRef: ref, 
+                    evaluationMethod: method,
+                    readings: initReadings
+                  }));
                 }}>
                   {(session.selectedAnnexes || []).map((ref) => <option key={ref} value={ref}>{ANNEX_REFS.find((item) => item.value === ref)?.label || ref}</option>)}
                 </select>
               </div>
-              <div className="gov-form-group"><label className="gov-label">Evaluation method</label><p>{obsForm.evaluationMethod === 'mpe_band' ? 'MPE calculation (A4 accuracy only)' : 'Manual checklist with evidence'}</p></div>
-              {obsForm.evaluationMethod === 'manual_checklist' ? <>
+              <div className="gov-form-group">
+                <label className="gov-label">Evaluation method</label>
+                <p>
+                  {obsForm.evaluationMethod === 'structured' ? 'Structured Test Criteria' : 
+                   obsForm.evaluationMethod === 'mpe_band' ? 'MPE calculation (A4 accuracy only)' : 
+                   'Manual checklist with evidence'}
+                </p>
+              </div>
+              
+              {obsForm.evaluationMethod === 'structured' && session.ruleConfig?.testCriteria?.find(c => c.annexRef === obsForm.annexRef) && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <h5 style={{ marginBottom: 10 }}>Readings</h5>
+                  {(obsForm.readings || []).map((reading, rIdx) => {
+                    const fields = session.ruleConfig.testCriteria.find(c => c.annexRef === obsForm.annexRef).fields;
+                    return (
+                      <div key={rIdx} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                        {fields.map(f => (
+                          <div key={f.name} className="gov-form-group" style={{ marginBottom: 0 }}>
+                            <label className="gov-label" style={{ fontSize: 12 }}>{f.labelEN} {f.required && '*'}</label>
+                            {f.type === 'string' ? (
+                              <input 
+                                className="gov-input" 
+                                value={reading[f.name] || ''} 
+                                onChange={(e) => {
+                                  const newReadings = [...obsForm.readings];
+                                  newReadings[rIdx][f.name] = e.target.value;
+                                  setObsForm(f => ({ ...f, readings: newReadings }));
+                                }} 
+                                style={{ padding: '6px' }}
+                              />
+                            ) : (
+                              <input 
+                                className="gov-input" 
+                                type="number" step="any"
+                                value={reading[f.name] ?? ''} 
+                                onChange={(e) => {
+                                  const newReadings = [...obsForm.readings];
+                                  newReadings[rIdx][f.name] = e.target.value;
+                                  setObsForm(f => ({ ...f, readings: newReadings }));
+                                }} 
+                                style={{ padding: '6px' }}
+                              />
+                            )}
+                          </div>
+                        ))}
+                        <button 
+                          className="gov-btn gov-btn-outline" 
+                          type="button" 
+                          onClick={() => {
+                            const newReadings = obsForm.readings.filter((_, i) => i !== rIdx);
+                            setObsForm(f => ({ ...f, readings: newReadings }));
+                          }}
+                          style={{ padding: '6px', color: 'var(--gov-red)', borderColor: 'var(--gov-red)' }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <button 
+                    className="gov-btn gov-btn-outline" 
+                    type="button" 
+                    onClick={() => {
+                      const fields = session.ruleConfig.testCriteria.find(c => c.annexRef === obsForm.annexRef).fields;
+                      const newReading = Object.fromEntries(fields.map(f => [f.name, '']));
+                      setObsForm(f => ({ ...f, readings: [...(f.readings || []), newReading] }));
+                    }}
+                  >
+                    <Plus size={14} /> Add Reading
+                  </button>
+                </div>
+              )}
+              
+              {obsForm.evaluationMethod === 'manual_checklist' && <>
                 <div className="gov-form-group">
                   <label className="gov-label">Checklist result</label>
                   <select className="gov-select" value={obsForm.checklistPassed === null ? '' : String(obsForm.checklistPassed)} onChange={(e) => setObsForm((f) => ({ ...f, checklistPassed: e.target.value === '' ? null : e.target.value === 'true' }))}>
@@ -343,7 +431,9 @@ export default function TestSessionDetailPage() {
                   <label className="gov-label">Reviewer notes / evidence</label>
                   <input className="gov-input" value={obsForm.reviewerNotes} onChange={(e) => setObsForm((f) => ({ ...f, reviewerNotes: e.target.value }))} />
                 </div>
-              </> : <>
+              </>}
+              
+              {obsForm.evaluationMethod === 'mpe_band' && <>
               <div className="gov-form-group">
                 <label className="gov-label">Reference load (same unit as registered model; kg)</label>
                 <input className="gov-input" type="number" step="any" value={obsForm.referenceLoad} onChange={(e) => setObsForm((f) => ({ ...f, referenceLoad: e.target.value }))} />
@@ -358,8 +448,48 @@ export default function TestSessionDetailPage() {
               </div>
               </>}
             </div>
-            <div className="flex-gap-8">
-              <button className="gov-btn gov-btn-primary" onClick={handleAddObs} disabled={addObsMutation.isPending || !obsForm.annexRef}>
+            <div className="flex-gap-8 mt-16">
+              <button className="gov-btn gov-btn-primary" onClick={() => {
+                let payload;
+                if (obsForm.evaluationMethod === 'structured') {
+                  const fields = session.ruleConfig.testCriteria.find(c => c.annexRef === obsForm.annexRef).fields;
+                  const parsedReadings = (obsForm.readings || []).map(r => {
+                    const parsed = { ...r };
+                    fields.forEach(f => {
+                      if (f.type === 'number' && parsed[f.name] !== '') {
+                        parsed[f.name] = Number(parsed[f.name]);
+                      }
+                    });
+                    return parsed;
+                  });
+                  payload = { annexRef: obsForm.annexRef, evaluationMethod: 'structured', readings: parsedReadings };
+                } else if (obsForm.evaluationMethod === 'manual_checklist') {
+                  if (obsForm.checklistPassed === null || !obsForm.reviewerNotes?.trim()) {
+                    addToast({ type: 'error', message: 'Choose the checklist result and record reviewer notes.' });
+                    return;
+                  }
+                  payload = { annexRef: obsForm.annexRef, evaluationMethod: 'manual_checklist', checklistPassed: obsForm.checklistPassed, reviewerNotes: obsForm.reviewerNotes.trim() };
+                } else {
+                  if (obsForm.referenceLoad === '' || obsForm.indicatedValue === '') {
+                    addToast({ type: 'error', message: 'Enter both the applied reference load and instrument indication.' });
+                    return;
+                  }
+                  const refLoad = Number(obsForm.referenceLoad);
+                  const indicatedValue = Number(obsForm.indicatedValue);
+                  if (!Number.isFinite(refLoad) || !Number.isFinite(indicatedValue)) {
+                    addToast({ type: 'error', message: 'Observation values must be finite numbers.' });
+                    return;
+                  }
+                  payload = { annexRef: obsForm.annexRef, evaluationMethod: 'mpe_band', referenceLoad: refLoad, indicatedValue };
+                  if (obsForm.zeroCorrection !== '') payload.zeroCorrection = Number(obsForm.zeroCorrection);
+                }
+            
+                if (editingObsId) {
+                  updateObsMutation.mutate({ obsId: editingObsId, data: payload });
+                } else {
+                  addObsMutation.mutate(payload);
+                }
+              }} disabled={addObsMutation.isPending || !obsForm.annexRef}>
                 {addObsMutation.isPending ? 'Saving...' : 'Save Observation'}
               </button>
               <button className="gov-btn gov-btn-outline" onClick={() => setShowObsForm(false)}>Cancel</button>
@@ -442,6 +572,10 @@ export default function TestSessionDetailPage() {
                             style={{ padding: '2px 6px', marginRight: 6 }}
                             onClick={() => {
                               setEditingObsId(obs._id);
+                              let initReadings = [];
+                              if (obs.evaluationMethod === 'structured') {
+                                initReadings = obs.readings || [];
+                              }
                               setObsForm({
                                 annexRef: obs.annexRef,
                                 referenceLoad: obs.referenceLoad ?? '',
@@ -450,6 +584,7 @@ export default function TestSessionDetailPage() {
                                 checklistPassed: obs.checklistPassed ?? null,
                                 reviewerNotes: obs.reviewerNotes || '',
                                 zeroCorrection: obs.zeroCorrection ?? '',
+                                readings: initReadings
                               });
                               setShowObsForm(true);
                             }}
