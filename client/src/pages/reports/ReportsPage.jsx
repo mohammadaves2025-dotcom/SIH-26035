@@ -7,6 +7,7 @@ import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { useTranslation } from '../../config/i18n.js';
 import { FileCheck, Download, AlertTriangle, ShieldCheck, Search } from 'lucide-react';
+import { useModalA11y } from '../../utils/useModalA11y.js';
 
 export default function ReportsPage() {
   const queryClient = useQueryClient();
@@ -18,9 +19,10 @@ export default function ReportsPage() {
   const [reason, setReason] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({ modelName: '', serialNumber: '', overallResult: '', status: '' });
+  const modalRef = useModalA11y(!!revokeId, () => setRevokeId(null));
   const updateFilter = (field, value) => setFilters((current) => ({ ...current, [field]: value }));
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['reports-list', searchTerm, filters],
     queryFn: () => apiClient.get('/reports', { params: { search: searchTerm, ...filters } }),
     select: (r) => r?.data?.reports || r?.data?.docs || [],
@@ -84,7 +86,7 @@ export default function ReportsPage() {
             <FileCheck size={22} style={{ marginRight: 8, verticalAlign: -3 }} />
             {t('nav_test_reports')}
           </h1>
-          <p className="page-header-subtitle">Generated test reports for reviewed OIML R-76 evaluations</p>
+          <p className="page-header-subtitle">{t('page_subtitle_reports')}</p>
           <p className="text-muted" style={{ fontSize: 12 }}>
             These files carry SHA-256 and server HMAC integrity tags. They are not PKI-signed approvals or certificates.
           </p>
@@ -167,13 +169,13 @@ export default function ReportsPage() {
             <table className="gov-table">
               <thead>
                 <tr>
-                  <th>Report Number</th>
-                  <th>Session ID</th>
-                  <th>Evaluation Verdict</th>
-                  <th>Report State</th>
-                  <th>Hash Digest</th>
-                  <th>Generated</th>
-                  <th>Actions</th>
+                  <th scope="col">Report Number</th>
+                  <th scope="col">Session ID</th>
+                  <th scope="col">Evaluation Verdict</th>
+                  <th scope="col">Report State</th>
+                  <th scope="col">Hash Digest</th>
+                  <th scope="col">Generated</th>
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -183,10 +185,12 @@ export default function ReportsPage() {
                       Loading…
                     </td>
                   </tr>
+                ) : isError ? (
+                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40 }}>Unable to load reports.</td></tr>
                 ) : (data || []).length === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--gov-text-muted)' }}>
-                      No reports generated yet
+                      {role === 'manufacturer' ? t('no_approved_results') : 'No reports generated yet'}
                     </td>
                   </tr>
                 ) : (
@@ -280,7 +284,7 @@ export default function ReportsPage() {
       {/* Revoke Modal */}
       {revokeId && (
         <div className="modal-overlay" onClick={() => setRevokeId(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div ref={modalRef} className="modal-content" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Revoke Test Report</h3>
             </div>

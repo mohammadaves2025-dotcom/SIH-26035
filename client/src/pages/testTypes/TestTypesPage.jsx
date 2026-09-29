@@ -26,10 +26,10 @@ export default function TestTypesPage() {
           <table className="gov-table">
             <thead>
               <tr>
-                <th>Procedure Code</th>
-                <th>Test Title</th>
-                <th>OIML Clause</th>
-                <th>Evaluation Strategy</th>
+                <th scope="col">Procedure Code</th>
+                <th scope="col">Test Title</th>
+                <th scope="col">OIML Clause</th>
+                <th scope="col">Evaluation Strategy</th>
               </tr>
             </thead>
             <tbody>

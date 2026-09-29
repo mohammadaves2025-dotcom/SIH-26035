@@ -3,14 +3,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getManufacturers, createManufacturer } from '../../services/manufacturer.service.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { Plus, X, Factory } from 'lucide-react';
+import { useModalA11y } from '../../utils/useModalA11y.js';
 
 export default function ManufacturersPage() {
   const queryClient = useQueryClient();
   const addToast = useNotificationStore((s) => s.addToast);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: '', licenseNumber: '', address: '', contactEmail: '' });
+  const modalRef = useModalA11y(showModal, () => setShowModal(false));
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['manufacturers'],
     queryFn: () => getManufacturers({ limit: 100 }),
     select: (r) => (Array.isArray(r?.data) ? r.data : r?.data?.manufacturers || r?.data?.docs || []),
@@ -49,15 +51,17 @@ export default function ManufacturersPage() {
           <table className="gov-table">
             <thead>
               <tr>
-                <th>Manufacturer Name</th>
-                <th>License / Reg Number</th>
-                <th>Contact Email</th>
-                <th>Registered Address</th>
+                <th scope="col">Manufacturer Name</th>
+                <th scope="col">License / Reg Number</th>
+                <th scope="col">Contact Email</th>
+                <th scope="col">Registered Address</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr><td colSpan={4} style={{ textAlign: 'center', padding: 40 }}>Loading…</td></tr>
+              ) : isError ? (
+                <tr><td colSpan={4} style={{ textAlign: 'center', padding: 40 }}>Unable to load manufacturers.</td></tr>
               ) : manufacturersList.length === 0 ? (
                 <tr><td colSpan={4} style={{ textAlign: 'center', padding: 40, color: 'var(--gov-text-muted)' }}>No manufacturers registered</td></tr>
               ) : (
@@ -77,27 +81,27 @@ export default function ManufacturersPage() {
 
       {showModal && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
-          <div className="modal-content">
+          <div ref={modalRef} className="modal-content" role="dialog" aria-modal="true">
             <div className="modal-header">
               <h3>Register New Manufacturer</h3>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+              <button aria-label="Close manufacturer form" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
             </div>
             <div className="modal-body">
               <div className="gov-form-group">
-                <label className="gov-label">Manufacturer Name</label>
-                <input className="gov-input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Avery India Ltd." />
+                <label className="gov-label" htmlFor="manufacturer-name">Manufacturer Name</label>
+                <input id="manufacturer-name" className="gov-input" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Avery India Ltd." />
               </div>
               <div className="gov-form-group">
-                <label className="gov-label">Legal Metrology License Number</label>
-                <input className="gov-input" value={form.licenseNumber} onChange={(e) => setForm((f) => ({ ...f, licenseNumber: e.target.value }))} placeholder="e.g. LM/DL/2024/0045" />
+                <label className="gov-label" htmlFor="manufacturer-license">Legal Metrology License Number</label>
+                <input id="manufacturer-license" className="gov-input" value={form.licenseNumber} onChange={(e) => setForm((f) => ({ ...f, licenseNumber: e.target.value }))} placeholder="e.g. LM/DL/2024/0045" />
               </div>
               <div className="gov-form-group">
-                <label className="gov-label">Contact Email</label>
-                <input className="gov-input" type="email" value={form.contactEmail} onChange={(e) => setForm((f) => ({ ...f, contactEmail: e.target.value }))} placeholder="contact@avery.co.in" />
+                <label className="gov-label" htmlFor="manufacturer-email">Contact Email</label>
+                <input id="manufacturer-email" className="gov-input" type="email" value={form.contactEmail} onChange={(e) => setForm((f) => ({ ...f, contactEmail: e.target.value }))} placeholder="contact@avery.co.in" />
               </div>
               <div className="gov-form-group">
-                <label className="gov-label">Registered Address</label>
-                <textarea className="gov-input" rows={3} value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} placeholder="Plot 12, Industrial Area, New Delhi" />
+                <label className="gov-label" htmlFor="manufacturer-address">Registered Address</label>
+                <textarea id="manufacturer-address" className="gov-input" rows={3} value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} placeholder="Plot 12, Industrial Area, New Delhi" />
               </div>
             </div>
             <div className="modal-footer">

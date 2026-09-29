@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { getExportData } from '../../services/admin.service.js';
 import { Download, FileSpreadsheet, Calendar, RefreshCw } from 'lucide-react';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
+import { useTranslation } from '../../config/i18n.js';
 
 export default function ExportPage() {
   const addToast = useNotificationStore((s) => s.addToast);
+  const { t } = useTranslation();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
@@ -63,33 +65,33 @@ export default function ExportPage() {
     <div style={{ maxWidth: 700 }}>
       <div className="page-header">
         <div>
-          <h1><Download size={22} style={{ marginRight: 8, verticalAlign: -3 }} />e-Government Export</h1>
-          <p className="page-header-subtitle">Export metrology data for National Legal Metrology Portal integration</p>
+          <h1><Download size={22} style={{ marginRight: 8, verticalAlign: -3 }} />{t('export_title')}</h1>
+          <p className="page-header-subtitle">{t('page_subtitle_export')}</p>
         </div>
       </div>
 
       <div className="gov-card">
         <div className="gov-card-header">
-          <h4>Export Parameters</h4>
+          <h4>{t('export_parameters')}</h4>
         </div>
         <div className="gov-card-body">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
             <div className="gov-form-group">
-              <label className="gov-label"><Calendar size={14} style={{ marginRight: 4, verticalAlign: -2 }} /> Start Date</label>
-              <input className="gov-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <label className="gov-label" htmlFor="export-start-date"><Calendar size={14} style={{ marginRight: 4, verticalAlign: -2 }} /> {t('start_date')}</label>
+              <input id="export-start-date" className="gov-input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
             <div className="gov-form-group">
-              <label className="gov-label"><Calendar size={14} style={{ marginRight: 4, verticalAlign: -2 }} /> End Date</label>
-              <input className="gov-input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <label className="gov-label" htmlFor="export-end-date"><Calendar size={14} style={{ marginRight: 4, verticalAlign: -2 }} /> {t('end_date')}</label>
+              <input id="export-end-date" className="gov-input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
 
           <div className="flex-gap-8">
             <button className="gov-btn gov-btn-primary" onClick={() => handleExport('json')} disabled={loading}>
-              <Download size={14} /> {loading ? 'Exporting...' : 'Export JSON (Portal Schema)'}
+              <Download size={14} /> {loading ? 'Exporting...' : t('export_json')}
             </button>
             <button className="gov-btn gov-btn-outline" onClick={() => handleExport('csv')} disabled={loading}>
-              <FileSpreadsheet size={14} /> Export CSV
+              <FileSpreadsheet size={14} /> {t('export_csv')}
             </button>
           </div>
         </div>

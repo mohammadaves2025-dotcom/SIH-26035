@@ -15,7 +15,7 @@ export default function AuditLogPage() {
   const [integrityResult, setIntegrityResult] = useState(null);
   const canVerifyChain = ['admin', 'auditor'].includes(user?.role);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['audit-logs', page],
     queryFn: () => getAuditLogs({ page, limit }),
     select: (r) => (Array.isArray(r?.data) ? r.data : r?.data?.logs || r?.data?.docs || []),
@@ -50,7 +50,7 @@ export default function AuditLogPage() {
             <ScrollText size={22} style={{ marginRight: 8, verticalAlign: -3 }} />
             {t('nav_audit_trail')}
           </h1>
-          <p className="page-header-subtitle">Immutable SHA-256 hash-chained compliance audit log</p>
+          <p className="page-header-subtitle">{t('page_subtitle_audit')}</p>
         </div>
         {canVerifyChain && (
           <button
@@ -58,7 +58,7 @@ export default function AuditLogPage() {
             onClick={() => verifyMutation.mutate()}
             disabled={verifyMutation.isPending}
           >
-            <ShieldCheck size={16} /> {verifyMutation.isPending ? 'Verifying chain…' : 'Verify Chain Integrity'}
+            <ShieldCheck size={16} /> {verifyMutation.isPending ? t('verifying_chain') : t('audit_verify')}
           </button>
         )}
       </div>
@@ -94,11 +94,11 @@ export default function AuditLogPage() {
             <table className="gov-table">
               <thead>
                 <tr>
-                  <th>Timestamp</th>
-                  <th>Actor / Role</th>
-                  <th>Action</th>
-                  <th>Entity Ref</th>
-                  <th>Hash Chain Digest</th>
+                  <th scope="col">Timestamp</th>
+                  <th scope="col">Actor / Role</th>
+                  <th scope="col">Action</th>
+                  <th scope="col">Entity Ref</th>
+                  <th scope="col">Hash Chain Digest</th>
                 </tr>
               </thead>
               <tbody>
@@ -108,6 +108,8 @@ export default function AuditLogPage() {
                       Loading…
                     </td>
                   </tr>
+                ) : isError ? (
+                  <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40 }}>Unable to load audit log entries.</td></tr>
                 ) : logs.length === 0 ? (
                   <tr>
                     <td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--gov-text-muted)' }}>

@@ -52,9 +52,15 @@ apiClient.interceptors.response.use(
 
     if (status === 401) {
       useAuthStore.getState().logout();
+      useNotificationStore.getState().addToast({ type: 'error', code: 'AUTH_REQUIRED', message: 'Your session has expired. Please sign in again.' });
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') window.location.assign('/login');
     }
 
-    useNotificationStore.getState().addToast({ type: 'error', code, message });
+    if (status === 403) {
+      useNotificationStore.getState().addToast({ type: 'error', code: 'FORBIDDEN', message: 'You do not have permission' });
+    } else if (!error.config?.skipErrorToast && status !== 401) {
+      useNotificationStore.getState().addToast({ type: 'error', code, message });
+    }
     return Promise.reject(error);
   }
 );

@@ -10,7 +10,7 @@ export default function InstrumentModelDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const { data: model, isLoading: modelLoading } = useQuery({
+  const { data: model, isLoading: modelLoading, isError: modelError, error: modelQueryError } = useQuery({
     queryKey: ['instrument-model', id],
     queryFn: () => getInstrumentModelById(id),
     select: (r) => r?.data || r,
@@ -28,6 +28,8 @@ export default function InstrumentModelDetailPage() {
   const complianceRate = historySessions.length > 0 ? Math.round((passedCount / historySessions.length) * 100) : 100;
 
   if (modelLoading) return <div style={{ padding: 40, textAlign: 'center' }}>Loading model details…</div>;
+  if (modelError && modelQueryError?.response?.status === 404) return <div style={{ padding: 40, textAlign: 'center' }}><p style={{ marginBottom: 12 }}>This record is not available.</p><button className="gov-btn gov-btn-outline" onClick={() => navigate('/instrument-models')}><ArrowLeft size={14} /> Back to Instrument Models</button></div>;
+  if (modelError) return <div style={{ padding: 40, textAlign: 'center' }}>Unable to load this instrument model.</div>;
   if (!model) return <div style={{ padding: 40, textAlign: 'center' }}>Instrument model not found</div>;
 
   return (
@@ -92,12 +94,12 @@ export default function InstrumentModelDetailPage() {
             <table className="gov-table">
               <thead>
                 <tr>
-                  <th>Session ID</th>
-                  <th>Serial No.</th>
-                  <th>Laboratory</th>
-                  <th>Test Date</th>
-                  <th>Status</th>
-                  <th>Overall Verdict</th>
+                  <th scope="col">Session ID</th>
+                  <th scope="col">Serial No.</th>
+                  <th scope="col">Laboratory</th>
+                  <th scope="col">Test Date</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Overall Verdict</th>
                 </tr>
               </thead>
               <tbody>

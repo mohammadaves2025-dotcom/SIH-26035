@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store/useAuthStore.js';
 import { useThemeStore } from '../../store/useThemeStore.js';
 import { login } from '../../services/auth.service.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
+import { useTranslation } from '../../config/i18n.js';
 import { Scale, Eye, EyeOff } from 'lucide-react';
 import './LoginPage.css';
 
@@ -15,6 +16,7 @@ export default function LoginPage() {
   const setAuth = useAuthStore((s) => s.setAuth);
   const addToast = useNotificationStore((s) => s.addToast);
   const { language } = useThemeStore();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -47,9 +49,10 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="gov-form-group">
-            <label className="gov-label" htmlFor="email">Email Address</label>
+            <label className="gov-label" htmlFor="email">{t('login_email')}</label>
             <input
               id="email"
+              data-testid="login-email"
               type="email"
               className="gov-input"
               value={email}
@@ -61,10 +64,11 @@ export default function LoginPage() {
           </div>
 
           <div className="gov-form-group">
-            <label className="gov-label" htmlFor="password">Password</label>
+            <label className="gov-label" htmlFor="password">{t('login_password')}</label>
             <div className="login-pw-wrap">
               <input
                 id="password"
+                data-testid="login-password"
                 type={showPw ? 'text' : 'password'}
                 className="gov-input"
                 value={password}
@@ -72,20 +76,20 @@ export default function LoginPage() {
                 placeholder="••••••••"
                 required
               />
-              <button type="button" className="login-pw-toggle" onClick={() => setShowPw(!showPw)} tabIndex={-1}>
+              <button type="button" aria-label={showPw ? 'Hide password' : 'Show password'} className="login-pw-toggle" onClick={() => setShowPw(!showPw)} tabIndex={-1}>
                 {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
 
-          <button type="submit" className="gov-btn gov-btn-primary login-submit" disabled={loading}>
+          <button type="submit" data-testid="login-submit" className="gov-btn gov-btn-primary login-submit" disabled={loading}>
             <Scale size={16} />
-            {loading ? 'Authenticating...' : 'Sign In'}
+            {loading ? t('login_authenticating') : t('login_sign_in')}
           </button>
         </form>
 
         <div className="login-demo-creds">
-          <p style={{ marginBottom: 8 }}><strong>Quick Demo Login (Select Role):</strong></p>
+          <p style={{ marginBottom: 8 }}><strong>{t('login_demo')}</strong></p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             <button type="button" className="gov-btn gov-btn-outline" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => { setEmail('admin@nawi.gov.in'); setPassword('Password123!'); }}>
               Admin

@@ -166,7 +166,7 @@ export default function NewTestSessionPage() {
               <h4 style={{ marginBottom: 16 }}>Step 1 — Instrument Selection</h4>
               <div className="gov-form-group">
                 <label className="gov-label">Instrument Model</label>
-                <select className="gov-select" value={form.instrumentModelId} onChange={(e) => updateField('instrumentModelId', e.target.value)}>
+                <select data-testid="session-model" className="gov-select" value={form.instrumentModelId} onChange={(e) => updateField('instrumentModelId', e.target.value)}>
                   <option value="">— Select model —</option>
                   {availableModels.map((m) => (
                     <option key={m._id || m.id} value={m._id || m.id}>{m.modelName} ({m.manufacturer?.name || m.manufacturerName || '—'})</option>
@@ -175,7 +175,7 @@ export default function NewTestSessionPage() {
               </div>
               <div className="gov-form-group">
                 <label className="gov-label">Serial Number</label>
-                <input className="gov-input" required placeholder="e.g. SN-2026-00123" value={form.serialNumber} onChange={(e) => updateField('serialNumber', e.target.value)} />
+                <input data-testid="session-serial" className="gov-input" required placeholder="e.g. SN-2026-00123" value={form.serialNumber} onChange={(e) => updateField('serialNumber', e.target.value)} />
               </div>
               {selectedModel && <p>Registered accuracy class: Class {selectedModel.accuracyClass}</p>}
             </>
@@ -187,14 +187,14 @@ export default function NewTestSessionPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                 <div className="gov-form-group">
                   <label className="gov-label">Testing Laboratory Facility</label>
-                  <select className="gov-select" value={form.labId} onChange={(e) => updateField('labId', e.target.value)}>
+                    <select data-testid="session-lab" className="gov-select" value={form.labId} onChange={(e) => updateField('labId', e.target.value)}>
                     <option value="">— Select a registered laboratory —</option>
                     {availableLabs.map((lab) => <option key={lab._id || lab.id} value={lab.labId}>{lab.labName} ({lab.location})</option>)}
                   </select>
                 </div>
                 <div className="gov-form-group">
                   <label className="gov-label">Evaluation Test Date</label>
-                  <input className="gov-input" required type="date" value={form.testDate} onChange={(e) => updateField('testDate', e.target.value)} />
+                  <input data-testid="session-date" className="gov-input" required type="date" value={form.testDate} onChange={(e) => updateField('testDate', e.target.value)} />
                 </div>
                 <div className="gov-form-group">
                   <label className="gov-label">Verification Stage (OIML R 76 §3.5)</label>
@@ -207,20 +207,20 @@ export default function NewTestSessionPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
                 <div className="gov-form-group">
                   <label className="gov-label">Ambient Temp (°C)</label>
-                  <input className="gov-input" required type="number" step="0.1" value={form.temperatureC} onChange={(e) => updateField('temperatureC', e.target.value)} />
+                  <input data-testid="session-temperature" className="gov-input" required type="number" step="0.1" value={form.temperatureC} onChange={(e) => updateField('temperatureC', e.target.value)} />
                 </div>
                 <div className="gov-form-group">
                   <label className="gov-label">Relative Humidity (%)</label>
-                  <input className="gov-input" required type="number" min="0" max="100" step="1" value={form.humidityPercent} onChange={(e) => updateField('humidityPercent', e.target.value)} />
+                  <input data-testid="session-humidity" className="gov-input" required type="number" min="0" max="100" step="1" value={form.humidityPercent} onChange={(e) => updateField('humidityPercent', e.target.value)} />
                 </div>
                 <div className="gov-form-group">
                   <label className="gov-label">Inclination (°)</label>
-                  <input className="gov-input" required type="number" step="0.01" value={form.inclinationDeg} onChange={(e) => updateField('inclinationDeg', e.target.value)} />
+                  <input data-testid="session-inclination" className="gov-input" required type="number" step="0.01" value={form.inclinationDeg} onChange={(e) => updateField('inclinationDeg', e.target.value)} />
                 </div>
               </div>
               <div className="gov-form-group">
                 <label className="gov-label">Environmental Control Notes</label>
-                <input className="gov-input" required placeholder="Record the observed environmental conditions" value={form.envNotes} onChange={(e) => updateField('envNotes', e.target.value)} />
+                <input data-testid="session-environment-notes" className="gov-input" required placeholder="Record the observed environmental conditions" value={form.envNotes} onChange={(e) => updateField('envNotes', e.target.value)} />
               </div>
             </>
           )}
@@ -268,11 +268,11 @@ export default function NewTestSessionPage() {
               <ChevronLeft size={14} /> Back
             </button>
             {step < 4 ? (
-              <button className="gov-btn gov-btn-primary" onClick={() => setStep(step + 1)}>
+              <button data-testid="session-next" className="gov-btn gov-btn-primary" onClick={() => setStep(step + 1)}>
                 Next <ChevronRight size={14} />
               </button>
             ) : (
-              <button className="gov-btn gov-btn-accent" onClick={handleSubmit} disabled={createMutation.isPending || !form.instrumentModelId}>
+              <button data-testid="create-session" className="gov-btn gov-btn-accent" onClick={handleSubmit} disabled={createMutation.isPending || !form.instrumentModelId}>
                 {createMutation.isPending ? 'Creating...' : online ? 'Create Session' : 'Save Offline Draft'}
               </button>
             )}

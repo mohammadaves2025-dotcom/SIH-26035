@@ -69,6 +69,30 @@
   gap: 14px;
 }
 
+.header-language-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 5px;
+}
+
+.header-language-toggle button {
+  border: 0;
+  border-radius: 3px;
+  padding: 3px 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.header-language-toggle button.active {
+  background: #fff;
+  color: var(--gov-navy-imperial);
+}
+
 /* Offline & Sync Status Badges */
 .header-offline-status {
   display: flex;

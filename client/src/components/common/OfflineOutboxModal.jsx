@@ -1,6 +1,7 @@
 import React from 'react';
 import { Wifi, WifiOff, RefreshCw, Trash2, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import { useTranslation } from '../../config/i18n.js';
+import { useModalA11y } from '../../utils/useModalA11y.js';
 
 export default function OfflineOutboxModal({
   isOpen,
@@ -14,18 +15,19 @@ export default function OfflineOutboxModal({
   onDiscardDraft,
 }) {
   const { t } = useTranslation();
+  const modalRef = useModalA11y(isOpen, onClose);
 
   if (!isOpen) return null;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()}>
+      <div ref={modalRef} className="modal-content" role="dialog" aria-modal="true" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {isOnline ? <Wifi size={20} color="#138808" /> : <WifiOff size={20} color="#DC2626" />}
             <h3>{t('offline_outbox_title')}</h3>
           </div>
-          <button className="topbar-btn" onClick={onClose} style={{ color: 'var(--gov-text-muted)', fontSize: 18 }}>
+          <button aria-label="Close offline outbox" className="topbar-btn" onClick={onClose} style={{ color: 'var(--gov-text-muted)', fontSize: 18 }}>
             <X size={18} />
           </button>
         </div>
@@ -153,10 +155,10 @@ export default function OfflineOutboxModal({
                 <table className="gov-table" style={{ fontSize: 12 }}>
                   <thead>
                     <tr>
-                      <th>Type</th>
-                      <th>Client ID</th>
-                      <th>Created At</th>
-                      <th>Status / Error</th>
+                      <th scope="col">Type</th>
+                      <th scope="col">Client ID</th>
+                      <th scope="col">Created At</th>
+                      <th scope="col">Status / Error</th>
                     </tr>
                   </thead>
                   <tbody>

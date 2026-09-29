@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useParams, useNavigate, Link } from 'react-router-dom';
 import { verifyReport } from '../../services/report.service.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
+import { useTranslation } from '../../config/i18n.js';
 import { ShieldCheck, Search, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function VerifyPage() {
@@ -9,8 +10,12 @@ export default function VerifyPage() {
   const [query, setQuery] = useState(
     searchParams.get('hash') || searchParams.get('id') || searchParams.get('q') || ''
   );
+  const { reportNumberOrHash } = useParams();
+  const navigate = useNavigate();
+  const { t } = useTranslation();
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [networkError, setNetworkError] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const handleVerify = async (qToUse) => {
@@ -18,12 +23,17 @@ export default function VerifyPage() {
     if (!target.trim()) return;
     setLoading(true);
     setError(null);
+    setNetworkError(null);
     setResult(null);
     try {
       const res = await verifyReport(target.trim());
       setResult(res.data || res);
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Report not found or verification failed');
+      if (err.response?.status === 404) {
+        setError('No published report matches this number or hash. If you have just received the report, it may not be published yet.');
+      } else {
+        setNetworkError(err.response?.data?.error?.message || 'Unable to contact the verification service. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -36,17 +46,19 @@ export default function VerifyPage() {
     : isCurrentPublished ? 'var(--gov-green)' : 'var(--gov-orange)';
 
   useEffect(() => {
-    if (query) {
-      handleVerify(query);
+    const deepLinkQuery = reportNumberOrHash || query;
+    if (deepLinkQuery) {
+      setQuery(deepLinkQuery);
+      handleVerify(deepLinkQuery);
     }
-  }, []);
+  }, [reportNumberOrHash]);
 
   return (
     <div style={{ maxWidth: 800 }}>
       <div className="page-header">
         <div>
-          <h1><ShieldCheck size={22} style={{ marginRight: 8, verticalAlign: -3 }} />Public Verification Portal</h1>
-          <p className="page-header-subtitle">Check publication status and the integrity of the stored PDF</p>
+          <h1><ShieldCheck size={22} style={{ marginRight: 8, verticalAlign: -3 }} />{t('verify_portal')}</h1>
+          <p className="page-header-subtitle">{t('page_subtitle_verify')}</p>
         </div>
       </div>
 
@@ -54,10 +66,10 @@ export default function VerifyPage() {
       <div className="gov-card mb-24">
         <div className="gov-card-body">
           <div className="gov-form-group">
-            <label className="gov-label">Enter report number or SHA-256 PDF hash</label>
+            <label className="gov-label" htmlFor="verify-query">{t('verify_input')}</label>
             <div className="flex-gap-8">
               <input
-                className="gov-input"
+                id="verify-query" className="gov-input"
                 style={{ flex: 1 }}
                 placeholder="e.g. NAWI-2026-000001 or 7f8a9b..."
                 value={query}
@@ -65,7 +77,7 @@ export default function VerifyPage() {
                 onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
               />
               <button className="gov-btn gov-btn-accent" onClick={() => handleVerify()} disabled={loading}>
-                <Search size={16} /> {loading ? 'Verifying...' : 'Verify'}
+                <Search size={16} /> {loading ? t('verifying') : t('verify_button')}
               </button>
             </div>
           </div>
@@ -73,13 +85,14 @@ export default function VerifyPage() {
       </div>
 
       {/* Error state */}
-      {error && (
-        <div className="gov-card mb-24" style={{ borderColor: 'var(--gov-red)' }}>
-          <div className="gov-card-body flex-gap-8" style={{ color: 'var(--gov-red)' }}>
+      {(error || networkError) && (
+        <div className="gov-card mb-24" style={{ borderColor: networkError ? 'var(--gov-red)' : 'var(--gov-border)' }}>
+          <div className="gov-card-body flex-gap-8" style={{ color: networkError ? 'var(--gov-red)' : 'var(--gov-text-body)' }}>
             <AlertCircle size={20} />
             <div>
-              <strong>Verification Failed</strong>
-              <p style={{ fontSize: 13, marginTop: 2 }}>{error}</p>
+              <strong>{networkError ? 'Verification service unavailable' : 'No published report found'}</strong>
+              <p style={{ fontSize: 13, marginTop: 2 }}>{networkError || error}</p>
+              <button type="button" className="gov-btn gov-btn-outline" style={{ marginTop: 8 }} onClick={() => navigate('/verify')}>Back to verification</button>
             </div>
           </div>
         </div>
@@ -101,12 +114,12 @@ export default function VerifyPage() {
           <div className="gov-card-body">
             {result.isRevoked && (
               <div className="gov-card mb-16" style={{ background: 'var(--gov-red-light)', border: '1px solid var(--gov-red)', color: 'var(--gov-red)', padding: 12 }}>
-                <strong>{result.revocationNotice || 'WARNING: This report has been REVOKED'}</strong>
+                <strong>{result.revocationReason || result.revocationNotice || 'WARNING: This report has been REVOKED'}</strong>
               </div>
             )}
             {result.isSuperseded && (
               <div className="gov-card mb-16" style={{ background: 'var(--gov-red-light)', border: '1px solid var(--gov-red)', color: 'var(--gov-red)', padding: 12 }}>
-                This report has been superseded by {result.supersededByReportNumber || 'a newer report'} and should not be used as the current certificate.
+                This report has been superseded by {result.supersededByReportNumber ? <Link to={`/verify/${encodeURIComponent(result.supersededByReportNumber)}`}>{result.supersededByReportNumber}</Link> : 'a newer report'} and should not be used as the current certificate.
               </div>
             )}
             {!result.isRevoked && !result.isSuperseded && !result.isPublished && (
@@ -122,6 +135,12 @@ export default function VerifyPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, fontSize: 14 }}>
               <div><span className="text-muted" style={{ fontSize: 12 }}>Report Number</span><br /><strong className="text-mono">{result.reportNumber || result._id}</strong></div>
               <div><span className="text-muted" style={{ fontSize: 12 }}>PDF integrity</span><br /><strong>{result.isIntegrityVerified ? 'Verified' : 'Could not verify stored PDF'}</strong></div>
+              <div><span className="text-muted" style={{ fontSize: 12 }}>Published</span><br /><strong>{result.isPublished ? 'Yes' : 'No'}</strong></div>
+              <div><span className="text-muted" style={{ fontSize: 12 }}>Digital signature</span><br /><strong>{result.isDigitalSignatureVerified ? 'Verified' : 'Not verified'}</strong></div>
+              <div><span className="text-muted" style={{ fontSize: 12 }}>Signature type</span><br /><strong>{result.signatureType || '-'}</strong></div>
+              <div><span className="text-muted" style={{ fontSize: 12 }}>Certificate fingerprint</span><br /><strong className="text-mono">{result.certificateFingerprint || '-'}</strong></div>
+              <div><span className="text-muted" style={{ fontSize: 12 }}>Signer key ID</span><br /><strong className="text-mono">{result.signerKeyId || '-'}</strong></div>
+              <div><span className="text-muted" style={{ fontSize: 12 }}>Overall result</span><br /><strong>{result.overallResult || result.overallVerdict || '-'}</strong></div>
               <div><span className="text-muted" style={{ fontSize: 12 }}>Accuracy Class</span><br /><strong>Class {result.accuracyClass || result.testSessionId?.accuracyClass || '—'}</strong></div>
               <div><span className="text-muted" style={{ fontSize: 12 }}>Serial Number</span><br /><strong className="text-mono">{result.serialNumber || result.testSessionId?.serialNumber || '—'}</strong></div>
               <div style={{ gridColumn: '1 / -1' }}>

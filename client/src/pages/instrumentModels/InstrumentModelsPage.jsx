@@ -5,14 +5,19 @@ import { getInstrumentModels, createInstrumentModel } from '../../services/instr
 import { getManufacturers } from '../../services/manufacturer.service.js';
 import { ACCURACY_CLASSES } from '../../config/constants.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
+import { useAuthStore } from '../../store/useAuthStore.js';
 import { useTranslation } from '../../config/i18n.js';
 import { Plus, X, Scale } from 'lucide-react';
+import { useModalA11y } from '../../utils/useModalA11y.js';
 
 export default function InstrumentModelsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const addToast = useNotificationStore((s) => s.addToast);
   const { t } = useTranslation();
+  const role = useAuthStore((s) => s.user?.role);
+  const canCreate = ['admin', 'lab_admin'].includes(role);
+  const modalRef = useModalA11y(showModal, () => setShowModal(false));
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
     modelName: '',
@@ -23,7 +28,7 @@ export default function InstrumentModelsPage() {
     scaleInterval: '',
   });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['instrument-models'],
     queryFn: () => getInstrumentModels({ limit: 100 }),
     select: (r) => (Array.isArray(r?.data) ? r.data : r?.data?.models || r?.data?.docs || []),
@@ -109,9 +114,9 @@ export default function InstrumentModelsPage() {
           </h1>
           <p className="page-header-subtitle">NAWI instrument type catalogue</p>
         </div>
-        <button className="gov-btn gov-btn-accent" onClick={() => setShowModal(true)}>
+        {canCreate && <button className="gov-btn gov-btn-accent" onClick={() => setShowModal(true)}>
           <Plus size={16} /> Register Model
-        </button>
+        </button>}
       </div>
 
       <div className="gov-card">
@@ -120,12 +125,12 @@ export default function InstrumentModelsPage() {
             <table className="gov-table">
               <thead>
                 <tr>
-                  <th>Model Name</th>
-                  <th>Manufacturer</th>
-                  <th>Accuracy Class</th>
-                  <th>Max Cap.</th>
-                  <th>Min Cap.</th>
-                  <th>Scale Interval (e)</th>
+                  <th scope="col">Model Name</th>
+                  <th scope="col">Manufacturer</th>
+                  <th scope="col">Accuracy Class</th>
+                  <th scope="col">Max Cap.</th>
+                  <th scope="col">Min Cap.</th>
+                  <th scope="col">Scale Interval (e)</th>
                 </tr>
               </thead>
               <tbody>
@@ -135,6 +140,8 @@ export default function InstrumentModelsPage() {
                       Loading…
                     </td>
                   </tr>
+                ) : isError ? (
+                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40 }}>Unable to load instrument models.</td></tr>
                 ) : modelsList.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--gov-text-muted)' }}>
@@ -169,10 +176,10 @@ export default function InstrumentModelsPage() {
           className="modal-overlay"
           onClick={(e) => e.target === e.currentTarget && setShowModal(false)}
         >
-          <div className="modal-content">
+          <div ref={modalRef} className="modal-content" role="dialog" aria-modal="true">
             <div className="modal-header">
               <h3>Register Instrument Model</h3>
-              <button
+                <button aria-label="Close instrument model form"
                 onClick={() => setShowModal(false)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer' }}
               >
@@ -181,16 +188,16 @@ export default function InstrumentModelsPage() {
             </div>
             <div className="modal-body">
               <div className="gov-form-group">
-                <label className="gov-label">Model Name</label>
-                <input
+                  <label className="gov-label" htmlFor="model-name">Model Name</label>
+                  <input id="model-name"
                   className="gov-input"
                   value={form.modelName}
                   onChange={(e) => setForm((f) => ({ ...f, modelName: e.target.value }))}
                 />
               </div>
               <div className="gov-form-group">
-                <label className="gov-label">Manufacturer</label>
-                <select
+                  <label className="gov-label" htmlFor="model-manufacturer">Manufacturer</label>
+                  <select id="model-manufacturer"
                   className="gov-select"
                   value={form.manufacturerId}
                   onChange={(e) => setForm((f) => ({ ...f, manufacturerId: e.target.value }))}
@@ -204,8 +211,8 @@ export default function InstrumentModelsPage() {
                 </select>
               </div>
               <div className="gov-form-group">
-                <label className="gov-label">Accuracy Class</label>
-                <select
+                  <label className="gov-label" htmlFor="model-accuracy">Accuracy Class</label>
+                  <select id="model-accuracy"
                   className="gov-select"
                   value={form.accuracyClass}
                   onChange={(e) => setForm((f) => ({ ...f, accuracyClass: e.target.value }))}
@@ -219,8 +226,8 @@ export default function InstrumentModelsPage() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12 }}>
                 <div className="gov-form-group">
-                  <label className="gov-label">Max Capacity (kg)</label>
-                  <input
+                  <label className="gov-label" htmlFor="model-max-capacity">Max Capacity (kg)</label>
+                  <input id="model-max-capacity"
                     className="gov-input"
                     required
                     type="number"
@@ -229,8 +236,8 @@ export default function InstrumentModelsPage() {
                   />
                 </div>
                 <div className="gov-form-group">
-                  <label className="gov-label">Min Capacity (kg)</label>
-                  <input
+                  <label className="gov-label" htmlFor="model-min-capacity">Min Capacity (kg)</label>
+                  <input id="model-min-capacity"
                     className="gov-input"
                     required
                     type="number"
@@ -239,8 +246,8 @@ export default function InstrumentModelsPage() {
                   />
                 </div>
                 <div className="gov-form-group">
-                  <label className="gov-label">Verification Interval e (kg)</label>
-                  <input
+                  <label className="gov-label" htmlFor="model-scale-interval">Verification Interval e (kg)</label>
+                  <input id="model-scale-interval"
                     className="gov-input"
                     required
                     type="number"

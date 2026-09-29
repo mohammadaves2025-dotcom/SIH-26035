@@ -4,12 +4,23 @@ import { activateRuleConfig, getRuleConfigs, createRuleConfig, sandboxRuleConfig
 import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { ACCURACY_CLASSES } from '../../config/constants.js';
+import { useTranslation } from '../../config/i18n.js';
 import { BookOpen, Plus, X, Trash2 } from 'lucide-react';
+import { useModalA11y } from '../../utils/useModalA11y.js';
+
+const CRITERION_LABELS = {
+  max_abs_error_le_mpe_factor: 'Maximum absolute error (at most MPE factor)',
+  range_le_mpe_factor: 'Repeatability range (at most MPE factor)',
+  change_ge_factor_of_e: 'Discrimination change (at least factor × e)',
+  change_le_factor_of_e: 'Discrimination change (at most factor × e)',
+  manual: 'Manual checklist',
+};
 
 export default function RuleConfigsPage() {
   const queryClient = useQueryClient();
   const addToast = useNotificationStore((s) => s.addToast);
   const user = useAuthStore((s) => s.user);
+  const { t } = useTranslation();
   const [showModal, setShowModal] = useState(false);
   const [reviewRule, setReviewRule] = useState(null);
   const [sandboxResult, setSandboxResult] = useState(null);
@@ -20,6 +31,8 @@ export default function RuleConfigsPage() {
     effectiveDate: new Date().toISOString().split('T')[0],
     bands: [{ uptoMultipleOfE: '', mpeFactor: '' }],
   });
+  const createModalRef = useModalA11y(showModal, () => setShowModal(false));
+  const reviewModalRef = useModalA11y(!!reviewRule, () => setReviewRule(null));
 
   const { data, isLoading } = useQuery({
     queryKey: ['rule-configs'],
@@ -34,6 +47,7 @@ export default function RuleConfigsPage() {
       addToast({ type: 'success', message: 'Rule configuration saved as draft for expert review' });
       setShowModal(false);
     },
+    onError: (error) => addToast({ type: 'error', message: error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || 'Unable to save rule configuration' }),
   });
 
   const activateMut = useMutation({
@@ -45,6 +59,7 @@ export default function RuleConfigsPage() {
       setSandboxResult(null);
       setReviewForm({ sourceReference: '', validationNote: '' });
     },
+    onError: (error) => addToast({ type: 'error', message: error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || 'Unable to activate rule configuration' }),
   });
 
   const sandboxMut = useMutation({
@@ -87,11 +102,11 @@ export default function RuleConfigsPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1><BookOpen size={22} style={{ marginRight: 8, verticalAlign: -3 }} />OIML Rule Configurations</h1>
-          <p className="page-header-subtitle">Draft rule sets require a separate metrology expert review before they can be used.</p>
+            <h1><BookOpen size={22} style={{ marginRight: 8, verticalAlign: -3 }} />{t('rule_configurations')}</h1>
+          <p className="page-header-subtitle">{t('page_subtitle_rules')}</p>
         </div>
         {user?.role === 'admin' && <button className="gov-btn gov-btn-accent" onClick={() => setShowModal(true)}>
-          <Plus size={16} /> New Rule Draft
+          <Plus size={16} /> {t('new_rule_draft')}
         </button>}
       </div>
 
@@ -100,11 +115,11 @@ export default function RuleConfigsPage() {
           <table className="gov-table">
             <thead>
               <tr>
-                <th>Accuracy Class</th>
-                <th>OIML Edition</th>
-                <th>Effective Date</th>
-                <th>Tolerance Bands (upto m, MPE factor)</th>
-                <th>Status / source</th>
+                <th scope="col">Accuracy Class</th>
+                <th scope="col">OIML Edition</th>
+                <th scope="col">Effective Date</th>
+                <th scope="col">Tolerance Bands (upto m, MPE factor)</th>
+                <th scope="col">Status / source</th>
               </tr>
             </thead>
             <tbody>
@@ -132,6 +147,14 @@ export default function RuleConfigsPage() {
                           Open technical review
                         </button>
                       )}
+                      {r.testCriteria?.length > 0 && <div style={{ marginTop: 8 }}>
+                        <strong>Test criteria</strong>
+                        {r.testCriteria.map((criterion) => <div key={criterion.annexRef} style={{ marginTop: 4, fontSize: 12 }}>
+                          <span className="text-mono">{criterion.annexRef}</span>: {criterion.criterion ? (CRITERION_LABELS[criterion.criterion.type] || criterion.criterion.type) : 'Manual checklist'}
+                          {criterion.criterion?.params?.factor != null && ` — factor ${criterion.criterion.params.factor}`}
+                          <div>{(criterion.fields || []).map((field) => `${field.labelEn || field.name}${field.unit ? ` (${field.unit})` : ''}`).join(', ') || '-'}</div>
+                        </div>)}
+                      </div>}
                     </td>
                   </tr>
                 ))
@@ -143,10 +166,10 @@ export default function RuleConfigsPage() {
 
       {showModal && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
-          <div className="modal-content" style={{ maxWidth: 640 }}>
+          <div ref={createModalRef} className="modal-content" role="dialog" aria-modal="true" style={{ maxWidth: 640 }}>
             <div className="modal-header">
               <h3>Create OIML Rule Configuration Version</h3>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+              <button aria-label="Close rule draft form" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
             </div>
             <div className="modal-body">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -195,7 +218,7 @@ export default function RuleConfigsPage() {
 
       {reviewRule && (
         <div className="modal-overlay" onClick={(event) => event.target === event.currentTarget && setReviewRule(null)}>
-          <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="rule-review-title" style={{ maxWidth: 720 }}>
+          <div ref={reviewModalRef} className="modal-content" role="dialog" aria-modal="true" aria-labelledby="rule-review-title" style={{ maxWidth: 720 }}>
             <div className="modal-header">
               <div><h3 id="rule-review-title">Technical review and regression check</h3><p className="text-muted" style={{ marginTop: 4 }}>Class {reviewRule.accuracyClass} · {reviewRule.oimlEdition} · effective {new Date(reviewRule.effectiveDate).toLocaleDateString()}</p></div>
               <button onClick={() => setReviewRule(null)} aria-label="Close review" style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>

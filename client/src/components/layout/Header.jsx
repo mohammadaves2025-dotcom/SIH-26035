@@ -25,6 +25,7 @@ const ROLE_LABELS = {
 export default function Header({ isMobileOpen, onToggleMobileMenu }) {
   const { user, logout } = useAuthStore();
   const { language } = useThemeStore();
+  const setLanguage = useThemeStore((s) => s.setLanguage);
   const { t } = useTranslation();
   const addToast = useNotificationStore((s) => s.addToast);
   const queryClient = useQueryClient();
@@ -56,6 +57,11 @@ export default function Header({ isMobileOpen, onToggleMobileMenu }) {
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleLanguageChange = (nextLanguage) => {
+    setLanguage(nextLanguage);
+    localStorage.setItem('nawi_lang', nextLanguage.toLowerCase());
   };
 
   const handleToggleDemoData = async () => {
@@ -120,6 +126,10 @@ export default function Header({ isMobileOpen, onToggleMobileMenu }) {
           </div>
 
           <div className="header-actions">
+            <div className="header-language-toggle" aria-label="Language">
+              <button type="button" className={language === 'EN' ? 'active' : ''} onClick={() => handleLanguageChange('EN')}>EN</button>
+              <button type="button" className={language === 'HI' ? 'active' : ''} onClick={() => handleLanguageChange('HI')}>हिं</button>
+            </div>
             {/* Offline Status Badge & Sync trigger */}
             <div className="header-offline-status">
               {!isOnline ? (
@@ -175,7 +185,7 @@ export default function Header({ isMobileOpen, onToggleMobileMenu }) {
                   <span className="header-user-name">{user.name}</span>
                   <span className="header-user-role">{ROLE_LABELS[user.role] || user.role}</span>
                 </div>
-                <button className="header-logout-btn" onClick={handleLogout} title="Logout">
+                <button className="header-logout-btn" onClick={handleLogout} title="Logout" aria-label="Logout">
                   <LogOut size={16} />
                 </button>
               </div>

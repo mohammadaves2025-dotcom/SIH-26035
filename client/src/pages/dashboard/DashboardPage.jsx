@@ -29,7 +29,7 @@ export default function DashboardPage() {
   const { t } = useTranslation();
   const role = user?.role;
 
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, isError } = useQuery({
     queryKey: ['dashboard-stats', role],
     queryFn: getDashboardStats,
     select: (res) => res?.data || res,
@@ -47,7 +47,7 @@ export default function DashboardPage() {
     ? Object.entries(stats.statusBreakdown)
         .map(([key, value]) => ({
           key,
-          name: STATUS_CONFIG[key]?.label || key.replace(/_/g, ' '),
+          name: t(`status_${key}`, STATUS_CONFIG[key]?.label || key.replace(/_/g, ' ')),
           value: Number(value) || 0,
           color: STATUS_CONFIG[key]?.color || '#003366',
         }))
@@ -55,6 +55,8 @@ export default function DashboardPage() {
     : [];
 
   const monthlyData = stats?.monthlyTrend || [];
+
+  if (isError) return <div className="gov-card"><div className="gov-card-body">Unable to load dashboard data. Please try again.</div></div>;
 
   // Role 1: MANUFACTURER REPRESENTATIVE DASHBOARD
   if (role === 'manufacturer') {
@@ -143,9 +145,9 @@ export default function DashboardPage() {
         <div className="gov-card" style={{ marginTop: 20 }}>
           <div className="gov-card-header"><h4>{t('quick_actions')}</h4></div>
           <div className="gov-card-body quick-actions-grid">
-            <Link to="/test-sessions" className="quick-action-card"><FlaskConical size={22} /><span>My Submissions</span></Link>
-            <Link to="/instrument-models" className="quick-action-card"><Scale size={22} /><span>View Models</span></Link>
-            <Link to="/reports" className="quick-action-card"><FileCheck size={22} /><span>View Test Reports</span></Link>
+            <Link to="/test-sessions" className="quick-action-card"><FlaskConical size={22} /><span>{t('nav_test_sessions')}</span></Link>
+            <Link to="/instrument-models" className="quick-action-card"><Scale size={22} /><span>{t('nav_instrument_models')}</span></Link>
+            <Link to="/reports" className="quick-action-card"><FileCheck size={22} /><span>{t('nav_test_reports')}</span></Link>
           </div>
         </div>
       </div>
@@ -186,8 +188,8 @@ export default function DashboardPage() {
           <div className="gov-card-header"><h4>{t('quick_actions')}</h4></div>
           <div className="gov-card-body quick-actions-grid">
             <Link to="/test-sessions/new" className="quick-action-card"><FlaskConical size={22} /><span>{t('new_test_session')}</span></Link>
-            <Link to="/test-sessions" className="quick-action-card"><CheckCircle2 size={22} /><span>Pending Test Sessions</span></Link>
-            <Link to="/instrument-models" className="quick-action-card"><Scale size={22} /><span>Instrument Models</span></Link>
+            <Link to="/test-sessions" className="quick-action-card"><CheckCircle2 size={22} /><span>{t('nav_test_sessions')}</span></Link>
+            <Link to="/instrument-models" className="quick-action-card"><Scale size={22} /><span>{t('nav_instrument_models')}</span></Link>
           </div>
         </div>
       </div>

@@ -10,9 +10,10 @@ COPY . .
 RUN npm run build
 
 # Serve Stage
-FROM nginx:alpine
+FROM nginxinc/nginx-unprivileged:alpine
 
 COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 8080
 
 CMD ["nginx", "-g", "daemon off;"]

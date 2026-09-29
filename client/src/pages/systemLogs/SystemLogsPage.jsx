@@ -103,12 +103,12 @@ export default function SystemLogsPage() {
             <table className="gov-table log-table">
               <thead>
                 <tr>
-                  <th>Timestamp</th>
-                  <th>Method</th>
-                  <th>Endpoint / Action</th>
-                  <th>Status</th>
-                  <th>Latency</th>
-                  <th>Message / Trace</th>
+                  <th scope="col">Timestamp</th>
+                  <th scope="col">Method</th>
+                  <th scope="col">Endpoint / Action</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Latency</th>
+                  <th scope="col">Message / Trace</th>
                 </tr>
               </thead>
               <tbody>

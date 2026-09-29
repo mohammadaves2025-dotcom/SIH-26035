@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../services/apiClient.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { Building2, Plus, X, MapPin, Award } from 'lucide-react';
+import { useModalA11y } from '../../utils/useModalA11y.js';
 
 export default function LaboratoriesPage() {
   const queryClient = useQueryClient();
@@ -15,8 +16,9 @@ export default function LaboratoriesPage() {
     contactEmail: '',
     accreditationNumber: '',
   });
+  const modalRef = useModalA11y(showModal, () => setShowModal(false));
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['laboratories-list'],
     queryFn: () => apiClient.get('/laboratories'),
     select: (r) => r?.data?.data || r?.data || [],
@@ -55,16 +57,18 @@ export default function LaboratoriesPage() {
           <table className="gov-table">
             <thead>
               <tr>
-                <th>Lab Code</th>
-                <th>Laboratory Name</th>
-                <th>Location</th>
-                <th>Accreditation No.</th>
-                <th>Status</th>
+                <th scope="col">Lab Code</th>
+                <th scope="col">Laboratory Name</th>
+                <th scope="col">Location</th>
+                <th scope="col">Accreditation No.</th>
+                <th scope="col">Status</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40 }}>Loading…</td></tr>
+              ) : isError ? (
+                <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40 }}>Unable to load laboratories.</td></tr>
               ) : labsList.length === 0 ? (
                 <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--gov-text-muted)' }}>No laboratories registered</td></tr>
               ) : (
@@ -85,31 +89,31 @@ export default function LaboratoriesPage() {
 
       {showModal && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
-          <div className="modal-content">
+          <div ref={modalRef} className="modal-content" role="dialog" aria-modal="true">
             <div className="modal-header">
               <h3>Register Testing Laboratory</h3>
-              <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+              <button aria-label="Close laboratory form" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
             </div>
             <div className="modal-body">
               <div className="gov-form-group">
-                <label className="gov-label">Laboratory Code</label>
-                <input className="gov-input" placeholder="e.g. LAB-HYDERABAD-05" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} />
+                <label className="gov-label" htmlFor="lab-code">Laboratory Code</label>
+                <input id="lab-code" className="gov-input" placeholder="e.g. LAB-HYDERABAD-05" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} />
               </div>
               <div className="gov-form-group">
-                <label className="gov-label">Laboratory Name</label>
-                <input className="gov-input" placeholder="e.g. RRSL Hyderabad Central Lab" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+                <label className="gov-label" htmlFor="lab-name">Laboratory Name</label>
+                <input id="lab-name" className="gov-input" placeholder="e.g. RRSL Hyderabad Central Lab" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
               </div>
               <div className="gov-form-group">
-                <label className="gov-label">Location / City</label>
-                <input className="gov-input" placeholder="e.g. Hyderabad, Telangana" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} />
+                <label className="gov-label" htmlFor="lab-location">Location / City</label>
+                <input id="lab-location" className="gov-input" placeholder="e.g. Hyderabad, Telangana" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} />
               </div>
               <div className="gov-form-group">
-                <label className="gov-label">NABL Accreditation Number</label>
-                <input className="gov-input" placeholder="e.g. NABL-TC-9012" value={form.accreditationNumber} onChange={(e) => setForm((f) => ({ ...f, accreditationNumber: e.target.value }))} />
+                <label className="gov-label" htmlFor="lab-accreditation">NABL Accreditation Number</label>
+                <input id="lab-accreditation" className="gov-input" placeholder="e.g. NABL-TC-9012" value={form.accreditationNumber} onChange={(e) => setForm((f) => ({ ...f, accreditationNumber: e.target.value }))} />
               </div>
               <div className="gov-form-group">
-                <label className="gov-label">Official Contact Email</label>
-                <input className="gov-input" type="email" placeholder="lab@doca.gov.in" value={form.contactEmail} onChange={(e) => setForm((f) => ({ ...f, contactEmail: e.target.value }))} />
+                <label className="gov-label" htmlFor="lab-email">Official Contact Email</label>
+                <input id="lab-email" className="gov-input" type="email" placeholder="lab@doca.gov.in" value={form.contactEmail} onChange={(e) => setForm((f) => ({ ...f, contactEmail: e.target.value }))} />
               </div>
             </div>
             <div className="modal-footer">

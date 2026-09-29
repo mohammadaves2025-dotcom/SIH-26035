@@ -16,6 +16,7 @@ export default function OfflineSessionPage() {
   const [indicatedValue, setIndicatedValue] = useState('');
   const [checklistPassed, setChecklistPassed] = useState('');
   const [reviewerNotes, setReviewerNotes] = useState('');
+  const [readings, setReadings] = useState([]);
   const [online, setOnline] = useState(navigator.onLine);
   const [syncing, setSyncing] = useState(false);
   const [syncConflicts, setSyncConflicts] = useState([]);
@@ -50,9 +51,36 @@ export default function OfflineSessionPage() {
   if (!session) return <div className="gov-card gov-card-body">Loading offline draft…</div>;
 
   const method = ANNEX_REFS.find((item) => item.value === annexRef)?.method || 'manual_checklist';
+  
+  const structuredFields = {
+    A4_eccentricity: [
+      { name: 'position', label: 'Position', type: 'string' },
+      { name: 'reference', label: 'Load', type: 'number' },
+      { name: 'indicated', label: 'Indication', type: 'number' },
+      { name: 'deltaL', label: 'Delta L (Round. Corr.)', type: 'number' }
+    ],
+    A4_repeatability: [
+      { name: 'reference', label: 'Load', type: 'number' },
+      { name: 'indicated', label: 'Indication', type: 'number' },
+      { name: 'deltaL', label: 'Delta L (Round. Corr.)', type: 'number' }
+    ]
+  };
+
   const addObservation = async () => {
     let observation;
-    if (method === 'mpe_band') {
+    if (method === 'structured') {
+      const parsedReadings = readings.map(r => {
+        const p = { ...r };
+        const fields = structuredFields[annexRef] || structuredFields['A4_repeatability'];
+        fields.forEach(f => {
+          if (f.type === 'number' && p[f.name] !== '' && p[f.name] != null) {
+            p[f.name] = Number(p[f.name]);
+          }
+        });
+        return p;
+      });
+      observation = { annexRef, evaluationMethod: method, readings: parsedReadings };
+    } else if (method === 'mpe_band') {
       if (referenceLoad === '' || indicatedValue === '' || !Number.isFinite(Number(referenceLoad)) || !Number.isFinite(Number(indicatedValue))) {
         addToast({ type: 'error', message: 'Enter valid reference load and indication values.' });
         return;
@@ -70,6 +98,7 @@ export default function OfflineSessionPage() {
     setIndicatedValue('');
     setChecklistPassed('');
     setReviewerNotes('');
+    setReadings([]);
     await refresh();
   };
 
@@ -112,17 +141,59 @@ export default function OfflineSessionPage() {
       </div></div>
       {!session.syncedAt && <div className="gov-card mb-24"><div className="gov-card-header"><h4>Add observation</h4></div><div className="gov-card-body">
         <div className="gov-form-group"><label className="gov-label">Selected procedure</label><select className="gov-select" value={annexRef} onChange={(event) => setAnnexRef(event.target.value)}>{session.selectedAnnexes.map((ref) => <option key={ref} value={ref}>{ANNEX_REFS.find((item) => item.value === ref)?.label || ref}</option>)}</select></div>
-        {method === 'mpe_band' ? <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        
+        {method === 'structured' && (
+          <div style={{ marginBottom: 16 }}>
+            <label className="gov-label">Readings</label>
+            {readings.map((r, rIdx) => {
+              const fields = structuredFields[annexRef] || structuredFields['A4_repeatability'];
+              return (
+                <div key={rIdx} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  {fields.map(f => (
+                    <div key={f.name} className="gov-form-group" style={{ marginBottom: 0 }}>
+                      <label className="gov-label" style={{ fontSize: 12 }}>{f.label}</label>
+                      <input 
+                        className="gov-input" 
+                        type={f.type === 'number' ? 'number' : 'text'}
+                        step={f.type === 'number' ? 'any' : undefined}
+                        value={r[f.name] || ''} 
+                        onChange={(e) => {
+                          const newReadings = [...readings];
+                          newReadings[rIdx][f.name] = e.target.value;
+                          setReadings(newReadings);
+                        }} 
+                        style={{ padding: '6px' }}
+                      />
+                    </div>
+                  ))}
+                  <button className="gov-btn gov-btn-outline" type="button" onClick={() => {
+                    const newReadings = readings.filter((_, i) => i !== rIdx);
+                    setReadings(newReadings);
+                  }} style={{ padding: '6px', color: 'var(--gov-red)', borderColor: 'var(--gov-red)' }}>Remove</button>
+                </div>
+              );
+            })}
+            <button className="gov-btn gov-btn-outline" type="button" onClick={() => {
+              const fields = structuredFields[annexRef] || structuredFields['A4_repeatability'];
+              const newReading = Object.fromEntries(fields.map(f => [f.name, '']));
+              setReadings([...readings, newReading]);
+            }}>Add Reading</button>
+          </div>
+        )}
+
+        {method === 'mpe_band' && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div className="gov-form-group"><label className="gov-label">Reference load</label><input className="gov-input" type="number" step="any" value={referenceLoad} onChange={(event) => setReferenceLoad(event.target.value)} /></div>
           <div className="gov-form-group"><label className="gov-label">Instrument indication</label><input className="gov-input" type="number" step="any" value={indicatedValue} onChange={(event) => setIndicatedValue(event.target.value)} /></div>
-        </div> : <>
+        </div>}
+        
+        {method === 'manual_checklist' && <>
           <div className="gov-form-group"><label className="gov-label">Checklist result</label><select className="gov-select" value={checklistPassed} onChange={(event) => setChecklistPassed(event.target.value)}><option value="">Select result</option><option value="true">Pass</option><option value="false">Fail</option></select></div>
           <div className="gov-form-group"><label className="gov-label">Evidence / notes</label><textarea className="gov-input" value={reviewerNotes} onChange={(event) => setReviewerNotes(event.target.value)} /></div>
         </>}
         <button className="gov-btn gov-btn-primary" onClick={addObservation}>Save observation locally</button>
       </div></div>}
       <div className="gov-card"><div className="gov-card-header"><h4>Recorded observations ({observations.length})</h4></div><div className="gov-card-body">
-        {observations.length ? observations.map((item) => <div key={item.clientId} style={{ padding: '10px 0', borderBottom: '1px solid var(--gov-border-subtle)' }}><strong>{item.annexRef}</strong> · {item.evaluationMethod === 'mpe_band' ? `Reference ${item.referenceLoad}; indication ${item.indicatedValue}` : `${item.checklistPassed ? 'Pass' : 'Fail'} — ${item.reviewerNotes}`}</div>) : <p className="text-muted">No observations have been entered.</p>}
+        {observations.length ? observations.map((item) => <div key={item.clientId} style={{ padding: '10px 0', borderBottom: '1px solid var(--gov-border-subtle)' }}><strong>{item.annexRef}</strong> · {item.evaluationMethod === 'structured' ? `${item.readings?.length || 0} readings` : item.evaluationMethod === 'mpe_band' ? `Reference ${item.referenceLoad}; indication ${item.indicatedValue}` : `${item.checklistPassed ? 'Pass' : 'Fail'} — ${item.reviewerNotes}`}</div>) : <p className="text-muted">No observations have been entered.</p>}
       </div></div>
     </div>
   );

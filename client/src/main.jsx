@@ -19,7 +19,6 @@ const updateSW = registerSW({
     }
   },
   onOfflineReady() {
-    console.log('[PWA] App is ready to work offline.');
   },
 });
 
@@ -31,7 +30,6 @@ async function replayOfflineOutbox() {
     const token = authStore?.state?.token;
     if (token) {
       const result = await replayOutbox(token);
-      console.log('[OfflineSync] Outbox replayed:', result);
       window.dispatchEvent(new CustomEvent('nawi:outbox-replayed', { detail: result }));
     }
   } catch (err) {

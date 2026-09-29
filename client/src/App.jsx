@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from './store/useAuthStore.js';
 import { useThemeStore } from './store/useThemeStore.js';
+import { useNotificationStore } from './store/useNotificationStore.js';
 
 import TopGovtBar from './components/layout/TopGovtBar.jsx';
 import Header from './components/layout/Header.jsx';
@@ -39,6 +40,12 @@ const queryClient = new QueryClient({
 
 function RoleGuard({ allowedRoles, children }) {
   const { user } = useAuthStore();
+  const addToast = useNotificationStore((s) => s.addToast);
+  useEffect(() => {
+    if (user?.role && user.role !== 'admin' && allowedRoles && !allowedRoles.includes(user.role)) {
+      addToast({ type: 'error', message: 'You do not have permission to access this page.' });
+    }
+  }, [user?.role, allowedRoles, addToast]);
   if (!user || !user.role) {
     return <Navigate to="/login" replace />;
   }
@@ -102,6 +109,14 @@ export default function App() {
                 <main className="app-main" style={{ marginLeft: 0, padding: '20px 16px' }}>
                   <VerifyPage />
                 </main>
+              </div>
+            }
+          />
+          <Route
+            path="/verify/:reportNumberOrHash"
+            element={
+              <div className="app-layout" style={{ paddingTop: 'calc(var(--topbar-height) + var(--header-height))' }}>
+                <main className="app-main" style={{ marginLeft: 0, padding: '20px 16px' }}><VerifyPage /></main>
               </div>
             }
           />

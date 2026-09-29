@@ -18,7 +18,7 @@ export default function TestSessionsPage() {
   const canCreate = ['admin', 'lab_technician', 'lab_admin'].includes(user?.role);
   const limit = 15;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['test-sessions', page, search, statusFilter],
     queryFn: () =>
       getTestSessions({ page, limit, search, status: statusFilter || undefined }),
@@ -50,10 +50,10 @@ export default function TestSessionsPage() {
       <div className="page-header">
         <div>
           <h1>{t('nav_test_sessions')}</h1>
-          <p className="page-header-subtitle">OIML R-76 type evaluation test sessions</p>
+          <p className="page-header-subtitle">{t('page_subtitle_sessions')}</p>
         </div>
         {canCreate && (
-          <button className="gov-btn gov-btn-accent" onClick={() => navigate('/test-sessions/new')}>
+          <button data-testid="new-session" className="gov-btn gov-btn-accent" onClick={() => navigate('/test-sessions/new')}>
             <Plus size={16} /> {t('new_test_session')}
           </button>
         )}
@@ -69,10 +69,10 @@ export default function TestSessionsPage() {
               <table className="gov-table">
                 <thead>
                   <tr>
-                    <th>Instrument Model</th>
-                    <th>Serial No.</th>
-                    <th>Sync Status</th>
-                    <th>Created</th>
+                    <th scope="col">Instrument Model</th>
+                    <th scope="col">Serial No.</th>
+                    <th scope="col">Sync Status</th>
+                    <th scope="col">Created</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -106,7 +106,7 @@ export default function TestSessionsPage() {
             <input
               className="gov-input"
               style={{ paddingLeft: 34, width: '100%' }}
-              placeholder="Search by serial number, model..."
+              placeholder={t('search_sessions')}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -122,7 +122,7 @@ export default function TestSessionsPage() {
               setPage(1);
             }}
           >
-            <option value="">All Statuses</option>
+            <option value="">{t('all_statuses')}</option>
             <option value="draft">Draft</option>
             <option value="under_review">Under Review</option>
             <option value="passed">Passed</option>
@@ -140,12 +140,12 @@ export default function TestSessionsPage() {
             <table className="gov-table">
               <thead>
                 <tr>
-                  <th>Session ID</th>
-                  <th>Instrument Model</th>
-                  <th>Serial No.</th>
-                  <th>Accuracy Class</th>
-                  <th>Status</th>
-                  <th>Created</th>
+                  <th scope="col">Session ID</th>
+                  <th scope="col">Instrument Model</th>
+                  <th scope="col">Serial No.</th>
+                  <th scope="col">Accuracy Class</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Created</th>
                 </tr>
               </thead>
               <tbody>
@@ -155,10 +155,12 @@ export default function TestSessionsPage() {
                       Loading…
                     </td>
                   </tr>
+                ) : isError ? (
+                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40 }}>Unable to load test sessions.</td></tr>
                 ) : filteredSessions.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--gov-text-muted)' }}>
-                      No sessions found
+                      {user?.role === 'manufacturer' ? t('no_approved_results') : t('no_sessions')}
                     </td>
                   </tr>
                 ) : (

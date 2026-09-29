@@ -17,7 +17,7 @@ html {
 }
 
 body {
-  font-family: 'Inter', 'Noto Sans Devanagari', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', 'Noto Sans Devanagari', 'Nirmala UI', 'Arial Unicode MS', system-ui, -apple-system, sans-serif;
   background: var(--gov-bg-page);
   color: var(--gov-text-body);
   line-height: 1.6;
@@ -38,6 +38,12 @@ a:hover { text-decoration: underline; }
 button {
   cursor: pointer;
   font-family: inherit;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid var(--gov-saffron);
+  outline-offset: 2px;
 }
 
 input, select, textarea {
