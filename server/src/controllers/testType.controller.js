@@ -1,8 +1,8 @@
 import { TestType } from '../models/TestType.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
-import { AppError } from '../middleware/errorHandler.js';
-import { appendAuditLog } from '../services/audit.service.js';
+import { AppError } from '../utils/AppError.js';
+import { appendAuditLog } from '../services/auditLogger.service.js';
 
 export const getTestTypes = asyncHandler(async (req, res) => {
   const types = await TestType.find().sort({ testTypeId: 1 });

@@ -3,29 +3,17 @@ import { InstrumentModel } from '../models/InstrumentModel.js';
 import { Manufacturer } from '../models/Manufacturer.js';
 import { Report } from '../models/Report.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { getManufacturerForUser } from '../utils/tenantAccess.js';
+import { getManufacturerForUser, sessionScopeForUser } from '../utils/tenantAccess.js';
 
 export const getDashboardStats = asyncHandler(async (req, res) => {
   const { role, labId } = req.user;
 
-  let sessionFilter = {};
+  const sessionFilter = await sessionScopeForUser(req.user);
   let modelFilter = {};
 
-  if (['lab_technician', 'lab_admin'].includes(role)) {
-    sessionFilter = { labId: labId || null };
-  } else if (role === 'reviewer') {
-    sessionFilter = { labId: labId || null };
-  } else if (role === 'manufacturer') {
+  if (role === 'manufacturer') {
     const mfg = await getManufacturerForUser(req.user.sub);
-    if (mfg) {
-      const models = await InstrumentModel.find({ manufacturerId: mfg._id }).select('_id');
-      const modelIds = models.map((m) => m._id);
-      sessionFilter = { instrumentModelId: { $in: modelIds } };
-      modelFilter = { manufacturerId: mfg._id };
-    } else {
-      sessionFilter = { instrumentModelId: { $in: [] } };
-      modelFilter = { manufacturerId: null };
-    }
+    modelFilter = mfg ? { manufacturerId: mfg._id } : { manufacturerId: null };
   }
 
   const matchingSessions = await TestSession.find(sessionFilter).select('_id');

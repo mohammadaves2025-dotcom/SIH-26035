@@ -9,11 +9,27 @@ function median(arr) {
 }
 
 export async function detectObservationAnomalies(observation, session) {
-  if (observation.evaluationMethod !== 'mpe_band' || observation.errorRatioE === undefined || observation.errorRatioE === null) {
-    return observation;
+  let isApplicable = false;
+  let currentValue = null;
+
+  if (observation.evaluationMethod === 'mpe_band' && observation.errorRatioE !== null && observation.errorRatioE !== undefined) {
+    isApplicable = true;
+    currentValue = observation.errorRatioE;
+  } else if (observation.evaluationMethod === 'structured') {
+    if (observation.annexRef === 'A4_accuracy' && observation.errorRatioE !== undefined && observation.errorRatioE !== null) {
+      isApplicable = true;
+      currentValue = observation.errorRatioE;
+    } else if (observation.annexRef === 'A4_eccentricity' && observation.worstMargin !== undefined && observation.worstMargin !== null) {
+      isApplicable = true;
+      currentValue = observation.worstMargin; // Note: higher is better, but distribution anomaly can still be checked
+    } else if (observation.annexRef === 'A4_repeatability' && observation.range !== undefined && observation.range !== null) {
+      isApplicable = true;
+      currentValue = observation.range;
+    }
   }
 
-  // Find all test sessions with the same instrument model
+  if (!isApplicable) return observation;
+
   const historicalSessions = await TestSession.find({
     instrumentModelId: session.instrumentModelId,
     _id: { $ne: session._id },
@@ -21,29 +37,37 @@ export async function detectObservationAnomalies(observation, session) {
   }).select('_id');
 
   if (!historicalSessions.length) return observation;
-
   const sessionIds = historicalSessions.map((s) => s._id);
 
-  // Find prior observations for the same model, same annex, and same reference load
+  // Find prior observations for the same model, same annex
   const priorObs = await Observation.find({
     testSessionId: { $in: sessionIds },
     deletedAt: null,
     annexRef: observation.annexRef,
-    referenceLoad: observation.referenceLoad,
-    evaluationMethod: 'mpe_band',
-    errorRatioE: { $ne: null },
-  }).select('errorRatioE');
+  });
 
-  if (priorObs.length < 10) {
-    return observation; // Requires >= 10 prior observations per spec
+  const values = [];
+  for (const o of priorObs) {
+    if (o.evaluationMethod === 'mpe_band' && o.errorRatioE !== null && o.errorRatioE !== undefined) {
+      values.push(o.errorRatioE);
+    } else if (o.evaluationMethod === 'structured') {
+      if (o.annexRef === 'A4_accuracy' && o.errorRatioE !== undefined && o.errorRatioE !== null) {
+        values.push(o.errorRatioE);
+      } else if (o.annexRef === 'A4_eccentricity' && o.worstMargin !== undefined && o.worstMargin !== null) {
+        values.push(o.worstMargin);
+      } else if (o.annexRef === 'A4_repeatability' && o.range !== undefined && o.range !== null) {
+        values.push(o.range);
+      }
+    }
   }
 
-  const values = priorObs.map((o) => o.errorRatioE);
+  if (values.length < 10) return observation;
+
   const med = median(values);
   const absDeviations = values.map((v) => Math.abs(v - med));
   const mad = median(absDeviations);
 
-  const x = observation.errorRatioE;
+  const x = currentValue;
   let zScore = 0;
   if (mad > 0) {
     zScore = (0.6745 * (x - med)) / mad;
@@ -52,11 +76,23 @@ export async function detectObservationAnomalies(observation, session) {
   }
 
   if (Math.abs(zScore) > 3.5) {
+    let metricName = 'Error ratio';
+    let flagType = 'ANOMALY_ERROR_RATIO';
+    if (observation.evaluationMethod === 'structured') {
+      if (observation.annexRef === 'A4_eccentricity') {
+        metricName = 'Worst margin';
+        flagType = 'ANOMALY_METRIC_DEVIATION';
+      } else if (observation.annexRef === 'A4_repeatability') {
+        metricName = 'Range';
+        flagType = 'ANOMALY_METRIC_DEVIATION';
+      }
+    }
+
     observation.advisoryFlags = [
       {
-        flagType: 'ANOMALY_ERROR_RATIO',
+        flagType: flagType,
         zScore: Number(zScore.toFixed(2)),
-        message: `Error ratio (${x.toFixed(3)}) deviates significantly from model median (${med.toFixed(3)}), Z=${zScore.toFixed(2)}`,
+        message: `${metricName} (${x.toFixed(3)}) deviates significantly from model median (${med.toFixed(3)}), Z=${zScore.toFixed(2)}`,
         acknowledged: false,
       },
     ];

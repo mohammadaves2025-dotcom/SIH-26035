@@ -4,6 +4,7 @@ import { TestSession } from '../models/TestSession.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
 import { appendAuditLog } from '../services/auditLogger.service.js';
+import { sessionScopeForUser } from '../utils/tenantAccess.js';
 
 const exportJobs = new Map();
 
@@ -18,8 +19,9 @@ async function generateExportData(req, startDate, endDate) {
     generatedAt: { $gte: from, $lte: to },
   };
 
-  if (['lab_admin', 'reviewer', 'lab_technician'].includes(req.user.role)) {
-    const sessionIds = await TestSession.find({ labId: req.user.labId || null }).distinct('_id');
+  const sessionQuery = await sessionScopeForUser(req.user);
+  if (Object.keys(sessionQuery).length > 0) {
+    const sessionIds = await TestSession.find(sessionQuery).distinct('_id');
     query.testSessionId = { $in: sessionIds };
   }
 

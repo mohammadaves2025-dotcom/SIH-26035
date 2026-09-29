@@ -44,6 +44,7 @@ export function evaluateAnnex(annexRef, observation, instrumentModel, ruleConfig
   let worstMargin = Infinity;
   let maxRange = 0;
   let isPass = true;
+  let maxErrorRatioE = 0;
 
   if (type === 'manual') {
     return { outcome: 'pass', ruleConfigId: ruleConfig._id }; 
@@ -71,6 +72,12 @@ export function evaluateAnnex(annexRef, observation, instrumentModel, ruleConfig
       const computedError = Number(errorScaled) / DECIMAL_SCALE_NUMBER;
       const margin = targetMpe - Math.abs(computedError);
       
+      const eValue = Number(eScaled) / DECIMAL_SCALE_NUMBER;
+      const currentRatioE = eValue !== 0 ? computedError / eValue : 0;
+      if (Math.abs(currentRatioE) > Math.abs(maxErrorRatioE)) {
+        maxErrorRatioE = currentRatioE;
+      }
+
       if (margin < worstMargin) worstMargin = margin;
       computedErrors.push({ load: r.reference, error: computedError, mpe: targetMpe, margin });
       
@@ -79,7 +86,7 @@ export function evaluateAnnex(annexRef, observation, instrumentModel, ruleConfig
       }
     }
     if (worstMargin === Infinity) worstMargin = null;
-    return { outcome: isPass ? 'pass' : 'fail', computedErrors, worstMargin, ruleConfigId: ruleConfig._id };
+    return { outcome: isPass ? 'pass' : 'fail', computedErrors, worstMargin, errorRatioE: maxErrorRatioE, ruleConfigId: ruleConfig._id };
   }
   
   if (type === 'range_le_mpe_factor') {

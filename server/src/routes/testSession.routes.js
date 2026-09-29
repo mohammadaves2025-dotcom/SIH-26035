@@ -17,7 +17,7 @@ import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
 import { validate } from '../middleware/validate.js';
 import { createTestSessionSchema } from '../validators/testSession.schema.js';
-import { addObservationsSchema, singleObservationSchema, updateObservationSchema } from '../validators/observation.schema.js';
+import { addObservationsSchema, updateObservationSchema } from '../validators/observation.schema.js';
 
 const router = Router();
 

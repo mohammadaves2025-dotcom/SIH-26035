@@ -25,6 +25,14 @@ export const verifyReport = asyncHandler(async (req, res) => {
     throw new AppError(404, 'NOT_FOUND', 'No report matches this number or hash');
   }
 
+  // WP6 §12.4: Only published/archived/revoked/superseded reports are publicly verifiable.
+  // integrity_tagged reports have not yet been published; treat as not found.
+  const PUBLICLY_VERIFIABLE_STATUSES = ['published', 'archived', 'revoked'];
+  const isSupersededReport = Boolean(report.supersededByReportId);
+  if (!PUBLICLY_VERIFIABLE_STATUSES.includes(report.status) && !isSupersededReport) {
+    throw new AppError(404, 'NOT_FOUND', 'No report matches this number or hash');
+  }
+
   const session = report.testSessionId;
   const model = session?.instrumentModelId;
 
@@ -37,7 +45,6 @@ export const verifyReport = asyncHandler(async (req, res) => {
   );
 
   const isRevoked = report.status === 'revoked';
-  const isSuperseded = Boolean(report.supersededByReportId);
 
   res.status(200).json({
     success: true,
@@ -46,7 +53,7 @@ export const verifyReport = asyncHandler(async (req, res) => {
       status: report.status,
       isRevoked,
       isPublished: report.status === 'published',
-      isSuperseded,
+      isSuperseded: isSupersededReport,
       supersededByReportNumber: report.supersededByReportId?.reportNumber || null,
       revocationReason: report.revocationReason || null,
       publishedAt: report.publishedAt || null,

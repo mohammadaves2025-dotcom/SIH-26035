@@ -54,12 +54,25 @@ describe('Rule configuration regression sandbox', () => {
     expect(created.status).toBe(201);
     const candidate = created.body.data;
 
+    await request(app)
+      .post(`/api/rule-configs/${candidate._id}/submit-review`)
+      .set('Authorization', `Bearer ${expertLogin.body.data.token}`);
+    
+    // Simulate technical review by updating DB directly
+    await RuleConfig.findByIdAndUpdate(candidate._id, { status: 'in_review', technicalReviewedBy: candidate.createdBy, technicalReviewedAt: new Date() });
+    
+    const dbRule = await RuleConfig.findById(candidate._id);
+    console.log('dbRule:', dbRule);
+
     const beforeSandbox = await request(app)
       .post(`/api/rule-configs/${candidate._id}/activate`)
       .set('Authorization', `Bearer ${expertLogin.body.data.token}`)
       .send({ sourceReference: 'test source', validationNote: 'reviewed' });
     expect(beforeSandbox.status).toBe(409);
     expect(beforeSandbox.body.error.code).toBe('SANDBOX_REQUIRED');
+
+    // Need to reset to draft to allow sandbox
+    await RuleConfig.findByIdAndUpdate(candidate._id, { status: 'draft' });
 
     const sandboxResponse = await request(app)
       .post(`/api/rule-configs/${candidate._id}/sandbox`)
@@ -71,6 +84,8 @@ describe('Rule configuration regression sandbox', () => {
     expect(result.changed).toBe(1);
     expect(result.changes[0]).toMatchObject({ previousOutcome: 'fail', proposedOutcome: 'pass' });
     expect(result.resultHash).toHaveLength(64);
+    await RuleConfig.findByIdAndUpdate(candidate._id, { status: 'in_review' });
+
     const activated = await request(app)
       .post(`/api/rule-configs/${candidate._id}/activate`)
       .set('Authorization', `Bearer ${expertLogin.body.data.token}`)
@@ -93,6 +108,12 @@ describe('Rule configuration regression sandbox', () => {
       .post(`/api/rule-configs/${futureDraft.body.data._id}/sandbox`)
       .set('Authorization', `Bearer ${expertLogin.body.data.token}`);
     expect(futureSandbox.status).toBe(200);
+    await RuleConfig.findByIdAndUpdate(futureDraft.body.data._id, {
+      status: 'in_review',
+      technicalReviewedBy: futureDraft.body.data.createdBy,
+      technicalReviewedAt: new Date()
+    });
+
     const scheduled = await request(app)
       .post(`/api/rule-configs/${futureDraft.body.data._id}/activate`)
       .set('Authorization', `Bearer ${expertLogin.body.data.token}`)

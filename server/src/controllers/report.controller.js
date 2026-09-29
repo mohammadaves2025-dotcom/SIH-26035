@@ -1,13 +1,12 @@
 import path from 'path';
 import fs from 'fs';
 import { Report } from '../models/Report.js';
-import { ReportJob } from '../models/ReportJob.js';
 import { TestSession } from '../models/TestSession.js';
 import { InstrumentModel } from '../models/InstrumentModel.js';
 import { generateReport } from '../services/reportGenerator.service.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { assertSessionAccess, getManufacturerForUser, manufacturerModelIds } from '../utils/tenantAccess.js';
+import { assertSessionAccess, assertReportAccess, getManufacturerForUser, manufacturerModelIds } from '../utils/tenantAccess.js';
 import { sha256 } from '../utils/hash.js';
 import { verifyReportArtifact } from '../services/digitalSignature.service.js';
 import { appendAuditLog } from '../services/auditLogger.service.js';
@@ -98,32 +97,16 @@ export const createReport = asyncHandler(async (req, res) => {
   const session = await TestSession.findById(sessionId).populate('instrumentModelId');
   if (!session) throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   await assertSessionAccess(req, session);
-  const { remarks, officerRemarks, format = 'pdf', language = 'en' } = req.body || {};
-  
-  const job = await ReportJob.create({
+  const { remarks, officerRemarks } = req.body || {};
+  const report = await generateReport({
     testSessionId: sessionId,
-    requestedBy: req.user.sub,
-    format,
-    language,
+    userId: req.user.sub,
     remarks: remarks || officerRemarks,
-    status: 'queued'
   });
 
-  res.status(202).json({
+  res.status(201).json({
     success: true,
-    data: job,
-  });
-});
-
-export const getReportJobById = asyncHandler(async (req, res) => {
-  const job = await ReportJob.findById(req.params.id);
-  if (!job) throw new AppError(404, 'NOT_FOUND', 'Report job not found');
-  
-  // optionally verify access via testSessionId here if we want strict access
-  
-  res.status(200).json({
-    success: true,
-    data: job
+    data: report,
   });
 });
 
@@ -141,7 +124,7 @@ export const getReportById = asyncHandler(async (req, res) => {
   if (!report) {
     throw new AppError(404, 'NOT_FOUND', 'Report not found');
   }
-  await assertSessionAccess(req, report.testSessionId);
+  await assertReportAccess(req, report);
 
   res.status(200).json({
     success: true,
@@ -157,7 +140,7 @@ export const downloadReportFile = asyncHandler(async (req, res) => {
     throw new AppError(404, 'NOT_FOUND', 'Report not found');
   }
 
-  await assertSessionAccess(req, report.testSessionId);
+  await assertReportAccess(req, report);
 
   if (!['pdf', 'docx'].includes(format)) {
     throw new AppError(400, 'VALIDATION_ERROR', 'format must be pdf or docx');
@@ -198,7 +181,7 @@ function assertStoredReportIntegrity(report) {
 export const publishReport = asyncHandler(async (req, res) => {
   const report = await Report.findById(req.params.id).populate('testSessionId');
   if (!report) throw new AppError(404, 'NOT_FOUND', 'Report not found');
-  await assertSessionAccess(req, report.testSessionId);
+  await assertReportAccess(req, report);
   if (report.status !== 'integrity_tagged') {
     throw new AppError(409, 'INVALID_STATE', 'Only an integrity-tagged report can be published');
   }
@@ -224,7 +207,7 @@ export const archiveReport = asyncHandler(async (req, res) => {
   }
   const report = await Report.findById(req.params.id).populate('testSessionId');
   if (!report) throw new AppError(404, 'NOT_FOUND', 'Report not found');
-  await assertSessionAccess(req, report.testSessionId);
+  await assertReportAccess(req, report);
   if (report.status !== 'published') {
     throw new AppError(409, 'INVALID_STATE', 'Only a published report can be archived');
   }
@@ -257,7 +240,7 @@ export const revokeReport = asyncHandler(async (req, res) => {
   if (!report) {
     throw new AppError(404, 'NOT_FOUND', 'Report not found');
   }
-  await assertSessionAccess(req, report.testSessionId);
+  await assertReportAccess(req, report);
 
   if (report.status === 'revoked') {
     throw new AppError(409, 'INVALID_STATE', 'Report is already revoked');

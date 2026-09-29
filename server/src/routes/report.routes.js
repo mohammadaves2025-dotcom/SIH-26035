@@ -7,7 +7,6 @@ import {
   revokeReport,
   publishReport,
   archiveReport,
-  getReportJobById
 } from '../controllers/report.controller.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { authorize } from '../middleware/authorize.js';
@@ -16,7 +15,6 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/jobs/:id', getReportJobById);
 router.get('/', listReports);
 router.post('/:sessionId/generate', authorize('admin', 'reviewer'), createReport);
 router.get('/:id', getReportById);

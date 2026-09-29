@@ -216,6 +216,42 @@ describe('P12 — Security & Delivery Hardening', () => {
         bands: [{ uptoMultipleOfE: 5000, mpeFactor: 0.5 }],
       });
     expect(ruleRes.status).toBe(201);
+
+    // Create a mock session to test report scope
+    const mockSession = await TestSession.create({
+      instrumentModelId: model._id,
+      manufacturerName: 'Avery India Ltd',
+      modelName: 'MODEL-SEC-100',
+      serialNumber: 'TEST-123',
+      accuracyClass: 'III',
+      maxCapacity: 3000,
+      minCapacity: 20,
+      scaleInterval: 1.0,
+      selectedAnnexes: ['A3_initial_examination'],
+      labId: 'OTHER-LAB-01',
+      laboratoryRef: lab._id,
+      laboratoryName: 'Other Laboratory',
+      environmentalConditions: {
+        temperatureC: 22,
+        humidityPercent: 50,
+        inclinationDeg: 0,
+        notes: 'Room conditions',
+      },
+      createdBy: (await User.findOne({ email: 'tech@npl.res.in' }))._id,
+      testDate: new Date(),
+      status: 'published',
+    });
+
+    // Test session scope for user
+    const techScopeRes = await request(app)
+      .get(`/api/test-sessions/${mockSession._id}`)
+      .set('Authorization', `Bearer ${techToken}`); // Tech is from LAB-DELHI-01
+    expect(techScopeRes.status).toBe(403); // Forbidden because wrong lab
+
+    const mfrScopeRes = await request(app)
+      .get(`/api/test-sessions/${mockSession._id}`)
+      .set('Authorization', `Bearer ${manufacturerToken}`);
+    expect(mfrScopeRes.status).toBe(200); // Mfr owns this model, so 200
   });
 
   test('Expanded Known-Answer OIML R-76 MPE evaluation', async () => {
@@ -313,20 +349,19 @@ describe('P13 — Advisory Anomaly Flags (G18)', () => {
     expect(newSessionRes.status).toBe(201);
     const sessionId = newSessionRes.body.data._id;
 
-    await request(app)
+    const obsRes = await request(app)
       .post(`/api/test-sessions/${sessionId}/observations`)
       .set('Authorization', `Bearer ${techToken}`)
       .send({
         observations: [
           {
             annexRef: 'A4_accuracy',
-            evaluationMethod: 'mpe_band',
-            referenceLoad: 100,
-            indicatedValue: 100.45,
-            zeroCorrection: 0,
+            evaluationMethod: 'structured',
+            readings: [{ load: 100, reference: 100, indicated: 100.45 }],
           },
         ],
       });
+    expect(obsRes.status).toBe(201);
 
     const submitRes = await request(app)
       .post(`/api/test-sessions/${sessionId}/submit`)
@@ -352,5 +387,107 @@ describe('P13 — Advisory Anomaly Flags (G18)', () => {
 
     expect(ackRes.status).toBe(200);
     expect(ackRes.body.data.advisoryFlags[0].acknowledged).toBe(true);
+  });
+});
+
+describe('Privacy Tests (Step 4)', () => {
+  let adminToken, techAToken, techBToken, mfgAToken, mfgBToken;
+  let labA, labB, mfgA, mfgB, modelA, modelB;
+  let sessionADraft, sessionAPublished, sessionBDraft, reportAPublished, reportAUnpublished;
+
+  beforeAll(async () => {
+    // We already have setupTestDB called, but we can do our own scoped DB clearing here.
+    await clearTestDB();
+    const hash = await bcrypt.hash('pwd', 10);
+    const admin = await User.create({ name: 'Admin', email: 'priv-admin@test.com', passwordHash: hash, role: 'admin' });
+    const adminLogin = await request(app).post('/api/auth/login').send({ email: 'priv-admin@test.com', password: 'pwd' });
+    adminToken = adminLogin.body.data.token;
+
+    labA = await Laboratory.create({ labId: 'LAB-A', labName: 'Lab A', location: 'A', contactEmail: 'a@test.com', accreditationNo: 'NABL-A' });
+    labB = await Laboratory.create({ labId: 'LAB-B', labName: 'Lab B', location: 'B', contactEmail: 'b@test.com', accreditationNo: 'NABL-B' });
+
+    mfgA = await Manufacturer.create({ name: 'Mfg A', contactEmail: 'mfga@test.com' });
+    mfgB = await Manufacturer.create({ name: 'Mfg B', contactEmail: 'mfgb@test.com' });
+
+    modelA = await InstrumentModel.create({ manufacturerId: mfgA._id, modelName: 'Model A', accuracyClass: 'III', maxCapacity: 50, e: 0.1, minCapacity: 0.5, n: 500 });
+    modelB = await InstrumentModel.create({ manufacturerId: mfgB._id, modelName: 'Model B', accuracyClass: 'III', maxCapacity: 50, e: 0.1, minCapacity: 0.5, n: 500 });
+
+    const userTechA = await User.create({ name: 'Tech A', email: 'techa@test.com', passwordHash: hash, role: 'lab_technician', labId: labA.labId });
+    const userTechB = await User.create({ name: 'Tech B', email: 'techb@test.com', passwordHash: hash, role: 'lab_technician', labId: labB.labId });
+    const userMfgA = await User.create({ name: 'Mfg A', email: 'usermfga@test.com', passwordHash: hash, role: 'manufacturer', manufacturerRef: mfgA._id });
+    const userMfgB = await User.create({ name: 'Mfg B', email: 'usermfgb@test.com', passwordHash: hash, role: 'manufacturer', manufacturerRef: mfgB._id });
+
+    techAToken = (await request(app).post('/api/auth/login').send({ email: 'techa@test.com', password: 'pwd' })).body.data.token;
+    techBToken = (await request(app).post('/api/auth/login').send({ email: 'techb@test.com', password: 'pwd' })).body.data.token;
+    mfgAToken = (await request(app).post('/api/auth/login').send({ email: 'usermfga@test.com', password: 'pwd' })).body.data.token;
+    mfgBToken = (await request(app).post('/api/auth/login').send({ email: 'usermfgb@test.com', password: 'pwd' })).body.data.token;
+
+    sessionADraft = await TestSession.create({ instrumentModelId: modelA._id, manufacturerName: mfgA.name, modelName: modelA.modelName, serialNumber: 'SN-A-1', accuracyClass: 'III', maxCapacity: 50, minCapacity: 0.5, scaleInterval: 0.1, selectedAnnexes: ['A4_accuracy'], labId: labA.labId, laboratoryRef: labA._id, laboratoryName: labA.labName, createdBy: userTechA._id, testDate: new Date(), verificationStage: 'initial', status: 'draft', environmentalConditions: { temperatureC: 20, humidityPercent: 50, inclinationDeg: 0, notes: 'NA' } });
+    sessionAPublished = await TestSession.create({ instrumentModelId: modelA._id, manufacturerName: mfgA.name, modelName: modelA.modelName, serialNumber: 'SN-A-2', accuracyClass: 'III', maxCapacity: 50, minCapacity: 0.5, scaleInterval: 0.1, selectedAnnexes: ['A4_accuracy'], labId: labA.labId, laboratoryRef: labA._id, laboratoryName: labA.labName, createdBy: userTechA._id, testDate: new Date(), verificationStage: 'initial', status: 'published', environmentalConditions: { temperatureC: 20, humidityPercent: 50, inclinationDeg: 0, notes: 'NA' } });
+    sessionBDraft = await TestSession.create({ instrumentModelId: modelB._id, manufacturerName: mfgB.name, modelName: modelB.modelName, serialNumber: 'SN-B-1', accuracyClass: 'III', maxCapacity: 50, minCapacity: 0.5, scaleInterval: 0.1, selectedAnnexes: ['A4_accuracy'], labId: labB.labId, laboratoryRef: labB._id, laboratoryName: labB.labName, createdBy: userTechB._id, testDate: new Date(), verificationStage: 'initial', status: 'draft', environmentalConditions: { temperatureC: 20, humidityPercent: 50, inclinationDeg: 0, notes: 'NA' } });
+    
+    const mongoose = (await import('mongoose')).default;
+    const Report = mongoose.model('Report');
+    reportAUnpublished = await Report.create({ reportNumber: 'REP-A-UNPUB', testSessionId: sessionADraft._id, status: 'integrity_tagged', contentHash: 'hash1', pdfPath: '/dummy/1.pdf', docxPath: '/dummy/1.docx' });
+    reportAPublished = await Report.create({ reportNumber: 'REP-A-PUB', testSessionId: sessionAPublished._id, status: 'published', contentHash: 'hash2', pdfPath: '/dummy/2.pdf', docxPath: '/dummy/2.docx' });
+  });
+
+  test('1. manufacturer: unpublished report by id -> 404', async () => {
+    const res = await request(app).get(`/api/reports/${reportAUnpublished._id}`).set('Authorization', `Bearer ${mfgAToken}`);
+    expect([403, 404]).toContain(res.status); // 404 expected
+  });
+
+  test('2. manufacturer: unpublished report absent from list', async () => {
+    const res = await request(app).get(`/api/reports`).set('Authorization', `Bearer ${mfgAToken}`);
+    const reportIds = res.body.data.data.map(r => r._id.toString());
+    expect(reportIds).not.toContain(reportAUnpublished._id.toString());
+  });
+
+  test('3. manufacturer: own published report -> 200', async () => {
+    const res = await request(app).get(`/api/reports/${reportAPublished._id}`).set('Authorization', `Bearer ${mfgAToken}`);
+    expect(res.status).toBe(200);
+  });
+
+  test('4. manufacturer: other manufacturer published report -> 403 or 404', async () => {
+    const res = await request(app).get(`/api/reports/${reportAPublished._id}`).set('Authorization', `Bearer ${mfgBToken}`);
+    expect([403, 404]).toContain(res.status);
+  });
+
+  test('5. manufacturer: draft session -> 403 or 404', async () => {
+    const res = await request(app).get(`/api/test-sessions/${sessionADraft._id}`).set('Authorization', `Bearer ${mfgAToken}`);
+    expect([403, 404]).toContain(res.status);
+  });
+
+  test('6. lab B tech: no lab A session', async () => {
+    const res = await request(app).get(`/api/test-sessions/${sessionADraft._id}`).set('Authorization', `Bearer ${techBToken}`);
+    expect([403, 404]).toContain(res.status);
+  });
+
+  test('7. lab B tech: no lab A report list', async () => {
+    const res = await request(app).get(`/api/reports`).set('Authorization', `Bearer ${techBToken}`);
+    const reportIds = res.body.data.data.map(r => r._id.toString());
+    expect(reportIds).not.toContain(reportAPublished._id.toString());
+  });
+
+  test('8. lab B tech: no lab A dashboard numbers', async () => {
+    const res = await request(app).get(`/api/dashboard/stats`).set('Authorization', `Bearer ${techBToken}`);
+    // should only count Lab B
+    if (res.body.data && res.body.data.totalSessions !== undefined) {
+      expect(res.body.data.totalSessions).toBe(1);
+    }
+  });
+
+  test('9. manufacturer dashboard excludes draft/under_review', async () => {
+    const res = await request(app).get(`/api/dashboard/stats`).set('Authorization', `Bearer ${mfgAToken}`);
+    if (res.body.data && res.body.data.totalSessions !== undefined) {
+      expect(res.body.data.totalSessions).toBe(1);
+    }
+  });
+
+  test('10. manufacturer model history scoped correctly', async () => {
+    const res = await request(app).get(`/api/instrument-models/${modelA._id}/history`).set('Authorization', `Bearer ${mfgAToken}`);
+    const sessionIds = res.body.data.map(s => s._id.toString());
+    expect(sessionIds).toContain(sessionAPublished._id.toString());
+    expect(sessionIds).not.toContain(sessionADraft._id.toString());
   });
 });

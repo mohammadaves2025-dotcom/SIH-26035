@@ -4,6 +4,7 @@ import { resolveRuleConfig } from '../services/ruleResolver.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
 import { compareRuleConfigToHistory } from '../services/ruleSandbox.service.js';
+import { TestType } from '../models/TestType.js';
 
 export const createRuleConfig = asyncHandler(async (req, res) => {
   const ruleConfig = await RuleConfig.create({ ...req.body, status: 'draft', createdBy: req.user.sub });
@@ -60,6 +61,19 @@ export const activateRuleConfig = asyncHandler(async (req, res) => {
   });
   if (conflictingRule) {
     throw new AppError(409, 'RULE_VERSION_CONFLICT', 'An active or scheduled rule already exists for this accuracy class and effective date');
+  }
+
+  const mandatoryTestTypes = await TestType.find({
+    status: 'approved',
+    isActive: true,
+    'mandatoryFor.accuracyClass': ruleConfig.accuracyClass
+  });
+
+  for (const tt of mandatoryTestTypes) {
+    const hasCriterion = ruleConfig.testCriteria?.some(c => c.annexRef === tt.oimlAnnexRef && c.criterion);
+    if (!hasCriterion) {
+      throw new AppError(422, 'MISSING_MANDATORY_CRITERION', `Rule configuration is missing a criterion for mandatory test type: ${tt.oimlAnnexRef}`);
+    }
   }
 
   const predecessor = await RuleConfig.findOne({

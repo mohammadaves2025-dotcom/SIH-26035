@@ -180,13 +180,9 @@ describe('End-to-End Metrology System Lifecycle', () => {
     expect(fs.existsSync(path.join(process.cwd(), report.docxPath))).toBe(true);
 
     // 6. Public verification endpoint (no auth required)
+    // WP6 §12.4: integrity_tagged reports are not publicly verifiable until published.
     const verifyRes = await request(app).get(`/api/verify/${report.reportNumber}`);
-    expect(verifyRes.status).toBe(200);
-    expect(verifyRes.body.data.reportNumber).toBe(report.reportNumber);
-    expect(verifyRes.body.data.overallResult).toBe('pass');
-    expect(verifyRes.body.data.status).toBe('integrity_tagged');
-    expect(verifyRes.body.data.isPublished).toBe(false);
-    expect(verifyRes.body.data.isIntegrityVerified).toBe(true);
+    expect(verifyRes.status).toBe(404);
 
     // Only a reviewer/admin can publish, and publication checks both stored artifacts.
     const publishRes = await request(app)
@@ -196,7 +192,12 @@ describe('End-to-End Metrology System Lifecycle', () => {
     expect(publishRes.body.data.status).toBe('published');
 
     const publishedVerifyRes = await request(app).get(`/api/verify/${report.reportNumber}`);
+    expect(publishedVerifyRes.status).toBe(200);
+    expect(publishedVerifyRes.body.data.reportNumber).toBe(report.reportNumber);
+    expect(publishedVerifyRes.body.data.overallResult).toBe('pass');
+    expect(publishedVerifyRes.body.data.status).toBe('published');
     expect(publishedVerifyRes.body.data.isPublished).toBe(true);
+    expect(publishedVerifyRes.body.data.isIntegrityVerified).toBe(true);
 
     // Verification by SHA256 hash
     const verifyHashRes = await request(app).get(`/api/verify/${report.contentHash}`);

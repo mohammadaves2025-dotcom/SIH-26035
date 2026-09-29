@@ -57,12 +57,11 @@ This document provides traceability, verification proof, and operational status 
 
 ## Honest List of Pending Items
 
-1. **P11 Offline Entry & Sync**: Core local draft and replay path is implemented; end-to-end offline/online validation and conflict resolution remain.
-2. **Docker Validation**: Dockerfiles exist but have never been built or tested.
-3. **OIML Constants**: All MPE band values, multiplier logic, and section references are UNVERIFIED - PENDING EXPERT review.
-4. **Regulatory rule source**: Department of Consumer Affairs source page is registered, but the base General Rules, applicable amendments/corrigenda, and the governing OIML edition still need clause-by-clause consolidation and expert approval.
-5. **Hindi/English Localization**: Not implemented.
-6. **Annex A2/A3/A5/A6 Automatic Computation**: Only A4_accuracy has automatic MPE calculation; all others use manual checklist.
-7. **Report lifecycle and signing deployment**: Detached PKI signatures are supported through an external signer contract, but an HSM/KMS signer, approved certificate, trusted timestamp policy and domain acceptance must be provisioned before production use.
-8. **Hardware Integration**: No RS-232 / Bluetooth serial scale integration.
-9. **Third-Party NABL LIMS Integration**: Not implemented.
+1. **Docker Validation**: Dockerfiles exist but have never been built or tested.
+2. **OIML Constants**: All MPE band values, multiplier logic, and section references are UNVERIFIED - PENDING EXPERT review.
+3. **Regulatory rule source**: Department of Consumer Affairs source page is registered, but the base General Rules, applicable amendments/corrigenda, and the governing OIML edition still need clause-by-clause consolidation and expert approval.
+4. **Hindi/English Localization**: Not implemented.
+5. **Annex A2/A3/A5/A6 Automatic Computation**: A4 tests (accuracy, repeatability, eccentricity) use structured MPE or max-error bounds; all others use manual checklist.
+6. **Report lifecycle and signing deployment**: Detached PKI signatures are supported through an external signer contract, but an HSM/KMS signer, approved certificate, trusted timestamp policy and domain acceptance must be provisioned before production use.
+7. **Hardware Integration**: No RS-232 / Bluetooth serial scale integration.
+8. **Third-Party NABL LIMS Integration**: Not implemented.

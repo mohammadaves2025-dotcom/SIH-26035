@@ -39,7 +39,6 @@ const reportSchema = new mongoose.Schema(
     revokedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     revocationReason: { type: String, trim: true, default: null },
     officerRemarks: { type: String, trim: true, default: null, immutable: true },
-    language: { type: String, enum: ['en', 'hi'], default: 'en', immutable: true },
     generatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

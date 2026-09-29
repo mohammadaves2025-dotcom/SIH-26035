@@ -9,9 +9,9 @@ import { detectObservationAnomalies } from '../services/anomalyDetector.service.
 import { appendAuditLog } from '../services/auditLogger.service.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { assertSessionAccess, getManufacturerForUser, manufacturerModelIds } from '../utils/tenantAccess.js';
+import { assertSessionAccess, getManufacturerForUser, manufacturerModelIds, sessionScopeForUser } from '../utils/tenantAccess.js';
 import { createTestSessionSchema } from '../validators/testSession.schema.js';
-import { singleObservationSchema } from '../validators/observation.schema.js';
+
 
 async function createSessionRecord(req, body) {
   const {
@@ -96,10 +96,10 @@ export const addObservations = asyncHandler(async (req, res) => {
   }
   const accuracyClass = session.accuracyClass || model?.accuracyClass;
   if (!accuracyClass) throw new AppError(422, 'INVALID_INSTRUMENT', 'Accuracy class is required');
-  
+
   const ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
   const validator = createObservationValidator(ruleConfig);
-  
+
   const validationResult = validator.safeParse({ observations: Array.isArray(req.body.observations) ? req.body.observations : [req.body] });
   if (!validationResult.success) {
     throw new AppError(400, 'VALIDATION_ERROR', validationResult.error.issues.map(i => i.message).join('; '));
@@ -152,22 +152,22 @@ export const submitTestSession = asyncHandler(async (req, res) => {
     );
   }
 
-async function checkMandatoryTests(session, observations, accuracyClass) {
-  const stage = session.verificationStage || 'initial';
-  const mandatoryTypes = await TestType.find({
-    status: 'approved',
-    isActive: true,
-    'mandatoryFor.accuracyClass': accuracyClass,
-    'mandatoryFor.verificationStage': { $in: ['all', stage] }
-  });
+  async function checkMandatoryTests(session, observations, accuracyClass) {
+    const stage = session.verificationStage || 'initial';
+    const mandatoryTypes = await TestType.find({
+      status: 'approved',
+      isActive: true,
+      'mandatoryFor.accuracyClass': accuracyClass,
+      'mandatoryFor.verificationStage': { $in: ['all', stage] }
+    });
 
-  const observedAnnexes = new Set(observations.map(o => o.annexRef));
-  const missingMandatory = mandatoryTypes.filter(t => !observedAnnexes.has(t.oimlAnnexRef));
+    const observedAnnexes = new Set(observations.map(o => o.annexRef));
+    const missingMandatory = mandatoryTypes.filter(t => !observedAnnexes.has(t.oimlAnnexRef));
 
-  if (missingMandatory.length > 0) {
-    throw new AppError(422, 'MANDATORY_TEST_MISSING', `Missing mandatory test types for class ${accuracyClass} stage ${stage}: ${missingMandatory.map(t => t.testName).join(', ')}`);
+    if (missingMandatory.length > 0) {
+      throw new AppError(422, 'MANDATORY_TEST_MISSING', `Missing mandatory test types for class ${accuracyClass} stage ${stage}: ${missingMandatory.map(t => t.testName).join(', ')}`);
+    }
   }
-}
 
   const selected = new Set(session.selectedAnnexes || []);
   const observed = new Set(observations.map((observation) => observation.annexRef));
@@ -210,8 +210,16 @@ async function checkMandatoryTests(session, observations, accuracyClass) {
       updateObj.marginToMpe = evalResult.marginToMpe;
       updateObj.errorRatioE = evalResult.errorRatioE;
       updateObj.ruleConfigId = evalResult.ruleConfigId;
+    } else if (obs.evaluationMethod === 'structured') {
+      updateObj.computedErrors = evalResult.computedErrors;
+      updateObj.worstMargin = evalResult.worstMargin;
+      updateObj.range = evalResult.range;
+      updateObj.errorRatioE = evalResult.errorRatioE;
+      updateObj.ruleConfigId = evalResult.ruleConfigId;
+    } else if (obs.evaluationMethod === 'manual_checklist') {
+      updateObj.ruleConfigId = evalResult.ruleConfigId;
     }
-    Object.assign(obs, updateObj);
+    obs.set(updateObj);
     await detectObservationAnomalies(obs, session);
     updateObj.advisoryFlags = obs.advisoryFlags;
 
@@ -346,18 +354,10 @@ export const getTestSessions = asyncHandler(async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit || '20', 10), 100);
   const skip = (page - 1) * limit;
 
-  const query = {};
+  const query = await sessionScopeForUser(req.user, req.query.labId);
 
   if (req.query.status) query.status = req.query.status;
-  if (req.query.labId) query.labId = req.query.labId;
   if (req.query.instrumentModelId) query.instrumentModelId = req.query.instrumentModelId;
-
-  // Auto-filter by role for lab tech & manufacturer
-  if (['lab_technician', 'lab_admin', 'reviewer'].includes(req.user.role)) query.labId = req.user.labId || null;
-  if (req.user.role === 'manufacturer') {
-    const manufacturer = await getManufacturerForUser(req.user.sub);
-    query.instrumentModelId = { $in: await manufacturerModelIds(manufacturer?._id) };
-  }
 
   const [sessions, total] = await Promise.all([
     TestSession.find(query)
@@ -466,10 +466,10 @@ export const updateObservation = asyncHandler(async (req, res) => {
   }
   const accuracyClass = session.accuracyClass || model?.accuracyClass;
   if (!accuracyClass) throw new AppError(422, 'INVALID_INSTRUMENT', 'Accuracy class is required');
-  
+
   const ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
   const validator = createSingleObservationValidator(ruleConfig);
-  
+
   const validationResult = validator.safeParse(mergedObs);
   if (!validationResult.success) {
     throw new AppError(400, 'VALIDATION_ERROR', validationResult.error.issues.map(i => i.message).join('; '));
@@ -613,16 +613,16 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
 
         let ruleConfig = ruleConfigBySessionId.get(session._id.toString());
         if (!ruleConfig) {
-           let model = session.instrumentModelId;
-           if (!model || !model.accuracyClass) {
-             model = await InstrumentModel.findById(session.instrumentModelId);
-           }
-           const accuracyClass = session.accuracyClass || model?.accuracyClass;
-           if (!accuracyClass) throw new AppError(422, 'INVALID_INSTRUMENT', 'Accuracy class is required');
-           ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
-           ruleConfigBySessionId.set(session._id.toString(), ruleConfig);
+          let model = session.instrumentModelId;
+          if (!model || !model.accuracyClass) {
+            model = await InstrumentModel.findById(session.instrumentModelId);
+          }
+          const accuracyClass = session.accuracyClass || model?.accuracyClass;
+          if (!accuracyClass) throw new AppError(422, 'INVALID_INSTRUMENT', 'Accuracy class is required');
+          ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
+          ruleConfigBySessionId.set(session._id.toString(), ruleConfig);
         }
-        
+
         const singleObservationValidator = createSingleObservationValidator(ruleConfig);
         const validation = singleObservationValidator.safeParse(data);
         if (!validation.success) {
@@ -668,24 +668,24 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
         }
 
         const allowedFields = ['annexRef', 'evaluationMethod', 'referenceLoad', 'indicatedValue', 'zeroCorrection', 'checklistPassed', 'reviewerNotes', 'readings'];
-        
+
         const mergedObs = { ...observation.toObject() };
         for (const field of allowedFields) {
           if (data && data[field] !== undefined) {
             mergedObs[field] = data[field];
           }
         }
-        
+
         let ruleConfig = ruleConfigBySessionId.get(session._id.toString());
         if (!ruleConfig) {
-           let model = session.instrumentModelId;
-           if (!model || !model.accuracyClass) {
-             model = await InstrumentModel.findById(session.instrumentModelId);
-           }
-           const accuracyClass = session.accuracyClass || model?.accuracyClass;
-           if (!accuracyClass) throw new AppError(422, 'INVALID_INSTRUMENT', 'Accuracy class is required');
-           ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
-           ruleConfigBySessionId.set(session._id.toString(), ruleConfig);
+          let model = session.instrumentModelId;
+          if (!model || !model.accuracyClass) {
+            model = await InstrumentModel.findById(session.instrumentModelId);
+          }
+          const accuracyClass = session.accuracyClass || model?.accuracyClass;
+          if (!accuracyClass) throw new AppError(422, 'INVALID_INSTRUMENT', 'Accuracy class is required');
+          ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
+          ruleConfigBySessionId.set(session._id.toString(), ruleConfig);
         }
 
         const singleObservationValidator = createSingleObservationValidator(ruleConfig);
@@ -697,7 +697,7 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
           });
           continue;
         }
-        
+
         for (const field of allowedFields) {
           if (data && data[field] !== undefined) observation[field] = data[field];
         }
