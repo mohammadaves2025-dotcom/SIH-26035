@@ -62,6 +62,7 @@ const observationSchema = new mongoose.Schema(
         acknowledged: { type: Boolean, default: false },
         acknowledgedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
         acknowledgedAt: { type: Date, default: null },
+        comment: { type: String, trim: true, default: null },
       },
     ],
   },

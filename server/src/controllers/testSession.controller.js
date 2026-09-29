@@ -162,19 +162,37 @@ export const submitTestSession = asyncHandler(async (req, res) => {
   };
   const ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
 
+  const bulkOps = [];
+  const auditLogsToAppend = [];
   for (const obs of observations) {
     const evalResult = evaluateObservation(obs, instrumentModel, ruleConfig, session.verificationStage || 'initial');
-    obs.outcome = evalResult.outcome;
+    const updateObj = {
+      outcome: evalResult.outcome,
+    };
     if (obs.evaluationMethod === 'mpe_band') {
-      obs.computedError = evalResult.computedError;
-      obs.appliedMpe = evalResult.appliedMpe;
-      obs.marginToMpe = evalResult.marginToMpe;
-      obs.errorRatioE = evalResult.errorRatioE;
-      obs.ruleConfigId = evalResult.ruleConfigId;
+      updateObj.computedError = evalResult.computedError;
+      updateObj.appliedMpe = evalResult.appliedMpe;
+      updateObj.marginToMpe = evalResult.marginToMpe;
+      updateObj.errorRatioE = evalResult.errorRatioE;
+      updateObj.ruleConfigId = evalResult.ruleConfigId;
     }
+    Object.assign(obs, updateObj);
     await detectObservationAnomalies(obs, session);
-    await obs.save();
-    await appendAuditLog({ entityType: 'Observation', entityId: obs._id, action: `evaluate:${ruleConfig._id}:${evalResult.outcome}`, userId: req.user.sub });
+    updateObj.advisoryFlags = obs.advisoryFlags;
+
+    bulkOps.push({
+      updateOne: {
+        filter: { _id: obs._id },
+        update: { $set: updateObj },
+      },
+    });
+
+    auditLogsToAppend.push({
+      entityType: 'Observation',
+      entityId: obs._id,
+      action: `evaluate:${ruleConfig._id}:${evalResult.outcome}`,
+      userId: req.user.sub,
+    });
   }
 
   const overall = evaluateSession(observations);
@@ -183,8 +201,15 @@ export const submitTestSession = asyncHandler(async (req, res) => {
   session.overallResult = overall;
   session.submittedBy = req.user.sub;
   session.submittedAt = new Date();
+
+  if (bulkOps.length > 0) {
+    await Observation.bulkWrite(bulkOps);
+  }
   await session.save();
 
+  for (const log of auditLogsToAppend) {
+    await appendAuditLog(log);
+  }
   await appendAuditLog({
     entityType: 'TestSession',
     entityId: session._id,
@@ -576,7 +601,60 @@ export const batchSyncTestSessions = asyncHandler(async (req, res) => {
   });
 });
 
+export const updateTestSession = asyncHandler(async (req, res) => {
+  const session = await TestSession.findById(req.params.id);
+  if (!session) {
+    throw new AppError(404, 'NOT_FOUND', 'Test session not found');
+  }
+
+  if (session.status !== 'draft') {
+    throw new AppError(
+      409,
+      'SESSION_LOCKED',
+      'Only test sessions in draft status can be modified'
+    );
+  }
+
+  await assertSessionAccess(req, session);
+
+  const allowedFields = ['environmentalConditions', 'serialNumber', 'testDate', 'verificationStage', 'selectedAnnexes'];
+  const before = {};
+  const after = {};
+  let modified = false;
+
+  for (const field of allowedFields) {
+    if (req.body[field] !== undefined) {
+      before[field] = session[field];
+      session[field] = req.body[field];
+      after[field] = req.body[field];
+      modified = true;
+    }
+  }
+
+  if (!modified) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'No valid editable fields provided');
+  }
+
+  await session.save();
+
+  await appendAuditLog({
+    entityType: 'TestSession',
+    entityId: session._id,
+    action: 'update',
+    userId: req.user.sub,
+    details: { before, after },
+  });
+
+  res.status(200).json({
+    success: true,
+    data: session,
+  });
+});
+
 export const acknowledgeObservationFlag = asyncHandler(async (req, res) => {
+  const { flagId, comment } = req.body || {};
+  const ackComment = (typeof comment === 'string' && comment.trim()) ? comment.trim() : 'Acknowledged by reviewing officer';
+
   const observation = await Observation.findOne({ _id: req.params.obsId, deletedAt: null });
   if (!observation) throw new AppError(404, 'NOT_FOUND', 'Observation not found');
 
@@ -584,20 +662,32 @@ export const acknowledgeObservationFlag = asyncHandler(async (req, res) => {
   if (!session) throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   await assertSessionAccess(req, session);
 
-  if (observation.advisoryFlags && observation.advisoryFlags.length > 0) {
-    for (const flag of observation.advisoryFlags) {
-      flag.acknowledged = true;
-      flag.acknowledgedBy = req.user.sub;
-      flag.acknowledgedAt = new Date();
-    }
-    await observation.save();
-    await appendAuditLog({
-      entityType: 'Observation',
-      entityId: observation._id,
-      action: 'acknowledge_advisory_flag',
-      userId: req.user.sub,
-    });
+  let targetFlag = null;
+  if (flagId && observation.advisoryFlags) {
+    targetFlag = observation.advisoryFlags.id(flagId) || observation.advisoryFlags.find(f => f._id.toString() === flagId.toString());
   }
+  if (!targetFlag && observation.advisoryFlags && observation.advisoryFlags.length > 0) {
+    targetFlag = observation.advisoryFlags.find(f => !f.acknowledged) || observation.advisoryFlags[0];
+  }
+
+  if (!targetFlag) {
+    throw new AppError(404, 'NOT_FOUND', 'Advisory flag not found on observation');
+  }
+
+  targetFlag.acknowledged = true;
+  targetFlag.acknowledgedBy = req.user.sub;
+  targetFlag.acknowledgedAt = new Date();
+  targetFlag.comment = ackComment;
+
+  await observation.save();
+
+  await appendAuditLog({
+    entityType: 'Observation',
+    entityId: observation._id,
+    action: 'acknowledge_advisory_flag',
+    userId: req.user.sub,
+    details: { flagId: targetFlag._id, comment: ackComment },
+  });
 
   res.status(200).json({
     success: true,

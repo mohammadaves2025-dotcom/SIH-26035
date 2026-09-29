@@ -65,7 +65,7 @@ async function getNextReportNumber() {
   return `NAWI-${year}-${seqStr}`;
 }
 
-function generateHtmlTemplate({ reportNumber, session, model, manufacturer, observations, attachments, generatedAt }) {
+function generateHtmlTemplate({ reportNumber, session, model, manufacturer, observations, attachments, generatedAt, remarks }) {
   const verificationUrl = process.env.PUBLIC_APP_URL
     ? `${process.env.PUBLIC_APP_URL.replace(/\/$/, '')}/verify?q=${encodeURIComponent(reportNumber)}`
     : `https://nawi.gov.in/verify?q=${encodeURIComponent(reportNumber)}`;
@@ -215,6 +215,17 @@ function generateHtmlTemplate({ reportNumber, session, model, manufacturer, obse
         }
       </div>
 
+      ${
+        remarks
+          ? `
+      <div class="section">
+        <div class="section-title">5. Reviewing Officer Remarks</div>
+        <p style="font-size: 13px; color: #334155; white-space: pre-wrap;">${escapeHtml(remarks)}</p>
+      </div>
+      `
+          : ''
+      }
+
       <div class="result-box ${session.overallResult === 'pass' ? 'pass' : 'fail'}">
         OVERALL EVALUATION VERDICT: ${session.overallResult ? session.overallResult.toUpperCase() : 'PENDING'}
       </div>
@@ -254,7 +265,7 @@ async function renderPdf({ html, pdfPath }) {
   }
 }
 
-async function renderDocx({ reportNumber, session, model, manufacturer, observations, attachments, docxPath }) {
+async function renderDocx({ reportNumber, session, model, manufacturer, observations, attachments, docxPath, remarks }) {
   try {
     const tableHeaderRow = new TableRow({
       children: [
@@ -298,6 +309,12 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
       rows: [tableHeaderRow, ...tableObsRows],
     });
 
+    const remarksParagraphs = remarks ? [
+      new Paragraph({ text: '' }),
+      new Paragraph({ text: '4. Reviewing Officer Remarks', heading: HeadingLevel.HEADING_3 }),
+      new Paragraph({ text: remarks }),
+    ] : [];
+
     const doc = new Document({
       sections: [
         {
@@ -330,6 +347,7 @@ async function renderDocx({ reportNumber, session, model, manufacturer, observat
             new Paragraph({ text: '' }),
             new Paragraph({ text: '3. OIML R-76 Test Observations & Compliance Determination', heading: HeadingLevel.HEADING_3 }),
             obsTable,
+            ...remarksParagraphs,
             new Paragraph({ text: '' }),
             new Paragraph({
               text: `OVERALL EVALUATION VERDICT: ${(session.overallResult || 'PENDING').toUpperCase()}`,

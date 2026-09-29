@@ -9,3 +9,5 @@ export const approveSession = (sessionId) => apiClient.post(`/test-sessions/${se
 export const rejectSession = (sessionId, reason) => apiClient.post(`/test-sessions/${sessionId}/reject`, { reason });
 export const updateObservation = (sessionId, obsId, data) => apiClient.patch(`/test-sessions/${sessionId}/observations/${obsId}`, data);
 export const deleteObservation = (sessionId, obsId) => apiClient.delete(`/test-sessions/${sessionId}/observations/${obsId}`);
+export const updateTestSession = (sessionId, data) => apiClient.patch(`/test-sessions/${sessionId}`, data);
+export const acknowledgeFlag = (sessionId, obsId, payload) => apiClient.post(`/test-sessions/${sessionId}/observations/${obsId}/acknowledge-flag`, payload);

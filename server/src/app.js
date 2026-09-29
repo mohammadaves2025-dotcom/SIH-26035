@@ -3,9 +3,11 @@ import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
+import mongoose from 'mongoose';
 import { env } from './config/env.js';
 import routes from './routes/index.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
+import { AppError } from './utils/AppError.js';
 
 const app = express();
 
@@ -15,8 +17,16 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-app.get('/ready', (_req, res) => {
-  res.status(200).json({ status: 'ready', timestamp: new Date().toISOString() });
+app.get('/ready', async (_req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ status: 'unhealthy', error: 'Database connection is not ready' });
+    }
+    await mongoose.connection.db.admin().ping();
+    res.status(200).json({ status: 'ready', timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(503).json({ status: 'unhealthy', error: 'Database ping failed' });
+  }
 });
 
 const allowedOrigins = (env.CLIENT_ORIGIN || 'http://localhost:5173')

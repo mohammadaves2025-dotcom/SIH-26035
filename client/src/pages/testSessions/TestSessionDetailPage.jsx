@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getTestSessionById, addObservations, updateObservation, deleteObservation, submitSession, approveSession, rejectSession } from '../../services/testSession.service.js';
+import { getTestSessionById, updateTestSession, addObservations, updateObservation, deleteObservation, submitSession, approveSession, rejectSession, acknowledgeFlag } from '../../services/testSession.service.js';
 import { generateReport } from '../../services/report.service.js';
 import { getAttachments, uploadAttachment, downloadAttachment } from '../../services/attachment.service.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { ANNEX_REFS } from '../../config/constants.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
-import { ArrowLeft, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle2, ShieldCheck, XCircle, Trash2, Pencil } from 'lucide-react';
+import { ArrowLeft, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle2, ShieldCheck, XCircle, Trash2, Pencil, AlertTriangle } from 'lucide-react';
 
 export default function TestSessionDetailPage() {
   const { id } = useParams();
@@ -27,6 +27,8 @@ export default function TestSessionDetailPage() {
     zeroCorrection: '',
   });
   const [showObsForm, setShowObsForm] = useState(false);
+  const [showSessionEditForm, setShowSessionEditForm] = useState(false);
+  const [sessionEditForm, setSessionEditForm] = useState({});
   const [editingObsId, setEditingObsId] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
 
@@ -41,6 +43,23 @@ export default function TestSessionDetailPage() {
     queryFn: () => getAttachments(id),
     select: (r) => r?.data || r || [],
     enabled: !!id,
+  });
+
+  const editSessionMutation = useMutation({
+    mutationFn: (data) => updateTestSession(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['test-session', id]);
+      addToast({ type: 'success', message: 'Test session parameters updated successfully' });
+      setShowSessionEditForm(false);
+    },
+  });
+
+  const ackFlagMutation = useMutation({
+    mutationFn: ({ obsId, flagId, comment }) => acknowledgeFlag(id, obsId, { flagId, comment }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['test-session', id]);
+      addToast({ type: 'success', message: 'Advisory flag acknowledged' });
+    },
   });
 
   const addObsMutation = useMutation({
@@ -100,7 +119,7 @@ export default function TestSessionDetailPage() {
   });
 
   const reportMutation = useMutation({
-    mutationFn: () => generateReport(id),
+    mutationFn: (remarks) => generateReport(id, remarks),
     onSuccess: () => {
       queryClient.invalidateQueries(['test-session', id]);
       queryClient.invalidateQueries(['reports']);
@@ -232,17 +251,70 @@ export default function TestSessionDetailPage() {
             <button className="gov-btn gov-btn-primary" onClick={() => setShowObsForm(!showObsForm)}>
               <Plus size={14} /> Add Observation
             </button>
+            <button className="gov-btn gov-btn-outline" onClick={() => {
+              setSessionEditForm({
+                serialNumber: session.serialNumber || '',
+                verificationStage: session.verificationStage || 'initial',
+                environmentalConditions: {
+                  temperatureC: session.environmentalConditions?.temperatureC ?? '',
+                  humidityPercent: session.environmentalConditions?.humidityPercent ?? '',
+                  inclinationDeg: session.environmentalConditions?.inclinationDeg ?? '',
+                },
+              });
+              setShowSessionEditForm(!showSessionEditForm);
+            }}>
+              <Pencil size={14} /> Edit Session Details
+            </button>
             <button className="gov-btn gov-btn-accent" onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending || observations.length === 0}>
               <Send size={14} /> {submitMutation.isPending ? 'Evaluating...' : 'Submit for Evaluation'}
             </button>
           </>
         )}
         {['passed', 'failed'].includes(session.status) && isReviewerOrAdmin && (
-          <button className="gov-btn gov-btn-primary" onClick={() => reportMutation.mutate()} disabled={reportMutation.isPending}>
+          <button className="gov-btn gov-btn-primary" onClick={() => {
+            const remarks = window.prompt('Enter optional reviewing officer remarks for the report:');
+            reportMutation.mutate(remarks ? remarks.trim() : undefined);
+          }} disabled={reportMutation.isPending}>
             <FileCheck size={14} /> {reportMutation.isPending ? 'Generating report...' : 'Generate test report'}
           </button>
         )}
       </div>
+
+      {/* Session Details Edit Panel */}
+      {showSessionEditForm && canEditDraft && (
+        <div className="gov-card mb-24" style={{ border: '2px solid var(--gov-navy-imperial)' }}>
+          <div className="gov-card-header"><h4>Edit Session Test Parameters</h4></div>
+          <div className="gov-card-body">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+              <div className="gov-form-group">
+                <label className="gov-label">Serial Number</label>
+                <input className="gov-input" value={sessionEditForm.serialNumber || ''} onChange={(e) => setSessionEditForm(f => ({ ...f, serialNumber: e.target.value }))} />
+              </div>
+              <div className="gov-form-group">
+                <label className="gov-label">Verification Stage</label>
+                <select className="gov-select" value={sessionEditForm.verificationStage || 'initial'} onChange={(e) => setSessionEditForm(f => ({ ...f, verificationStage: e.target.value }))}>
+                  <option value="initial">Initial Verification</option>
+                  <option value="subsequent">Subsequent Inspection (In-Service, 2× MPE)</option>
+                </select>
+              </div>
+              <div className="gov-form-group">
+                <label className="gov-label">Temperature (°C)</label>
+                <input className="gov-input" type="number" step="any" value={sessionEditForm.environmentalConditions?.temperatureC ?? ''} onChange={(e) => setSessionEditForm(f => ({ ...f, environmentalConditions: { ...f.environmentalConditions, temperatureC: e.target.value === '' ? null : Number(e.target.value) } }))} />
+              </div>
+              <div className="gov-form-group">
+                <label className="gov-label">Humidity (% RH)</label>
+                <input className="gov-input" type="number" step="any" value={sessionEditForm.environmentalConditions?.humidityPercent ?? ''} onChange={(e) => setSessionEditForm(f => ({ ...f, environmentalConditions: { ...f.environmentalConditions, humidityPercent: e.target.value === '' ? null : Number(e.target.value) } }))} />
+              </div>
+            </div>
+            <div className="flex-gap-8 mt-16">
+              <button className="gov-btn gov-btn-primary" onClick={() => editSessionMutation.mutate(sessionEditForm)} disabled={editSessionMutation.isPending}>
+                {editSessionMutation.isPending ? 'Saving...' : 'Save Parameters'}
+              </button>
+              <button className="gov-btn gov-btn-outline" onClick={() => setShowSessionEditForm(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Observation Form Modal/Panel */}
       {showObsForm && canEditDraft && (
@@ -330,7 +402,38 @@ export default function TestSessionDetailPage() {
                       <td className="text-mono">{obs.computedError !== undefined && obs.computedError !== null ? (obs.computedError > 0 ? `+${obs.computedError}` : obs.computedError) : 'Pending evaluation'}</td>
                       <td className="text-mono">{obs.appliedMpe != null ? `±${obs.appliedMpe}` : '—'}</td>
                       <td className="text-mono">{obs.marginToMpe != null ? (obs.marginToMpe >= 0 ? `+${obs.marginToMpe.toFixed(4)}` : `${obs.marginToMpe.toFixed(4)}`) : '—'}</td>
-                      <td>{obs.outcome || 'Pending evaluation'}</td>
+                      <td>
+                        {obs.outcome || 'Pending evaluation'}
+                        {obs.advisoryFlags && obs.advisoryFlags.length > 0 && (
+                          <div style={{ marginTop: 4 }}>
+                            {obs.advisoryFlags.map((flag, fIdx) => (
+                              <div key={flag._id || fIdx} style={{ fontSize: 11, background: flag.acknowledged ? '#f0fdf4' : '#fff7ed', border: `1px solid ${flag.acknowledged ? '#bbf7d0' : '#fed7aa'}`, padding: '4px 6px', borderRadius: 4, marginTop: 4 }}>
+                                <span style={{ color: flag.acknowledged ? 'var(--gov-green)' : 'var(--gov-orange)', fontWeight: 600 }}>
+                                  ⚠️ {flag.flagType || 'Advisory Flag'}
+                                </span>
+                                <div style={{ color: '#475569' }}>{flag.message}</div>
+                                {flag.acknowledged ? (
+                                  <div style={{ color: 'var(--gov-green)', fontStyle: 'italic', fontSize: 10 }}>Ack: {flag.comment || 'Acknowledged'}</div>
+                                ) : (
+                                  isReviewerOrAdmin && (
+                                    <button
+                                      type="button"
+                                      className="gov-btn gov-btn-outline"
+                                      style={{ padding: '1px 6px', fontSize: 10, marginTop: 4, borderColor: 'var(--gov-orange)', color: 'var(--gov-orange)' }}
+                                      onClick={() => {
+                                        const comment = window.prompt('Enter mandatory acknowledgment comment for this advisory flag:');
+                                        if (comment?.trim()) ackFlagMutation.mutate({ obsId: obs._id, flagId: flag._id, comment: comment.trim() });
+                                      }}
+                                    >
+                                      Acknowledge Flag
+                                    </button>
+                                  )
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
                       {session.status === 'draft' && canEditDraft && (
                         <td>
                           <button

@@ -224,7 +224,10 @@ export const getInstrumentModelHistory = asyncHandler(async (req, res) => {
   ]);
 
   const sessionIds = sessions.map((s) => s._id);
-  const reports = await Report.find({ testSessionId: { $in: sessionIds } }).sort({ revision: -1, createdAt: -1 });
+  const reports = await Report.find({
+    testSessionId: { $in: sessionIds },
+    status: { $ne: 'revoked' },
+  }).sort({ revisionNumber: -1, createdAt: -1 });
   const reportsBySession = new Map();
   for (const r of reports) {
     const key = r.testSessionId.toString();

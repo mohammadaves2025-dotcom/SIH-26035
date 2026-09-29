@@ -28,6 +28,10 @@ const insecureDefaults = new Set([
 ]);
 
 if (process.env.NODE_ENV === 'production') {
+  if (process.env.ENABLE_DEMO === 'true') {
+    console.error('FATAL ERROR: ENABLE_DEMO cannot be enabled in production.');
+    process.exit(1);
+  }
   if (!process.env.REPORT_INTEGRITY_SECRET) {
     console.error('FATAL ERROR: REPORT_INTEGRITY_SECRET is required in production.');
     process.exit(1);

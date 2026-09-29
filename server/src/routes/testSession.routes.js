@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   createTestSession,
+  updateTestSession,
   addObservations,
   updateObservation,
   deleteObservation,
@@ -27,6 +28,12 @@ router.post(
   authorize('admin', 'lab_technician', 'lab_admin'),
   validate(createTestSessionSchema),
   createTestSession
+);
+
+router.patch(
+  '/:id',
+  authorize('admin', 'lab_technician', 'lab_admin'),
+  updateTestSession
 );
 
 router.post(
