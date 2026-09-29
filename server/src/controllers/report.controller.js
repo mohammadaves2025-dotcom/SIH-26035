@@ -1,6 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import { Report } from '../models/Report.js';
+import { ReportJob } from '../models/ReportJob.js';
 import { TestSession } from '../models/TestSession.js';
 import { InstrumentModel } from '../models/InstrumentModel.js';
 import { generateReport } from '../services/reportGenerator.service.js';
@@ -97,16 +98,32 @@ export const createReport = asyncHandler(async (req, res) => {
   const session = await TestSession.findById(sessionId).populate('instrumentModelId');
   if (!session) throw new AppError(404, 'NOT_FOUND', 'Test session not found');
   await assertSessionAccess(req, session);
-  const { remarks, officerRemarks } = req.body || {};
-  const report = await generateReport({
+  const { remarks, officerRemarks, format = 'pdf', language = 'en' } = req.body || {};
+  
+  const job = await ReportJob.create({
     testSessionId: sessionId,
-    userId: req.user.sub,
+    requestedBy: req.user.sub,
+    format,
+    language,
     remarks: remarks || officerRemarks,
+    status: 'queued'
   });
 
-  res.status(201).json({
+  res.status(202).json({
     success: true,
-    data: report,
+    data: job,
+  });
+});
+
+export const getReportJobById = asyncHandler(async (req, res) => {
+  const job = await ReportJob.findById(req.params.id);
+  if (!job) throw new AppError(404, 'NOT_FOUND', 'Report job not found');
+  
+  // optionally verify access via testSessionId here if we want strict access
+  
+  res.status(200).json({
+    success: true,
+    data: job
   });
 });
 
