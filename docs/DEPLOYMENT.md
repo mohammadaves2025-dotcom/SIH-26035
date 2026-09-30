@@ -15,7 +15,7 @@ The Compose stack runs the API in production mode, so it requires separate secre
 5. Set `CLIENT_ORIGIN` and `PUBLIC_APP_URL` to the addresses used by your deployment.
 6. Run `docker compose up --build` from the repository root.
 
-The API never receives the signing private key. Production startup fails unless the separate signer service and certificate trust configuration are present. This repository supplies the adapter contract and verifies detached RSA-SHA256 signatures against pinned X.509 certificate fingerprints; deployment still requires an actual HSM/KMS signer, an approved certificate, and a trusted timestamp policy.
+The API never receives the signing private key. Production startup fails unless the separate signer service and certificate trust configuration are present. The `signer/` directory contains an optional software-key signer suitable only for a hackathon/demo. It is not an HSM/KMS, does not provide a trusted timestamp, and does not create legally accredited signatures; do not use it for production metrology decisions.
 
 ## Local development
 
@@ -44,13 +44,19 @@ Set the following in the Vercel project's environment variables (Production, and
 | `CLIENT_ORIGIN` | Exact frontend origin(s), comma-separated, with no trailing slash (for example `https://your-frontend.vercel.app`). |
 | `PUBLIC_APP_URL` | Frontend origin used to build report verification QR links. |
 | `ENABLE_DEMO` | `false` for production. |
-| `REPORT_SIGNING_SERVICE_URL` | HTTPS endpoint for the external RSA-SHA256 signing service. |
+| `REPORT_SIGNING_SERVICE_URL` | HTTPS `/api/sign` endpoint for the external RSA-SHA256 signing service. |
 | `REPORT_SIGNING_SERVICE_TOKEN` | Secret bearer token for that signing service. |
 | `REPORT_SIGNING_KEY_ID` | Key identifier configured in the signing service. |
 | `REPORT_SIGNING_CERTIFICATE_B64` | Base64-encoded PEM certificate corresponding to the signer's public key. |
 | `REPORT_SIGNING_TRUSTED_FINGERPRINTS` | Comma-separated SHA-256 certificate fingerprints trusted for verification. |
 
 Vercel sets `NODE_ENV=production` for production deployments. Keep `NODE_ENV=development` in the local `server/.env`; do not copy local secrets into Vercel. Production startup intentionally rejects missing or weak secrets and missing/invalid PKI signer configuration.
+
+### Optional demo signer (not production PKI)
+
+To satisfy the backend's signer contract for a demo only, deploy the separate `signer/` directory as another Vercel project with **Root Directory** set to `signer`. Before deploying, run `node signer/scripts/generate-demo-credentials.js` from the repository root in a terminal with OpenSSL available. It creates ignored local key material in `signer/generated/` and prints a random shared bearer token, key ID, base64 private key, base64 certificate, and certificate fingerprint. The script refuses to overwrite generated key files. Keep the private key and token secret; do not commit them or paste them into chat.
+
+Add `SIGNER_TOKEN`, `SIGNER_KEY_ID`, and `SIGNER_PRIVATE_KEY_B64` to the signer Vercel project's Production environment variables, then deploy it. Its signing endpoint is `https://<signer-project>.vercel.app/api/sign`; `/api/health` is a simple health check. Add the matching `REPORT_SIGNING_SERVICE_URL`, `REPORT_SIGNING_SERVICE_TOKEN`, `REPORT_SIGNING_KEY_ID`, `REPORT_SIGNING_CERTIFICATE_B64`, and `REPORT_SIGNING_TRUSTED_FINGERPRINTS` values printed by the generator to the backend Vercel project's Production environment variables, then redeploy the backend. The backend and signer token/key ID values must match exactly. The software private key is stored in Vercel environment configuration rather than an HSM and signatures are only as trustworthy as that deployment and its operators.
 
 Uploaded evidence and generated PDF/DOCX files use MongoDB GridFS on Vercel so they survive function invocations; local development continues storing them under `server/uploads/`. Vercel's function request-size limit means attachment uploads are capped at 4 MiB there (10 MiB locally). PDF generation uses the Vercel-compatible Chromium runtime in deployed functions and the regular Puppeteer installation locally.
 
