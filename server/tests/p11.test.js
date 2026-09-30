@@ -118,7 +118,10 @@ describe('Phase P11 — Offline Batch Sync & Outbox Replay', () => {
         data: {
           annexRef: 'A4_accuracy',
           evaluationMethod: 'structured',
-          readings: [{ load: 10, reference: 10, indicated: 10.01 }],
+          readings: [
+            { load: 10, reference: 10, indicated: 10.01 },
+            { load: 10, reference: 10, indicated: 10 },
+          ],
         },
       },
     ];
@@ -163,7 +166,14 @@ describe('Phase P11 — Offline Batch Sync & Outbox Replay', () => {
         clientId: observationClientId,
         type: 'ADD_OBSERVATION',
         sessionId: sessionClientId,
-        data: { annexRef: 'A4_accuracy', evaluationMethod: 'structured', readings: [{ load: 10, reference: 10, indicated: 10.01 }] },
+        data: {
+          annexRef: 'A4_accuracy',
+          evaluationMethod: 'structured',
+          readings: [
+            { load: 10, reference: 10, indicated: 10.01 },
+            { load: 10, reference: 10, indicated: 10 },
+          ],
+        },
       },
     ];
 
@@ -199,7 +209,10 @@ describe('Phase P11 — Offline Batch Sync & Outbox Replay', () => {
         data: {
           annexRef: 'A4_accuracy',
           evaluationMethod: 'structured',
-          readings: [{ load: 10, reference: 10, indicated: 10.05 }],
+          readings: [
+            { load: 10, reference: 10, indicated: 10.05 },
+            { load: 10, reference: 10, indicated: 10.02 },
+          ],
         },
       },
     ];
@@ -245,7 +258,10 @@ describe('Phase P11 — Offline Batch Sync & Outbox Replay', () => {
       data: {
         annexRef: 'A4_accuracy',
         evaluationMethod: 'structured',
-        readings: [{ load: 50, reference: 50, indicated: 50.01 }],
+        readings: [
+          { load: 50, reference: 50, indicated: 50.01 },
+          { load: 50, reference: 50, indicated: 50 },
+        ],
       },
     }];
     const res1 = await request(app).post('/api/test-sessions/sync/batch').set('Authorization', `Bearer ${adminToken}`).send({ batch });
@@ -261,9 +277,9 @@ describe('Phase P11 — Offline Batch Sync & Outbox Replay', () => {
 
   test('Step 2.2: batch of 3 with an invalid middle item (single repeatability reading): items 1 and 3 applied, item 2 returned as conflict', async () => {
     const batch = [
-      { clientId: 'step2-b-1', type: 'ADD_OBSERVATION', sessionId, data: { annexRef: 'A4_accuracy', evaluationMethod: 'structured', readings: [{ load: 10, reference: 10, indicated: 10 }] } },
+      { clientId: 'step2-b-1', type: 'ADD_OBSERVATION', sessionId, data: { annexRef: 'A4_accuracy', evaluationMethod: 'structured', readings: [{ load: 10, reference: 10, indicated: 10 }, { load: 10, reference: 10, indicated: 10.01 }] } },
       { clientId: 'step2-b-2', type: 'ADD_OBSERVATION', sessionId, data: { annexRef: 'A4_repeatability', evaluationMethod: 'structured', readings: [{ reference: 10, indicated: 10 }] } },
-      { clientId: 'step2-b-3', type: 'ADD_OBSERVATION', sessionId, data: { annexRef: 'A4_accuracy', evaluationMethod: 'structured', readings: [{ load: 20, reference: 20, indicated: 20 }] } },
+      { clientId: 'step2-b-3', type: 'ADD_OBSERVATION', sessionId, data: { annexRef: 'A4_accuracy', evaluationMethod: 'structured', readings: [{ load: 20, reference: 20, indicated: 20 }, { load: 20, reference: 20, indicated: 20.01 }] } },
     ];
     const res = await request(app).post('/api/test-sessions/sync/batch').set('Authorization', `Bearer ${adminToken}`).send({ batch });
     expect(res.status).toBe(200);
@@ -286,8 +302,8 @@ describe('Phase P11 — Offline Batch Sync & Outbox Replay', () => {
     const techToken = loginRes.body.data.token;
 
     const batch = [
-      { clientId: 'step2-c-1', type: 'ADD_OBSERVATION', sessionId, data: { annexRef: 'A4_accuracy', evaluationMethod: 'structured', readings: [{ load: 10, reference: 10, indicated: 10 }] } },
-      { clientId: 'step2-c-2', type: 'ADD_OBSERVATION', sessionId: otherSession._id.toString(), data: { annexRef: 'A4_accuracy', evaluationMethod: 'structured', readings: [{ load: 10, reference: 10, indicated: 10 }] } },
+      { clientId: 'step2-c-1', type: 'ADD_OBSERVATION', sessionId, data: { annexRef: 'A4_accuracy', evaluationMethod: 'structured', readings: [{ load: 10, reference: 10, indicated: 10 }, { load: 10, reference: 10, indicated: 10.01 }] } },
+      { clientId: 'step2-c-2', type: 'ADD_OBSERVATION', sessionId: otherSession._id.toString(), data: { annexRef: 'A4_accuracy', evaluationMethod: 'structured', readings: [{ load: 10, reference: 10, indicated: 10 }, { load: 10, reference: 10, indicated: 10.01 }] } },
     ];
     const res = await request(app).post('/api/test-sessions/sync/batch').set('Authorization', `Bearer ${techToken}`).send({ batch });
     expect(res.status).toBe(200);

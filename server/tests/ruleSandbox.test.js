@@ -42,6 +42,10 @@ describe('Rule configuration regression sandbox', () => {
     const observation = await Observation.create({
       testSessionId: session._id, annexRef: 'A4_accuracy', evaluationMethod: 'mpe_band',
       referenceLoad: 10, indicatedValue: 10.08, outcome: 'fail', ruleConfigId: active._id,
+      readings: [
+        { reference: 10, indicated: 10.08 },
+        { reference: 10, indicated: 10.06 },
+      ],
     });
 
     const created = await request(app)
@@ -62,8 +66,6 @@ describe('Rule configuration regression sandbox', () => {
     await RuleConfig.findByIdAndUpdate(candidate._id, { status: 'in_review', technicalReviewedBy: candidate.createdBy, technicalReviewedAt: new Date() });
     
     const dbRule = await RuleConfig.findById(candidate._id);
-    console.log('dbRule:', dbRule);
-
     const beforeSandbox = await request(app)
       .post(`/api/rule-configs/${candidate._id}/activate`)
       .set('Authorization', `Bearer ${expertLogin.body.data.token}`)
