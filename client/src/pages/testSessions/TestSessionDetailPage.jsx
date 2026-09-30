@@ -12,6 +12,7 @@ import { ANNEX_REFS } from '../../config/constants.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import VirtualBalancePanel from '../../components/common/VirtualBalancePanel.jsx';
 import { ArrowLeft, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle2, ShieldCheck, XCircle, Trash2, Pencil, AlertTriangle } from 'lucide-react';
+import './TestSessionDetailPage.css';
 
 const outcomeLabel = (outcome) => outcome === 'pass' ? 'pass' : outcome === 'fail' ? 'fail' : 'Not evaluated';
 
@@ -352,10 +353,10 @@ export default function TestSessionDetailPage() {
 
       {/* Observation Form Modal/Panel */}
       {showObsForm && canEditDraft && (
-        <div className="gov-card mb-24" style={{ border: '2px solid var(--gov-blue-primary)' }}>
+        <div className="gov-card mb-24 observation-form-card">
           <div className="gov-card-header"><h4>Record Metrological Observation</h4></div>
           <div className="gov-card-body">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+            <div className="observation-form-grid">
               <div className="gov-form-group">
                 <label className="gov-label">Annex Test Procedure</label>
                 <select data-testid="observation-annex" className="gov-select" value={obsForm.annexRef} onChange={(e) => {
@@ -490,22 +491,31 @@ export default function TestSessionDetailPage() {
                 <label className="gov-label">Zero correction (optional offset to indication; kg)</label>
                 <input className="gov-input" type="number" step="any" value={obsForm.zeroCorrection} onChange={(e) => setObsForm((f) => ({ ...f, zeroCorrection: e.target.value }))} />
               </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <button type="button" className="gov-btn gov-btn-outline" onClick={() => setShowVirtualBalance((visible) => !visible)}>
-                  {showVirtualBalance ? 'Close Virtual Balance' : 'Use Virtual Balance'}
+              <div className="observation-simulator-row">
+                <button
+                  type="button"
+                  className="gov-btn gov-btn-outline"
+                  aria-expanded={showVirtualBalance}
+                  aria-controls="virtual-balance-panel"
+                  onClick={() => setShowVirtualBalance((visible) => !visible)}
+                >
+                  <Scale size={15} />
+                  {showVirtualBalance ? 'Hide simulator' : 'Open virtual scale simulator'}
                 </button>
                 {showVirtualBalance && (
                   <VirtualBalancePanel
+                    maxCapacity={session.maxCapacity}
+                    scaleInterval={session.scaleInterval}
                     onApply={({ referenceLoad, indicatedValue }) => {
                       setObsForm((form) => ({ ...form, referenceLoad: String(referenceLoad), indicatedValue: String(indicatedValue) }));
-                      addToast({ type: 'success', message: 'Virtual balance reading copied into the observation form.' });
+                      addToast({ type: 'success', message: 'Simulated load and indication copied into the observation form. Save the observation to evaluate it.' });
                     }}
                   />
                 )}
               </div>
               </>}
             </div>
-            <div className="flex-gap-8 mt-16">
+            <div className="observation-form-actions">
               <button className="gov-btn gov-btn-primary" onClick={() => {
                 let payload;
                 if (obsForm.evaluationMethod === 'structured') {

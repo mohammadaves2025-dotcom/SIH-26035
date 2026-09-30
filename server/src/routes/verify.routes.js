@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { verifyReport } from '../controllers/verify.controller.js';
+import { lookupReportsBySerialNumber, verifyReport } from '../controllers/verify.controller.js';
 
 const router = Router();
 
@@ -16,6 +16,7 @@ const verifyLimiter = rateLimit({
   },
 });
 
+router.get('/lookup', verifyLimiter, lookupReportsBySerialNumber);
 router.get('/:reportNumberOrHash', verifyLimiter, verifyReport);
 
 export default router;

@@ -9,6 +9,10 @@
   line-height: 1.7;
 }
 
+.gov-footer-full {
+  margin-left: 0;
+}
+
 @media (max-width: 768px) {
   .gov-footer {
     margin-left: 0;

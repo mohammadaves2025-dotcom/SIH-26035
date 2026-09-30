@@ -5,7 +5,6 @@ import { useAuthStore } from './store/useAuthStore.js';
 import { useThemeStore } from './store/useThemeStore.js';
 import { useNotificationStore } from './store/useNotificationStore.js';
 
-import TopGovtBar from './components/layout/TopGovtBar.jsx';
 import Header from './components/layout/Header.jsx';
 import Sidebar from './components/layout/Sidebar.jsx';
 import Footer from './components/layout/Footer.jsx';
@@ -117,7 +116,6 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <TopGovtBar />
         <Header
           isMobileOpen={isMobileOpen}
           onToggleMobileMenu={() => setIsMobileOpen((prev) => !prev)}

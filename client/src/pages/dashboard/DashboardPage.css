@@ -41,12 +41,79 @@
 
 .status-chart-body {
   min-width: 0;
+  min-height: 0;
+  padding: 8px 12px 14px;
 }
 
 .status-pie-plot {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
   width: 100%;
-  height: 100%;
-  min-height: 300px;
+  min-height: 0;
+}
+
+.status-pie-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 310px;
+  min-width: 0;
+  overflow: visible;
+}
+
+.status-pie-label {
+  fill: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: rgba(15, 23, 42, 0.15);
+  stroke-width: 1px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.status-pie-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.status-pie-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--gov-text-body);
+  font-size: 12px;
+}
+
+.status-pie-legend li i {
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.status-pie-legend-name {
+  overflow-wrap: anywhere;
+}
+
+.status-pie-legend li strong {
+  color: var(--gov-text-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.status-pie-legend li small {
+  min-width: 34px;
+  color: var(--gov-text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .quick-actions-grid {
@@ -91,6 +158,15 @@
   }
 
   .status-pie-plot {
-    min-height: 280px;
+    gap: 8px;
+  }
+
+  .status-pie-legend {
+    justify-content: flex-start;
+    gap: 8px 12px;
+  }
+
+  .status-pie-label {
+    font-size: 9px;
   }
 }

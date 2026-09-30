@@ -6,3 +6,5 @@ export const revokeReport = (id, reason) => apiClient.post(`/reports/${id}/revok
 export const publishReport = (id) => apiClient.post(`/reports/${id}/publish`);
 export const archiveReport = (id, reason) => apiClient.post(`/reports/${id}/archive`, { reason });
 export const verifyReport = (query) => apiClient.get(`/verify/${query}`, { skipErrorToast: true });
+export const lookupPublicReportsBySerialNumber = (serialNumber) =>
+  apiClient.get('/verify/lookup', { params: { serialNumber }, skipErrorToast: true });

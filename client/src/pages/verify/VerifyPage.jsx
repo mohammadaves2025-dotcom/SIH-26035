@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useParams, useNavigate, Link } from 'react-router-dom';
-import { verifyReport } from '../../services/report.service.js';
+import { lookupPublicReportsBySerialNumber, verifyReport } from '../../services/report.service.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import { useTranslation } from '../../config/i18n.js';
 import { ShieldCheck, Search, AlertCircle, CheckCircle2 } from 'lucide-react';
+import './VerifyPage.css';
 
 export default function VerifyPage() {
   const [searchParams] = useSearchParams();
@@ -17,6 +18,11 @@ export default function VerifyPage() {
   const [error, setError] = useState(null);
   const [networkError, setNetworkError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [lookupBySerial, setLookupBySerial] = useState(false);
+  const [lookupReports, setLookupReports] = useState([]);
+  const [lookupHasMore, setLookupHasMore] = useState(false);
+  const [lookupError, setLookupError] = useState(null);
+  const [lookupAttempted, setLookupAttempted] = useState(false);
 
   const handleVerify = async (qToUse) => {
     const target = qToUse || query;
@@ -38,6 +44,35 @@ export default function VerifyPage() {
       setLoading(false);
     }
   };
+
+  const handleSerialLookup = async () => {
+    const serialNumber = query.trim();
+    if (!serialNumber) return;
+    setLoading(true);
+    setError(null);
+    setNetworkError(null);
+    setResult(null);
+    setLookupError(null);
+    setLookupReports([]);
+    setLookupHasMore(false);
+    setLookupAttempted(true);
+    try {
+      const response = await lookupPublicReportsBySerialNumber(serialNumber);
+      const data = response?.data || response;
+      setLookupReports(data?.reports || []);
+      setLookupHasMore(Boolean(data?.hasMore));
+    } catch (err) {
+      if (err.response?.status === 400) {
+        setLookupError(t('verify_serial_invalid'));
+      } else {
+        setLookupError(err.response?.data?.error?.message || t('verify_lookup_failed'));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = () => (lookupBySerial ? handleSerialLookup() : handleVerify());
 
   const integrityFailed = !result?.isIntegrityVerified;
   const isCurrentPublished = result?.isPublished && !result?.isSuperseded;
@@ -65,24 +100,104 @@ export default function VerifyPage() {
       {/* Search box */}
       <div className="gov-card mb-24">
         <div className="gov-card-body">
+          <div className="verify-search-modes" role="group" aria-label={t('verify_search_method')}>
+            <button
+              type="button"
+              className={`gov-btn ${lookupBySerial ? 'gov-btn-outline' : 'gov-btn-primary'}`}
+              aria-pressed={!lookupBySerial}
+              onClick={() => {
+                setLookupBySerial(false);
+                setQuery('');
+                setLookupReports([]);
+                setLookupError(null);
+                setLookupAttempted(false);
+              }}
+            >
+              {t('verify_by_report_id')}
+            </button>
+            <button
+              type="button"
+              className={`gov-btn ${lookupBySerial ? 'gov-btn-primary' : 'gov-btn-outline'}`}
+              aria-pressed={lookupBySerial}
+              onClick={() => {
+                setLookupBySerial(true);
+                setQuery('');
+                setResult(null);
+                setError(null);
+                setNetworkError(null);
+                setLookupReports([]);
+                setLookupAttempted(false);
+              }}
+            >
+              {t('verify_by_serial')}
+            </button>
+          </div>
           <div className="gov-form-group">
-            <label className="gov-label" htmlFor="verify-query">{t('verify_input')}</label>
-            <div className="flex-gap-8">
+            <label className="gov-label" htmlFor="verify-query">
+              {lookupBySerial ? t('verify_serial_input') : t('verify_input')}
+            </label>
+            {lookupBySerial && <p className="verify-search-help">{t('verify_serial_help')}</p>}
+            <div className="verify-search-row">
               <input
                 id="verify-query" className="gov-input"
                 style={{ flex: 1 }}
-                placeholder="e.g. NAWI-2026-000001 or 7f8a9b..."
+                placeholder={lookupBySerial ? t('verify_serial_placeholder') : 'e.g. NAWI-2026-000001 or 7f8a9b...'}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               />
-              <button className="gov-btn gov-btn-accent" onClick={() => handleVerify()} disabled={loading}>
-                <Search size={16} /> {loading ? t('verifying') : t('verify_button')}
+              <button className="gov-btn gov-btn-accent" onClick={handleSearch} disabled={loading || !query.trim()}>
+                <Search size={16} /> {loading ? t('verifying') : lookupBySerial ? t('find_reports') : t('verify_button')}
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {lookupError && (
+        <div className="gov-card mb-24 verify-message-error" role="alert">
+          <div className="gov-card-body flex-gap-8">
+            <AlertCircle size={20} />
+            <p>{lookupError}</p>
+          </div>
+        </div>
+      )}
+
+      {lookupReports.length > 0 && (
+        <section className="gov-card mb-24" aria-label={t('verify_lookup_results')}>
+          <div className="gov-card-header verify-results-header">
+            <div>
+              <h3>{t('verify_lookup_results')}</h3>
+              <p>{t('verify_lookup_results_help')}</p>
+            </div>
+            <span className="verify-result-count">{lookupReports.length}{lookupHasMore ? '+' : ''}</span>
+          </div>
+          <div className="gov-card-body verify-results-list">
+            {lookupReports.map((report) => (
+              <article className="verify-result-item" key={report.reportNumber}>
+                <div className="verify-result-main">
+                  <strong className="text-mono">{report.reportNumber}</strong>
+                  <span>{report.instrumentModelName} · Class {report.accuracyClass} · {report.overallResult}</span>
+                  <small>
+                    {report.status === 'published' ? t('verify_published') : report.isSuperseded ? t('verify_superseded') : report.status}
+                    {report.publishedAt ? ` · ${new Date(report.publishedAt).toLocaleDateString()}` : ''}
+                  </small>
+                </div>
+                <Link className="gov-btn gov-btn-outline verify-result-action" to={`/verify/${encodeURIComponent(report.reportNumber)}`}>
+                  {t('verify_button')}
+                </Link>
+              </article>
+            ))}
+            {lookupHasMore && <p className="verify-results-note">{t('verify_lookup_limit')}</p>}
+          </div>
+        </section>
+      )}
+
+      {lookupAttempted && lookupReports.length === 0 && !loading && !lookupError && lookupBySerial && (
+        <div className="gov-card mb-24">
+          <div className="gov-card-body text-muted">{t('verify_no_serial_matches')}</div>
+        </div>
+      )}
 
       {/* Error state */}
       {(error || networkError) && (

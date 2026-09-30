@@ -376,9 +376,9 @@ export async function seedDemoData() {
     maxCapacity: 15,
     minCapacity: 5,
     scaleInterval: 0.1,
-    labId: 'LAB-AHM-02',
-    laboratoryRef: laboratories[1]._id,
-    laboratoryName: laboratories[1].labName,
+    labId: 'LAB-DELHI-01',
+    laboratoryRef: laboratories[0]._id,
+    laboratoryName: laboratories[0].labName,
     createdBy: techDelhi._id,
     testDate: new Date('2026-09-26'),
     status: 'draft',
@@ -388,6 +388,56 @@ export async function seedDemoData() {
       humidityPercent: 50,
       inclinationDeg: 0,
       notes: 'Evaluation in progress.',
+    },
+  });
+
+  await TestSession.create({
+    instrumentModelId: models[0]._id,
+    manufacturerName: manufacturers[0].name,
+    modelName: models[0].modelName,
+    selectedAnnexes: ['A1_administrative', 'A4_accuracy'],
+    serialNumber: 'SN-2026-007',
+    accuracyClass: models[0].accuracyClass,
+    maxCapacity: models[0].maxCapacity,
+    minCapacity: models[0].minCapacity,
+    scaleInterval: models[0].e,
+    labId: 'LAB-DELHI-01',
+    laboratoryRef: laboratories[0]._id,
+    laboratoryName: laboratories[0].labName,
+    createdBy: techDelhi._id,
+    testDate: new Date('2026-09-28'),
+    status: 'draft',
+    overallResult: null,
+    environmentalConditions: {
+      temperatureC: 22.0,
+      humidityPercent: 51,
+      inclinationDeg: 0,
+      notes: 'Draft session ready for accuracy readings.',
+    },
+  });
+
+  await TestSession.create({
+    instrumentModelId: models[1]._id,
+    manufacturerName: manufacturers[1].name,
+    modelName: models[1].modelName,
+    selectedAnnexes: ['A4_accuracy', 'A4_repeatability'],
+    serialNumber: 'SN-2026-008',
+    accuracyClass: models[1].accuracyClass,
+    maxCapacity: models[1].maxCapacity,
+    minCapacity: models[1].minCapacity,
+    scaleInterval: models[1].e,
+    labId: 'LAB-DELHI-01',
+    laboratoryRef: laboratories[0]._id,
+    laboratoryName: laboratories[0].labName,
+    createdBy: techDelhi._id,
+    testDate: new Date('2026-09-29'),
+    status: 'draft',
+    overallResult: null,
+    environmentalConditions: {
+      temperatureC: 21.5,
+      humidityPercent: 49,
+      inclinationDeg: 0,
+      notes: 'Draft session for repeatability and accuracy practice.',
     },
   });
 
@@ -472,7 +522,7 @@ export async function seedDemoData() {
 
   console.log('Legal Metrology demo datasets seeded successfully with 7 roles and all ERD entities!');
   return {
-    sessionsCount: 6,
+    sessionsCount: 8,
     reportsCount: 0,
     manufacturersCount: manufacturers.length,
     modelsCount: models.length,

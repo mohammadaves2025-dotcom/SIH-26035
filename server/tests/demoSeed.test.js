@@ -30,13 +30,17 @@ describe('Demo seed', () => {
 
     const result = await seedDemoData();
 
-    expect(result.sessionsCount).toBe(6);
+    expect(result.sessionsCount).toBe(8);
     expect(result.reportsCount).toBe(0);
     expect(await Report.countDocuments()).toBe(0);
-    const seededMonths = (await TestSession.find().select('testDate'))
+    const seededSessions = await TestSession.find().select('testDate status labId');
+    const seededMonths = [...new Set(seededSessions
       .map((session) => session.testDate.toISOString().slice(0, 7))
-      .sort();
+      .sort())];
     expect(seededMonths).toEqual(['2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09']);
+    const draftSessions = seededSessions.filter((session) => session.status === 'draft');
+    expect(draftSessions).toHaveLength(3);
+    expect(draftSessions.every((session) => session.labId === 'LAB-DELHI-01')).toBe(true);
     expect(await AuditLog.exists({ _id: existingAuditLog._id })).toBeTruthy();
     expect(await AuditLog.countDocuments()).toBeGreaterThan(1);
   }, 120000);

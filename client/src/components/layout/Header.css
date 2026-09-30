@@ -235,6 +235,10 @@
 
 /* ──────────── Mobile Responsiveness ──────────── */
 @media (max-width: 768px) {
+  :root {
+    --header-height: 64px;
+  }
+
   .mobile-menu-btn {
     display: flex;
   }
@@ -259,13 +263,20 @@
     gap: 8px;
   }
   .header-brand {
+    flex: 1 1 auto;
     gap: 8px;
   }
+
+  .header-titles {
+    flex: 1 1 0;
+  }
+
   .header-title {
-    max-width: 34vw;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: none;
+    line-height: 1.2;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
   }
   .header-user {
     gap: 6px;
@@ -277,12 +288,29 @@
 }
 
 @media (max-width: 480px) {
+  :root {
+    --header-height: 64px;
+  }
+
   .header-inner {
     padding: 0 8px;
   }
+
+  .header-brand {
+    flex: 1 1 auto;
+  }
+
+  .header-titles {
+    flex: 1 1 0;
+  }
+
   .header-title {
-    max-width: 32vw;
+    max-width: none;
     font-size: 12px;
+    line-height: 1.2;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
   }
   .header-emblem {
     height: 24px;
@@ -318,10 +346,6 @@
 }
 
 @media (max-width: 360px) {
-  .header-title {
-    max-width: 20vw;
-  }
-
   .header-emblem {
     width: 36px;
   }

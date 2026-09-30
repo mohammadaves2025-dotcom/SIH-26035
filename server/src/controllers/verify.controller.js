@@ -1,10 +1,59 @@
 import fs from 'fs';
 import path from 'path';
 import { Report } from '../models/Report.js';
+import { TestSession } from '../models/TestSession.js';
 import { sha256 } from '../utils/hash.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { verifyReportArtifact } from '../services/digitalSignature.service.js';
+
+const PUBLICLY_VERIFIABLE_STATUSES = ['published', 'archived', 'revoked'];
+const MAX_SERIAL_LOOKUP_RESULTS = 25;
+
+export const lookupReportsBySerialNumber = asyncHandler(async (req, res) => {
+  const serialNumber = String(req.query.serialNumber || '').trim();
+  if (!serialNumber || serialNumber.length > 120) {
+    throw new AppError(400, 'INVALID_SERIAL_NUMBER', 'Enter a valid instrument serial number');
+  }
+
+  const escapedSerialNumber = serialNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const sessions = await TestSession.find({
+    serialNumber: { $regex: `^${escapedSerialNumber}$`, $options: 'i' },
+  }).select('_id');
+  const reports = await Report.find({
+    status: { $in: PUBLICLY_VERIFIABLE_STATUSES },
+    testSessionId: { $in: sessions.map((session) => session._id) },
+  })
+    .select('reportNumber status generatedAt publishedAt supersededByReportId testSessionId')
+    .sort({ generatedAt: -1 })
+    .limit(MAX_SERIAL_LOOKUP_RESULTS + 1)
+    .populate({
+      path: 'testSessionId',
+      select: 'serialNumber overallResult instrumentModelId',
+      populate: { path: 'instrumentModelId', select: 'modelName accuracyClass' },
+    });
+
+  const matchingRecords = reports.filter((report) => report.testSessionId);
+  const matchingReports = matchingRecords.slice(0, MAX_SERIAL_LOOKUP_RESULTS).map((report) => ({
+      reportNumber: report.reportNumber,
+      status: report.status,
+      generatedAt: report.generatedAt,
+      publishedAt: report.publishedAt,
+      isSuperseded: Boolean(report.supersededByReportId),
+      serialNumber: report.testSessionId.serialNumber,
+      overallResult: report.testSessionId.overallResult,
+      instrumentModelName: report.testSessionId.instrumentModelId?.modelName || 'Unknown',
+      accuracyClass: report.testSessionId.instrumentModelId?.accuracyClass || 'Unknown',
+    }));
+
+  res.status(200).json({
+    success: true,
+    data: {
+      reports: matchingReports,
+      hasMore: matchingRecords.length > MAX_SERIAL_LOOKUP_RESULTS,
+    },
+  });
+});
 
 export const verifyReport = asyncHandler(async (req, res) => {
   const { reportNumberOrHash } = req.params;
@@ -27,7 +76,6 @@ export const verifyReport = asyncHandler(async (req, res) => {
 
   // WP6 §12.4: Only published/archived/revoked/superseded reports are publicly verifiable.
   // integrity_tagged reports have not yet been published; treat as not found.
-  const PUBLICLY_VERIFIABLE_STATUSES = ['published', 'archived', 'revoked'];
   const isSupersededReport = Boolean(report.supersededByReportId);
   if (!PUBLICLY_VERIFIABLE_STATUSES.includes(report.status) && !isSupersededReport) {
     throw new AppError(404, 'NOT_FOUND', 'No report matches this number or hash');

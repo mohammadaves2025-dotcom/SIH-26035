@@ -183,6 +183,11 @@ describe('End-to-End Metrology System Lifecycle', () => {
     // WP6 §12.4: integrity_tagged reports are not publicly verifiable until published.
     const verifyRes = await request(app).get(`/api/verify/${report.reportNumber}`);
     expect(verifyRes.status).toBe(404);
+    const unpublishedLookup = await request(app)
+      .get('/api/verify/lookup')
+      .query({ serialNumber: 'test-scale-001' });
+    expect(unpublishedLookup.status).toBe(200);
+    expect(unpublishedLookup.body.data.reports).toHaveLength(0);
 
     // Only a reviewer/admin can publish, and publication checks both stored artifacts.
     const publishRes = await request(app)
@@ -198,6 +203,17 @@ describe('End-to-End Metrology System Lifecycle', () => {
     expect(publishedVerifyRes.body.data.status).toBe('published');
     expect(publishedVerifyRes.body.data.isPublished).toBe(true);
     expect(publishedVerifyRes.body.data.isIntegrityVerified).toBe(true);
+
+    const serialLookup = await request(app)
+      .get('/api/verify/lookup')
+      .query({ serialNumber: 'test-scale-001' });
+    expect(serialLookup.status).toBe(200);
+    expect(serialLookup.body.data.reports).toHaveLength(1);
+    expect(serialLookup.body.data.reports[0]).toMatchObject({
+      reportNumber: report.reportNumber,
+      serialNumber: 'TEST-SCALE-001',
+      status: 'published',
+    });
 
     // Verification by SHA256 hash
     const verifyHashRes = await request(app).get(`/api/verify/${report.contentHash}`);

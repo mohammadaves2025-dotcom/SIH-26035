@@ -134,9 +134,7 @@ export default function LoginPage() {
           <img src="/ascension-logo.png" alt="Ascension" className="login-emblem" onError={(e) => { e.target.style.display = 'none'; }} />
           <h1>{language === 'HI' ? 'NAWI डिजिटल मापविज्ञान प्रणाली' : 'NAWI Digital Metrology System'}</h1>
           <p className="login-dept">
-            {language === 'HI'
-              ? 'उपभोक्ता मामले विभाग — विधिक मापविज्ञान प्रभाग'
-              : 'Department of Consumer Affairs — Legal Metrology Division'}
+            {language === 'HI' ? 'टीम एसेंशन' : 'Team Ascension'}
           </p>
         </div>
 

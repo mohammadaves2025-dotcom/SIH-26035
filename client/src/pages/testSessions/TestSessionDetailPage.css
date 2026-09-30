@@ -1,0 +1,108 @@
+.observation-form-card {
+  border: 1px solid #cbd5e1;
+  border-top: 3px solid var(--gov-navy-imperial);
+  box-shadow: var(--gov-shadow-md);
+}
+
+.observation-form-card > .gov-card-header {
+  background: #f8fafc;
+}
+
+.observation-form-card > .gov-card-body {
+  padding: clamp(14px, 2.4vw, 24px);
+}
+
+.observation-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 6px 20px;
+}
+
+.observation-form-grid > .gov-form-group {
+  min-width: 0;
+}
+
+.observation-form-grid > .gov-form-group > p {
+  min-height: 0;
+  margin: 0;
+  padding: 6px 0 10px;
+  color: var(--gov-text-body);
+  line-height: 1.5;
+}
+
+.observation-form-grid .gov-label {
+  line-height: 1.45;
+}
+
+.observation-form-grid .gov-input,
+.observation-form-grid .gov-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.observation-simulator-row {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.observation-simulator-row > .gov-btn {
+  min-height: 40px;
+  padding-inline: 14px;
+  border-color: #b7c9dc;
+  background: #f8fafc;
+  font-weight: 600;
+}
+
+.observation-simulator-row > .gov-btn:hover,
+.observation-simulator-row > .gov-btn[aria-expanded="true"] {
+  border-color: #8eabc9;
+  background: #eef4fb;
+}
+
+.observation-simulator-row .virtual-balance {
+  width: 100%;
+}
+
+.observation-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--gov-border-subtle);
+}
+
+@media (max-width: 760px) {
+  .observation-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .observation-form-card > .gov-card-body {
+    padding: 16px;
+  }
+
+  .observation-form-grid > .gov-form-group > p {
+    min-height: 0;
+    padding: 4px 0 10px;
+  }
+}
+
+@media (max-width: 560px) {
+  .observation-form-card > .gov-card-body {
+    padding: 14px 12px;
+  }
+
+  .observation-simulator-row > .gov-btn {
+    width: 100%;
+    justify-content: center;
+    white-space: normal;
+  }
+
+  .observation-form-actions > .gov-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}

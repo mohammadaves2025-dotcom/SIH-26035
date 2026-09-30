@@ -42,24 +42,15 @@ function prepareChartData(data) {
   }));
 }
 
-function polarPoint(cx, cy, radius, angle) {
-  return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
+function piePoint(cx, cy, rx, ry, angle) {
+  return { x: cx + rx * Math.cos(angle), y: cy + ry * Math.sin(angle) };
 }
 
-function donutSlicePath(cx, cy, outerRadius, innerRadius, startAngle, endAngle) {
-  const startOuter = polarPoint(cx, cy, outerRadius, startAngle);
-  const endOuter = polarPoint(cx, cy, outerRadius, endAngle);
-  const startInner = polarPoint(cx, cy, innerRadius, startAngle);
-  const endInner = polarPoint(cx, cy, innerRadius, endAngle);
+function pieSlicePath(cx, cy, rx, ry, startAngle, endAngle) {
+  const start = piePoint(cx, cy, rx, ry, startAngle);
+  const end = piePoint(cx, cy, rx, ry, endAngle);
   const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
-
-  return [
-    `M ${startOuter.x} ${startOuter.y}`,
-    `A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${endOuter.x} ${endOuter.y}`,
-    `L ${endInner.x} ${endInner.y}`,
-    `A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${startInner.x} ${startInner.y}`,
-    'Z',
-  ].join(' ');
+  return `M ${cx} ${cy} L ${start.x} ${start.y} A ${rx} ${ry} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
 }
 
 function darkenColor(color, factor = 0.58) {
@@ -79,51 +70,81 @@ function StatusPieChart({ data, emptyMessage, sessionUnit, chartLabel }) {
 
   const chartData = prepareChartData(data);
   const total = chartData.reduce((sum, item) => sum + item.v, 0);
-  const center = 150;
-  const outerRadius = 92;
-  const innerRadius = 48;
-  const depth = 16;
+  const cx = 250;
+  const cy = 145;
+  const rx = 218;
+  const ry = 116;
+  const depth = 34;
   let startAngle = -Math.PI / 2;
+  const slices = chartData.map((item) => {
+    const endAngle = startAngle + (item.v / total) * Math.PI * 2;
+    const middleAngle = (startAngle + endAngle) / 2;
+    const slice = {
+      ...item,
+      path: pieSlicePath(cx, cy, rx, ry, startAngle, endAngle),
+      labelPoint: piePoint(cx, cy, rx * 0.65, ry * 0.65, middleAngle),
+    };
+    startAngle = endAngle;
+    return slice;
+  });
 
   return (
-    <div className="status-pie-plot" role="img" aria-label={chartLabel}>
-      <svg viewBox="0 0 300 360" className="status-pie-svg" aria-hidden="true">
-        <g transform="translate(0 8)">
-          {chartData.map((item) => {
-            const endAngle = startAngle + (item.v / total) * Math.PI * 2;
-            const path = donutSlicePath(center, center, outerRadius, innerRadius, startAngle, endAngle);
-            const sideColor = darkenColor(item.color);
-            startAngle = endAngle;
-            return (
-              <g key={item.key}>
-                {Array.from({ length: depth }, (_, layer) => (
-                  <path
-                    key={`${item.key}-depth-${layer}`}
-                    d={path}
-                    fill={sideColor}
-                    stroke={sideColor}
-                    strokeWidth="3"
-                    transform={`translate(0 ${layer + 1})`}
-                  />
-                ))}
-                <path d={path} fill={item.color} stroke="#fff" strokeWidth="3" strokeLinejoin="round">
-                  <title>{`${item.l}: ${item.v} ${sessionUnit} (${item.p}%)`}</title>
-                </path>
-              </g>
-            );
-          })}
-          <text x={center} y={center - 2} textAnchor="middle" className="status-pie-total">{total}</text>
-          <text x={center} y={center + 16} textAnchor="middle" className="status-pie-unit">{sessionUnit}</text>
-        </g>
-      </svg>
-      <div className="status-pie-legend">
-        {chartData.map((item) => (
-          <span key={item.key}>
-            <i style={{ backgroundColor: item.color }} />
-            {item.l} ({item.p}%)
-          </span>
+    <div className="status-pie-plot" aria-label={chartLabel}>
+      <svg
+        className="status-pie-svg"
+        viewBox="0 0 500 325"
+        role="img"
+        aria-label={`${chartLabel}: ${total} ${sessionUnit}`}
+      >
+        {slices.map((slice) => (
+          <g key={slice.key}>
+            {Array.from({ length: depth }, (_, layer) => (
+              <path
+                key={`${slice.key}-depth-${layer}`}
+                d={slice.path}
+                fill={darkenColor(slice.color)}
+                stroke={darkenColor(slice.color)}
+                strokeWidth="1"
+                transform={`translate(0 ${layer + 1})`}
+              />
+            ))}
+          </g>
         ))}
-      </div>
+        {slices.map((slice) => (
+          <path
+            key={`${slice.key}-top`}
+            d={slice.path}
+            fill={slice.color}
+            stroke="#fff"
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+          >
+            <title>{`${slice.l}: ${slice.v} ${sessionUnit} (${slice.p}%)`}</title>
+          </path>
+        ))}
+        {slices.filter((slice) => slice.p >= 6).map((slice) => (
+          <text
+            key={`${slice.key}-label`}
+            x={slice.labelPoint.x}
+            y={slice.labelPoint.y}
+            textAnchor="middle"
+            className="status-pie-label"
+          >
+            <tspan x={slice.labelPoint.x} dy="-0.2em">{slice.l}</tspan>
+            <tspan x={slice.labelPoint.x} dy="1.35em">{slice.p}%</tspan>
+          </text>
+        ))}
+      </svg>
+      <ul className="status-pie-legend" aria-label={chartLabel}>
+        {chartData.map((item) => (
+          <li key={item.key}>
+            <i style={{ backgroundColor: item.color }} aria-hidden="true" />
+            <span className="status-pie-legend-name">{item.l}</span>
+            <strong>{item.v}</strong>
+            <small>{item.p}%</small>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -214,7 +235,7 @@ export default function DashboardPage() {
             <div className="gov-card-header">
               <h4><CheckCircle2 size={16} style={{ marginRight: 8 }} />{t('session_status_breakdown')}</h4>
             </div>
-            <div className="gov-card-body status-chart-body" style={{ height: 420, padding: 12 }}>
+            <div className="gov-card-body status-chart-body">
               <StatusPieChart
                 data={statusData}
                 emptyMessage={t('no_active_session_data')}
@@ -336,7 +357,7 @@ export default function DashboardPage() {
           <div className="gov-card-header">
             <h4><AlertCircle size={16} style={{ marginRight: 8 }} />{t('session_status_breakdown')}</h4>
           </div>
-          <div className="gov-card-body status-chart-body" style={{ height: 420, padding: 12 }}>
+          <div className="gov-card-body status-chart-body">
             <StatusPieChart
               data={statusData}
               emptyMessage={t('no_active_session_data')}

@@ -11,6 +11,50 @@ import { cacheInstrumentModels, cacheLaboratories, getCachedInstrumentModels, ge
 import { FlaskConical, ChevronRight, ChevronLeft } from 'lucide-react';
 import './NewTestSessionPage.css';
 
+function RangeNumberField({ id, label, value, min, max, inputMin, inputMax, step, unit, onChange, testId }) {
+  const numericValue = value === '' ? min : Number(value);
+  const sliderMin = Number.isFinite(numericValue) ? Math.min(min, numericValue) : min;
+  const sliderMax = Number.isFinite(numericValue) ? Math.max(max, numericValue) : max;
+  const sliderValue = Number.isFinite(numericValue) ? numericValue : min;
+  const formattedValue = value === '' ? `Select ${unit}` : `${value} ${unit}`;
+
+  return (
+    <div className="session-env-range-control">
+      <div className="session-env-number-wrap">
+        <input
+          id={id}
+          data-testid={testId}
+          className="gov-input"
+          required
+          type="number"
+          min={inputMin}
+          max={inputMax}
+          step={step}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          aria-label={label}
+        />
+        <span className="session-env-unit" aria-hidden="true">{unit}</span>
+      </div>
+      <input
+        className="session-env-slider"
+        type="range"
+        min={sliderMin}
+        max={sliderMax}
+        step={step}
+        value={sliderValue}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label={`${label} slider`}
+        aria-valuetext={formattedValue}
+      />
+      <div className="session-env-range-limits" aria-hidden="true">
+        <span>{sliderMin} {unit}</span>
+        <span>{sliderMax} {unit}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function NewTestSessionPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -109,6 +153,10 @@ export default function NewTestSessionPage() {
     if (!form.instrumentModelId || !form.labId || !form.testDate || !form.serialNumber.trim() || form.temperatureC === '' ||
         form.humidityPercent === '' || form.inclinationDeg === '' || !form.envNotes.trim() || form.selectedAnnexes.length === 0) {
       addToast({ type: 'error', message: 'Enter the serial number, test date, observed environmental conditions, and at least one applicable procedure.' });
+      return;
+    }
+    if (Number(form.humidityPercent) < 0 || Number(form.humidityPercent) > 100) {
+      addToast({ type: 'error', message: 'Relative humidity must be between 0% and 100%.' });
       return;
     }
     const payload = {
@@ -229,16 +277,48 @@ export default function NewTestSessionPage() {
                   </select>
                 </div>
                 <div className="gov-form-group session-env-field">
-                  <label className="gov-label">Ambient Temp (°C)</label>
-                  <input data-testid="session-temperature" className="gov-input" required type="number" step="0.1" value={form.temperatureC} onChange={(e) => updateField('temperatureC', e.target.value)} />
+                  <label className="gov-label" htmlFor="session-temperature">Ambient Temp (°C)</label>
+                  <RangeNumberField
+                    id="session-temperature"
+                    testId="session-temperature"
+                    label="Ambient temperature"
+                    value={form.temperatureC}
+                    min={-10}
+                    max={60}
+                    step={0.1}
+                    unit="°C"
+                    onChange={(value) => updateField('temperatureC', value)}
+                  />
                 </div>
                 <div className="gov-form-group session-env-field">
-                  <label className="gov-label">Relative Humidity (%)</label>
-                  <input data-testid="session-humidity" className="gov-input" required type="number" min="0" max="100" step="1" value={form.humidityPercent} onChange={(e) => updateField('humidityPercent', e.target.value)} />
+                  <label className="gov-label" htmlFor="session-humidity">Relative Humidity (%)</label>
+                  <RangeNumberField
+                    id="session-humidity"
+                    testId="session-humidity"
+                    label="Relative humidity"
+                    value={form.humidityPercent}
+                    min={0}
+                    max={100}
+                    inputMin={0}
+                    inputMax={100}
+                    step={1}
+                    unit="%"
+                    onChange={(value) => updateField('humidityPercent', value)}
+                  />
                 </div>
                 <div className="gov-form-group session-env-field">
-                  <label className="gov-label">Inclination (°)</label>
-                  <input data-testid="session-inclination" className="gov-input" required type="number" step="0.01" value={form.inclinationDeg} onChange={(e) => updateField('inclinationDeg', e.target.value)} />
+                  <label className="gov-label" htmlFor="session-inclination">Inclination (°)</label>
+                  <RangeNumberField
+                    id="session-inclination"
+                    testId="session-inclination"
+                    label="Inclination"
+                    value={form.inclinationDeg}
+                    min={-10}
+                    max={10}
+                    step={0.01}
+                    unit="°"
+                    onChange={(value) => updateField('inclinationDeg', value)}
+                  />
                 </div>
                 <div className="gov-form-group session-env-field session-env-notes">
                   <label className="gov-label">Environmental Control Notes</label>

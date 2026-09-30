@@ -27,7 +27,7 @@
 
 .session-env-field .gov-label {
   display: block;
-  min-height: 2.8em;
+  min-height: 0;
   line-height: 1.4;
 }
 
@@ -36,6 +36,58 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
+}
+
+.session-env-range-control {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+}
+
+.session-env-number-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.session-env-number-wrap .gov-input {
+  padding-right: 48px;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-env-unit {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  color: #52657a;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.session-env-slider {
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--gov-navy-imperial);
+  cursor: pointer;
+  touch-action: pan-y;
+}
+
+.session-env-slider:focus-visible {
+  outline: 3px solid rgba(217, 119, 6, 0.45);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+
+.session-env-range-limits {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -7px;
+  color: var(--gov-text-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .session-env-notes {
@@ -77,6 +129,14 @@
   .session-env-field .gov-label {
     min-height: 0;
     margin-bottom: 6px;
+  }
+
+  .session-env-range-control {
+    gap: 7px;
+  }
+
+  .session-env-slider {
+    height: 22px;
   }
 
   .session-wizard-navigation {
