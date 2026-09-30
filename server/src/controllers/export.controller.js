@@ -1,12 +1,16 @@
-import mongoose from 'mongoose';
 import { Report } from '../models/Report.js';
 import { TestSession } from '../models/TestSession.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/AppError.js';
 import { appendAuditLog } from '../services/auditLogger.service.js';
 import { sessionScopeForUser } from '../utils/tenantAccess.js';
+import { ExportJob } from '../models/ExportJob.js';
+import mongoose from 'mongoose';
 
-const exportJobs = new Map();
+async function findExportJob(jobId) {
+  if (!mongoose.isValidObjectId(jobId)) return null;
+  return ExportJob.findById(jobId);
+}
 
 async function generateExportData(req, startDate, endDate) {
   const now = new Date();
@@ -66,25 +70,18 @@ export const createExportJob = asyncHandler(async (req, res) => {
     throw new AppError(400, 'VALIDATION_ERROR', 'Format must be json or csv');
   }
 
-  const jobObjectId = new mongoose.Types.ObjectId();
-  const jobId = jobObjectId.toString();
   const exportData = await generateExportData(req, startDate, endDate);
 
-  const job = {
-    jobId,
-    status: 'completed',
+  const job = await ExportJob.create({
     format,
     count: exportData.length,
     data: exportData,
     createdBy: req.user.sub,
-    createdAt: new Date().toISOString(),
-  };
-
-  exportJobs.set(jobId, job);
+  });
 
   await appendAuditLog({
     entityType: 'ExportJob',
-    entityId: jobObjectId,
+    entityId: job._id,
     action: `create_export_job:${format}`,
     userId: req.user.sub,
   });
@@ -92,50 +89,50 @@ export const createExportJob = asyncHandler(async (req, res) => {
   res.status(201).json({
     success: true,
     data: {
-      jobId,
-      status: job.status,
+      jobId: job._id,
+      status: 'completed',
       format: job.format,
       count: job.count,
-      createdAt: job.createdAt,
+      createdAt: job.createdAt.toISOString(),
     },
   });
 });
 
 export const getExportJobStatus = asyncHandler(async (req, res) => {
-  const job = exportJobs.get(req.params.jobId);
+  const job = await findExportJob(req.params.jobId);
   if (!job) {
     throw new AppError(404, 'NOT_FOUND', 'Export job not found');
   }
 
-  if (job.createdBy !== req.user.sub && !['admin', 'auditor'].includes(req.user.role)) {
+  if (job.createdBy.toString() !== req.user.sub && !['admin', 'auditor'].includes(req.user.role)) {
     throw new AppError(403, 'FORBIDDEN', 'Cannot access export job created by another user');
   }
 
   res.status(200).json({
     success: true,
     data: {
-      jobId: job.jobId,
-      status: job.status,
+      jobId: job._id,
+      status: 'completed',
       format: job.format,
       count: job.count,
-      createdAt: job.createdAt,
+      createdAt: job.createdAt.toISOString(),
     },
   });
 });
 
 export const downloadExportJob = asyncHandler(async (req, res) => {
-  const job = exportJobs.get(req.params.jobId);
+  const job = await findExportJob(req.params.jobId);
   if (!job) {
     throw new AppError(404, 'NOT_FOUND', 'Export job not found');
   }
 
-  if (job.createdBy !== req.user.sub && !['admin', 'auditor'].includes(req.user.role)) {
+  if (job.createdBy.toString() !== req.user.sub && !['admin', 'auditor'].includes(req.user.role)) {
     throw new AppError(403, 'FORBIDDEN', 'Cannot download export job created by another user');
   }
 
   await appendAuditLog({
     entityType: 'ExportJob',
-    entityId: new mongoose.Types.ObjectId(job.jobId),
+    entityId: job._id,
     action: `download_export:${job.format}`,
     userId: req.user.sub,
   });
@@ -144,7 +141,7 @@ export const downloadExportJob = asyncHandler(async (req, res) => {
     const rows = job.data || [];
     if (rows.length === 0) {
       res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="${job.jobId}.csv"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${job._id}.csv"`);
       return res.status(200).send('reportNumber,instrumentModelName,manufacturerName,accuracyClass,overallResult,generatedAt\n');
     }
 
@@ -166,11 +163,11 @@ export const downloadExportJob = asyncHandler(async (req, res) => {
     ];
 
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="${job.jobId}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${job._id}.csv"`);
     return res.status(200).send(csvLines.join('\n'));
   }
 
   res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Content-Disposition', `attachment; filename="${job.jobId}.json"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${job._id}.json"`);
   res.status(200).json(job.data);
 });

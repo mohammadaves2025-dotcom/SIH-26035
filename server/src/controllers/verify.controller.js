@@ -1,11 +1,10 @@
-import fs from 'fs';
-import path from 'path';
 import { Report } from '../models/Report.js';
 import { TestSession } from '../models/TestSession.js';
 import { sha256 } from '../utils/hash.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { verifyReportArtifact } from '../services/digitalSignature.service.js';
+import { readStoredFile } from '../services/fileStorage.service.js';
 
 const PUBLICLY_VERIFIABLE_STATUSES = ['published', 'archived', 'revoked'];
 const MAX_SERIAL_LOOKUP_RESULTS = 25;
@@ -84,9 +83,15 @@ export const verifyReport = asyncHandler(async (req, res) => {
   const session = report.testSessionId;
   const model = session?.instrumentModelId;
 
-  const pdfPath = path.resolve(process.cwd(), report.pdfPath);
-  const pdfExists = fs.existsSync(pdfPath);
-  const actualPdfHash = pdfExists ? sha256(fs.readFileSync(pdfPath)) : null;
+  let actualPdfHash = null;
+  try {
+    actualPdfHash = sha256(await readStoredFile({
+      storageFileId: report.pdfStorageFileId,
+      filePath: report.pdfPath,
+    }));
+  } catch (error) {
+    if (error.statusCode !== 404) throw error;
+  }
   const isIntegrityVerified = Boolean(
     actualPdfHash && actualPdfHash === report.contentHash &&
     verifyReportArtifact(actualPdfHash, report, 'PDF')

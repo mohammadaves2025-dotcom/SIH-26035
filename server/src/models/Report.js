@@ -26,6 +26,8 @@ const reportSchema = new mongoose.Schema(
     docxSignedAt: { type: Date, default: null, immutable: true },
     pdfPath: { type: String, required: true, immutable: true },
     docxPath: { type: String, required: true, immutable: true },
+    pdfStorageFileId: { type: String, default: null, immutable: true },
+    docxStorageFileId: { type: String, default: null, immutable: true },
     status: {
       type: String,
       enum: ['integrity_tagged', 'published', 'archived', 'revoked'],

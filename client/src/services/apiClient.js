@@ -4,7 +4,9 @@ import { useNotificationStore } from '../store/useNotificationStore.js';
 import { useLogStore } from '../store/useLogStore.js';
 
 const apiClient = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL
+    ? `${import.meta.env.VITE_API_URL.replace(/\/+$/, '')}/api`
+    : '/api',
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
 });

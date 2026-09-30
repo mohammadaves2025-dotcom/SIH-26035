@@ -76,6 +76,7 @@ REPORT_INTEGRITY_SECRET=change_me_to_a_random_64_char_secret_for_hmac_sha256_int
 PUBLIC_APP_URL=http://localhost:5173
 ENABLE_DEMO=false
 ```
+Keep `NODE_ENV=development` in the local `.env`; production deployments receive their own environment variables. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for separate backend and frontend Vercel setup.
 
 ### 2. Install Dependencies
 ```bash

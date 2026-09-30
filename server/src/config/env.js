@@ -28,6 +28,10 @@ const insecureDefaults = new Set([
 ]);
 
 if (process.env.NODE_ENV === 'production') {
+  if (!process.env.CRON_SECRET || process.env.CRON_SECRET.length < 32 || insecureDefaults.has(process.env.CRON_SECRET.trim())) {
+    console.error('FATAL ERROR: CRON_SECRET must be at least 32 characters and cannot use default example values in production.');
+    process.exit(1);
+  }
   if (process.env.ENABLE_DEMO === 'true') {
     console.error('FATAL ERROR: ENABLE_DEMO cannot be enabled in production.');
     process.exit(1);
@@ -77,4 +81,5 @@ export const env = {
   CLIENT_ORIGIN: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
   RATE_LIMIT_MAX: parseInt(process.env.RATE_LIMIT_MAX || '200', 10),
+  isVercel: process.env.VERCEL === '1',
 };

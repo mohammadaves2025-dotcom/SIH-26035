@@ -13,6 +13,7 @@ const attachmentSchema = new mongoose.Schema(
       required: true,
     },
     filePath: { type: String, required: true },
+    storageFileId: { type: String, default: null },
     originalFilename: { type: String, required: true },
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,

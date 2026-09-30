@@ -1,5 +1,3 @@
-import path from 'path';
-import fs from 'fs';
 import { Report } from '../models/Report.js';
 import { TestSession } from '../models/TestSession.js';
 import { InstrumentModel } from '../models/InstrumentModel.js';
@@ -10,6 +8,7 @@ import { assertSessionAccess, assertReportAccess, getManufacturerForUser, manufa
 import { sha256 } from '../utils/hash.js';
 import { verifyReportArtifact } from '../services/digitalSignature.service.js';
 import { appendAuditLog } from '../services/auditLogger.service.js';
+import { readStoredFile } from '../services/fileStorage.service.js';
 
 export const listReports = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, search, status, labId, manufacturerId, accuracyClass, startDate, endDate } = req.query;
@@ -150,32 +149,40 @@ export const downloadReportFile = asyncHandler(async (req, res) => {
     throw new AppError(400, 'VALIDATION_ERROR', 'format must be pdf or docx');
   }
 
-  let filePath = format === 'docx' ? report.docxPath : report.pdfPath;
-  let absolutePath = path.join(process.cwd(), filePath);
-
-  if (!fs.existsSync(absolutePath)) {
-    throw new AppError(404, 'NOT_FOUND', `Report file (${format}) could not be generated on disk`);
-  }
-
-  const fileHash = sha256(fs.readFileSync(absolutePath));
+  const filePath = format === 'docx' ? report.docxPath : report.pdfPath;
+  const storageFileId = format === 'docx' ? report.docxStorageFileId : report.pdfStorageFileId;
+  const contents = await readStoredFile({ storageFileId, filePath });
+  const fileHash = sha256(contents);
   const expectedHash = format === 'pdf' ? report.contentHash : report.docxContentHash;
   if (!expectedHash || fileHash !== expectedHash || !verifyReportArtifact(fileHash, report, format)) {
     throw new AppError(409, 'REPORT_INTEGRITY_FAILED', 'Report integrity verification failed');
   }
 
-  res.download(absolutePath);
+  const contentType = format === 'pdf'
+    ? 'application/pdf'
+    : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  res.type(contentType).attachment(`${report.reportNumber}.${format}`).send(contents);
 });
 
-function assertStoredReportIntegrity(report) {
+async function assertStoredReportIntegrity(report) {
   const artifacts = [
-    { path: path.resolve(process.cwd(), report.pdfPath), hash: report.contentHash, format: 'PDF' },
-    { path: path.resolve(process.cwd(), report.docxPath), hash: report.docxContentHash, format: 'DOCX' },
+    { path: report.pdfPath, storageFileId: report.pdfStorageFileId, hash: report.contentHash, format: 'PDF' },
+    { path: report.docxPath, storageFileId: report.docxStorageFileId, hash: report.docxContentHash, format: 'DOCX' },
   ];
   for (const artifact of artifacts) {
-    if (!artifact.hash || !fs.existsSync(artifact.path)) {
+    if (!artifact.hash) {
       throw new AppError(409, 'REPORT_INTEGRITY_FAILED', `${artifact.format} file or integrity metadata is missing`);
     }
-    const actualHash = sha256(fs.readFileSync(artifact.path));
+    let contents;
+    try {
+      contents = await readStoredFile({ storageFileId: artifact.storageFileId, filePath: artifact.path });
+    } catch (error) {
+      if (error.statusCode === 404) {
+        throw new AppError(409, 'REPORT_INTEGRITY_FAILED', `${artifact.format} file or integrity metadata is missing`);
+      }
+      throw error;
+    }
+    const actualHash = sha256(contents);
     if (actualHash !== artifact.hash || !verifyReportArtifact(actualHash, report, artifact.format)) {
       throw new AppError(409, 'REPORT_INTEGRITY_FAILED', `${artifact.format} integrity verification failed`);
     }
@@ -189,7 +196,7 @@ export const publishReport = asyncHandler(async (req, res) => {
   if (report.status !== 'integrity_tagged') {
     throw new AppError(409, 'INVALID_STATE', 'Only an integrity-tagged report can be published');
   }
-  assertStoredReportIntegrity(report);
+  await assertStoredReportIntegrity(report);
 
   report.status = 'published';
   report.publishedAt = new Date();

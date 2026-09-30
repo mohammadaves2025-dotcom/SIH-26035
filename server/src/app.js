@@ -8,6 +8,10 @@ import { env } from './config/env.js';
 import routes from './routes/index.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
 import { AppError } from './utils/AppError.js';
+import { connectDB } from './config/db.js';
+import { processScheduledActivations } from './jobs/activationJob.js';
+import { asyncHandler } from './utils/asyncHandler.js';
+import { timingSafeEqual } from 'node:crypto';
 
 const app = express();
 
@@ -79,6 +83,26 @@ const globalLimiter = rateLimit({
 });
 
 app.use(globalLimiter);
+
+app.use(asyncHandler(async (req, _res, next) => {
+  if (req.path === '/health' || req.path === '/ready') return next();
+  await connectDB();
+  next();
+}));
+
+app.get('/api/cron/activate-rules', asyncHandler(async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  const authorization = req.get('authorization') || '';
+  const expected = secret ? `Bearer ${secret}` : '';
+  const authorized = Boolean(secret) &&
+    Buffer.byteLength(authorization) === Buffer.byteLength(expected) &&
+    timingSafeEqual(Buffer.from(authorization), Buffer.from(expected));
+  if (!authorized) {
+    throw new AppError(secret ? 401 : 503, 'CRON_UNAUTHORIZED', 'Scheduled job authorization failed');
+  }
+  await processScheduledActivations();
+  res.status(200).json({ success: true });
+}));
 
 // Mount API routes
 app.use('/api', routes);

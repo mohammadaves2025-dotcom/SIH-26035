@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import os from 'node:os';
 import puppeteer from 'puppeteer';
 import {
   Document,
@@ -24,8 +25,12 @@ import { signReportDigest } from './digitalSignature.service.js';
 import { appendAuditLog } from './auditLogger.service.js';
 import { AppError } from '../utils/AppError.js';
 import { generateQrSvg } from '../utils/qrGenerator.js';
+import { env } from '../config/env.js';
+import { removeStoredFile, storeFile } from './fileStorage.service.js';
 
-const reportsDir = path.join(process.cwd(), 'uploads', 'reports');
+const reportsDir = env.isVercel
+  ? path.join(os.tmpdir(), 'nawi-reports')
+  : path.join(process.cwd(), 'uploads', 'reports');
 if (!fs.existsSync(reportsDir)) {
   fs.mkdirSync(reportsDir, { recursive: true });
 }
@@ -51,6 +56,26 @@ function getBrowserExecutablePath() {
   return undefined;
 }
 
+async function launchBrowser() {
+  if (env.isVercel) {
+    const [{ default: chromium }, { default: puppeteerCore }] = await Promise.all([
+      import('@sparticuz/chromium'),
+      import('puppeteer-core'),
+    ]);
+    return puppeteerCore.launch({
+      args: chromium.args,
+      executablePath: await chromium.executablePath(),
+      headless: true,
+    });
+  }
+
+  return puppeteer.launch({
+    headless: true,
+    executablePath: getBrowserExecutablePath(),
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
+}
+
 async function getNextReportNumber() {
   const year = new Date().getFullYear();
   const counterName = `report_seq_${year}`;
@@ -70,12 +95,7 @@ import { generateHtmlTemplate, buildDocxDocument } from '../utils/reportBuilders
 async function renderPdf({ html, pdfPath }) {
   let browser;
   try {
-    const executablePath = getBrowserExecutablePath();
-    browser = await puppeteer.launch({
-      headless: true,
-      executablePath,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    browser = await launchBrowser();
 
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });
@@ -189,30 +209,61 @@ export async function generateReport({ testSessionId, userId, remarks }) {
     throw error;
   }
 
-  const report = await Report.create({
-    testSessionId: session._id,
-    revisionNumber,
-    supersedesReportId: latestReport?._id || null,
-    reportNumber,
-    contentHash,
-    docxContentHash,
-    hmacTag,
-    docxHmacTag,
-    signatureAlgorithm: pdfSigning ? pdfSigning.algorithm : 'HMAC-SHA256',
-    pdfSignature: pdfSigning?.signature || null,
-    docxSignature: docxSigning?.signature || null,
-    signatureCertificate: pdfSigning?.certificatePem || null,
-    certificateFingerprint: pdfSigning?.certificateFingerprint || null,
-    signerKeyId: pdfSigning?.keyId || null,
-    pdfSignedAt: pdfSigning?.signedAt || null,
-    docxSignedAt: docxSigning?.signedAt || null,
-    pdfPath: pdfPathRel.replace(/\\/g, '/'),
-    docxPath: docxPathRel.replace(/\\/g, '/'),
-    status: 'integrity_tagged',
-    officerRemarks: remarks ? remarks.trim() : null,
-    generatedBy: userId,
-    generatedAt,
-  });
+  let pdfStoredFile;
+  let docxStoredFile;
+  try {
+    pdfStoredFile = await storeFile(pdfPathRel, pdfBuffer);
+    docxStoredFile = await storeFile(docxPathRel, docxBuffer);
+  } catch (error) {
+    if (pdfStoredFile) await removeStoredFile({ storageFileId: pdfStoredFile.storageFileId, filePath: pdfPathRel });
+    if (docxStoredFile) await removeStoredFile({ storageFileId: docxStoredFile.storageFileId, filePath: docxPathRel });
+    if (env.isVercel) {
+      fs.rmSync(pdfPathAbs, { force: true });
+      fs.rmSync(docxPathAbs, { force: true });
+    }
+    throw error;
+  }
+
+  let report;
+  try {
+    report = await Report.create({
+      testSessionId: session._id,
+      revisionNumber,
+      supersedesReportId: latestReport?._id || null,
+      reportNumber,
+      contentHash,
+      docxContentHash,
+      hmacTag,
+      docxHmacTag,
+      signatureAlgorithm: pdfSigning ? pdfSigning.algorithm : 'HMAC-SHA256',
+      pdfSignature: pdfSigning?.signature || null,
+      docxSignature: docxSigning?.signature || null,
+      signatureCertificate: pdfSigning?.certificatePem || null,
+      certificateFingerprint: pdfSigning?.certificateFingerprint || null,
+      signerKeyId: pdfSigning?.keyId || null,
+      pdfSignedAt: pdfSigning?.signedAt || null,
+      docxSignedAt: docxSigning?.signedAt || null,
+      pdfPath: pdfPathRel.replace(/\\/g, '/'),
+      docxPath: docxPathRel.replace(/\\/g, '/'),
+      pdfStorageFileId: pdfStoredFile.storageFileId,
+      docxStorageFileId: docxStoredFile.storageFileId,
+      status: 'integrity_tagged',
+      officerRemarks: remarks ? remarks.trim() : null,
+      generatedBy: userId,
+      generatedAt,
+    });
+  } catch (error) {
+    await Promise.all([
+      removeStoredFile({ storageFileId: pdfStoredFile.storageFileId, filePath: pdfPathRel }),
+      removeStoredFile({ storageFileId: docxStoredFile.storageFileId, filePath: docxPathRel }),
+    ]);
+    throw error;
+  } finally {
+    if (env.isVercel) {
+      fs.rmSync(pdfPathAbs, { force: true });
+      fs.rmSync(docxPathAbs, { force: true });
+    }
+  }
 
   if (latestReport) {
     latestReport.supersededByReportId = report._id;
