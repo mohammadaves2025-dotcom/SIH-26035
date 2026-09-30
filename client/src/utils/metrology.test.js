@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReadingPayload, formatMetrologyValue, getDisplayReadingFields, getMandatoryProcedureAnnexes, getMissingSelectedProcedures, getRuleFieldLabel, getSubmissionFocusAnnex, hasRequiredReadings, minimumReadingCount } from './metrology.js';
+import { buildReadingPayload, formatMetrologyValue, getDisplayReadingFields, getMandatoryProcedureAnnexes, getMissingSelectedProcedures, getProcedureMeasurementReadingCount, getRuleFieldLabel, getSubmissionFocusAnnex, hasCompleteMeasurementPairs, hasRequiredReadings, minimumReadingCount } from './metrology.js';
 
 describe('metrology helpers', () => {
   it('formats values with six decimal places, trimmed zeros, and signs', () => {
@@ -8,11 +8,33 @@ describe('metrology helpers', () => {
     expect(formatMetrologyValue(null)).toBe('-');
   });
 
-  it('requires two rows for repeatability and discrimination criteria', () => {
+  it('requires two rows for measured criteria and exempts manual criteria', () => {
     expect(minimumReadingCount({ criterion: { type: 'range_le_mpe_factor' } })).toBe(2);
     expect(minimumReadingCount({ criterion: { type: 'change_ge_factor_of_e' } })).toBe(2);
     expect(minimumReadingCount({ criterion: { type: 'change_le_factor_of_e' } })).toBe(2);
+    expect(minimumReadingCount({ criterion: { type: 'max_abs_error_le_mpe_factor' } })).toBe(2);
+    expect(minimumReadingCount({ criterion: { type: 'manual' } })).toBe(1);
     expect(hasRequiredReadings([{ load: 1 }], [{ name: 'load', required: true }], 2)).toBe(false);
+  });
+
+  it('validates two complete accuracy measurement pairs', () => {
+    expect(hasCompleteMeasurementPairs([
+      { reference: '10', indicated: '10.1' },
+      { reference: '20', indicated: '20.1' },
+    ])).toBe(true);
+    expect(hasCompleteMeasurementPairs([
+      { reference: '10', indicated: '10.1' },
+      { reference: '', indicated: '20.1' },
+    ])).toBe(false);
+  });
+
+  it('counts saved accuracy readings and flags a single legacy measurement', () => {
+    expect(getProcedureMeasurementReadingCount('A4_accuracy', [
+      { annexRef: 'A4_accuracy', evaluationMethod: 'mpe_band', referenceLoad: 10, indicatedValue: 10 },
+    ])).toBe(1);
+    expect(getProcedureMeasurementReadingCount('A4_accuracy', [
+      { annexRef: 'A4_accuracy', evaluationMethod: 'mpe_band', readings: [{ reference: 10, indicated: 10 }, { reference: 20, indicated: 20 }] },
+    ])).toBe(2);
   });
 
   it('omits empty optional fields from reading payloads', () => {

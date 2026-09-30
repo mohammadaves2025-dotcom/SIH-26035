@@ -28,6 +28,17 @@
   line-height: 1.5;
 }
 
+.observation-reading-requirement {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-left: 4px solid var(--gov-navy-imperial);
+  border-radius: var(--gov-radius);
+  background: #f1f5f9;
+  color: var(--gov-text-body);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .observation-form-card > .gov-card-body {
   padding: clamp(14px, 2.4vw, 24px);
 }
@@ -252,6 +263,191 @@
   color: var(--gov-text-muted);
 }
 
+.procedure-coverage-alert {
+  overflow: hidden;
+  border: 1px solid #ead7ad;
+  border-left: 4px solid var(--gov-saffron);
+  border-radius: var(--gov-radius);
+  background: linear-gradient(120deg, #fffdf7 0%, #fff9eb 100%);
+  box-shadow: 0 3px 12px rgba(95, 69, 16, 0.06);
+}
+
+.procedure-coverage-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 17px 18px 13px;
+}
+
+.procedure-coverage-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border: 1px solid #f0d7a0;
+  border-radius: 11px;
+  background: #fff2d3;
+  color: #986000;
+}
+
+.procedure-coverage-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.procedure-coverage-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.procedure-coverage-title-row h3 {
+  margin: 0;
+  color: var(--gov-text-heading);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.procedure-coverage-copy p {
+  margin: 4px 0 0;
+  color: var(--gov-text-body);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.procedure-coverage-count {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  border: 1px solid #edcf91;
+  border-radius: 999px;
+  background: #fff4dc;
+  color: #805000;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.procedure-coverage-progress {
+  height: 4px;
+  margin: 0 18px 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f0e6d1;
+}
+
+.procedure-coverage-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #c58113, #e2a63b);
+  transition: width 180ms ease;
+}
+
+.procedure-coverage-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0 12px 12px;
+  list-style: none;
+}
+
+.procedure-coverage-item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #efe5d1;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.82);
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.procedure-coverage-item:hover {
+  transform: translateY(-1px);
+  border-color: #dfc184;
+  background: #fff;
+}
+
+.procedure-coverage-item-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.procedure-coverage-item-copy > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.procedure-coverage-item-copy strong {
+  color: var(--gov-text-heading);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.procedure-coverage-item-copy > div > span {
+  overflow: hidden;
+  color: var(--gov-text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.procedure-coverage-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border: 2px solid #d5901f;
+  border-radius: 50%;
+  background: #fff8e9;
+}
+
+.procedure-coverage-action {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid #d9dee5;
+  border-radius: 7px;
+  background: #fff;
+  color: #303841;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.procedure-coverage-action:hover:not(:disabled) {
+  border-color: #c58113;
+  background: #fff8e9;
+  color: #704500;
+}
+
+.procedure-coverage-action:focus-visible {
+  outline: 2px solid #c58113;
+  outline-offset: 2px;
+}
+
+.procedure-coverage-action:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.procedure-coverage-loading {
+  padding: 0 18px 14px 69px;
+  color: var(--gov-text-muted);
+  font-size: 12px;
+}
+
 .approval-separation-notice {
   display: flex;
   align-items: flex-start;
@@ -292,6 +488,62 @@
   .procedure-card-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .procedure-coverage-header {
+    gap: 10px;
+    padding: 14px 12px 11px;
+  }
+
+  .procedure-coverage-icon {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
+
+  .procedure-coverage-title-row {
+    align-items: flex-start;
+  }
+
+  .procedure-coverage-title-row h3 {
+    font-size: 15px;
+  }
+
+  .procedure-coverage-progress {
+    margin-right: 12px;
+    margin-left: 12px;
+  }
+
+  .procedure-coverage-list {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .procedure-coverage-item {
+    align-items: flex-start;
+    gap: 8px;
+    padding: 9px;
+  }
+
+  .procedure-coverage-item-copy {
+    align-items: flex-start;
+    gap: 7px;
+  }
+
+  .procedure-coverage-item-copy > .procedure-required-label {
+    display: none;
+  }
+
+  .procedure-coverage-action {
+    padding: 7px;
+  }
+
+  .procedure-coverage-action span {
+    display: none;
+  }
+
+  .procedure-coverage-loading {
+    padding-left: 56px;
   }
 
   .procedure-card-status {

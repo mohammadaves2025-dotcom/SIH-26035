@@ -7,7 +7,51 @@ export function formatMetrologyValue(value, signed = false) {
 }
 
 export function minimumReadingCount(criterion) {
-  return ['range_le_mpe_factor', 'change_le_factor_of_e', 'change_ge_factor_of_e'].includes(criterion?.criterion?.type) ? 2 : 1;
+  return criterion?.criterion?.type === 'manual' ? 1 : criterion ? 2 : 1;
+}
+
+export function hasCompleteMeasurementPairs(readings, minimumRows = 2) {
+  const rows = readings || [];
+  return rows.length >= minimumRows && rows.every((reading) =>
+    reading.reference !== undefined &&
+    reading.reference !== null &&
+    String(reading.reference).trim() !== '' &&
+    reading.indicated !== undefined &&
+    reading.indicated !== null &&
+    String(reading.indicated).trim() !== ''
+  );
+}
+
+export function getProcedureMeasurementReadingCount(annexRef, observations, criterion) {
+  if (criterion?.criterion?.type === 'manual') return Infinity;
+  const relevant = (observations || []).filter((observation) => observation.annexRef === annexRef);
+  if (!relevant.length) return 0;
+
+  if (relevant.some((observation) => observation.evaluationMethod === 'manual_checklist')) {
+    return Infinity;
+  }
+
+  if (relevant.some((observation) => observation.evaluationMethod === 'structured')) {
+    return relevant.reduce((count, observation) => {
+      const fields = criterion?.fields || [];
+      const completeCount = (observation.readings || []).filter((reading) =>
+        fields.filter((field) => field.required).every((field) =>
+          reading[field.name] !== undefined &&
+          reading[field.name] !== null &&
+          String(reading[field.name]).trim() !== ''
+        )
+      ).length;
+      return count + completeCount;
+    }, 0);
+  }
+
+  return relevant.reduce((count, observation) => {
+    const completeRows = (observation.readings || []).filter((reading) =>
+      reading.reference !== undefined && reading.reference !== null &&
+      reading.indicated !== undefined && reading.indicated !== null
+    ).length;
+    return count + Math.max(completeRows, observation.referenceLoad != null && observation.indicatedValue != null ? 1 : 0);
+  }, 0);
 }
 
 export function getMissingSelectedProcedures(selectedAnnexes, observations) {

@@ -265,7 +265,14 @@ describe('P12 — Security & Delivery Hardening', () => {
 
     // Load = 100kg (n=200): MPE = 0.5e = 0.25kg
     const obsPass = evaluateObservation(
-      { referenceLoad: 100, indicatedValue: 100.2, zeroCorrection: 0, evaluationMethod: 'mpe_band', annexRef: 'A4_accuracy' },
+      {
+        referenceLoad: 100,
+        indicatedValue: 100.2,
+        zeroCorrection: 0,
+        evaluationMethod: 'mpe_band',
+        annexRef: 'A4_accuracy',
+        readings: [{ reference: 100, indicated: 100.2 }, { reference: 100, indicated: 100.1 }],
+      },
       inst,
       rConfig,
       'initial'
@@ -276,7 +283,14 @@ describe('P12 — Security & Delivery Hardening', () => {
 
     // Load = 1000kg (n=2000): MPE = 1.0e = 0.5kg
     const obsFail = evaluateObservation(
-      { referenceLoad: 1000, indicatedValue: 1000.7, zeroCorrection: 0, evaluationMethod: 'mpe_band', annexRef: 'A4_accuracy' },
+      {
+        referenceLoad: 1000,
+        indicatedValue: 1000.7,
+        zeroCorrection: 0,
+        evaluationMethod: 'mpe_band',
+        annexRef: 'A4_accuracy',
+        readings: [{ reference: 1000, indicated: 1000.7 }, { reference: 1000, indicated: 1000.1 }],
+      },
       inst,
       rConfig,
       'initial'
@@ -356,7 +370,10 @@ describe('P13 — Advisory Anomaly Flags (G18)', () => {
           {
             annexRef: 'A4_accuracy',
             evaluationMethod: 'structured',
-            readings: [{ load: 100, reference: 100, indicated: 100.45 }],
+            readings: [
+              { load: 100, reference: 100, indicated: 100.45 },
+              { load: 100, reference: 100, indicated: 100.1 },
+            ],
           },
         ],
       });

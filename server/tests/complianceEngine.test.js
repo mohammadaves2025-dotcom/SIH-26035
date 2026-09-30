@@ -22,10 +22,20 @@ describe('Compliance Engine Service', () => {
     ],
   };
 
+  const mpeObservation = (referenceLoad, indicatedValue) => ({
+    evaluationMethod: 'mpe_band',
+    referenceLoad,
+    indicatedValue,
+    readings: [
+      { reference: referenceLoad, indicated: indicatedValue },
+      { reference: referenceLoad, indicated: referenceLoad },
+    ],
+  });
+
   test('pass within lowest band', () => {
     // For n=500, MPE is 0.5e = 0.25kg.
     const result = evaluateObservation(
-      { evaluationMethod: 'mpe_band', referenceLoad: 200, indicatedValue: 200.15 },
+      mpeObservation(200, 200.15),
       instrument,
       ruleConfig
     );
@@ -37,7 +47,7 @@ describe('Compliance Engine Service', () => {
   test('fail above highest band', () => {
     const largerInstrument = { ...instrument, maxCapacity: 5000, n: 10000 };
     const result = evaluateObservation(
-      { evaluationMethod: 'mpe_band', referenceLoad: 1400, indicatedValue: 1401.20 },
+      mpeObservation(1400, 1401.20),
       largerInstrument,
       ruleConfig
     );
@@ -50,7 +60,7 @@ describe('Compliance Engine Service', () => {
     // At n=500, the inclusive band applies 0.5e.
     // indicated = 250.25 -> error = 0.25 -> pass
     const resultInclusivePass = evaluateObservation(
-      { evaluationMethod: 'mpe_band', referenceLoad: 250, indicatedValue: 250.25 },
+      mpeObservation(250, 250.25),
       instrument,
       ruleConfig
     );
@@ -59,7 +69,7 @@ describe('Compliance Engine Service', () => {
 
     // indicated = 250.30 -> error = 0.30 (> 0.25) -> fail.
     const resultInclusiveFail = evaluateObservation(
-      { evaluationMethod: 'mpe_band', referenceLoad: 250, indicatedValue: 250.30 },
+      mpeObservation(250, 250.30),
       instrument,
       ruleConfig
     );
@@ -70,11 +80,33 @@ describe('Compliance Engine Service', () => {
   test('uses n-based band above the inclusive class boundary', () => {
     const n501Instrument = { ...instrument, maxCapacity: 250.5, n: 501 };
     const result = evaluateObservation(
-      { evaluationMethod: 'mpe_band', referenceLoad: 250.5, indicatedValue: 250.9 },
+      mpeObservation(250.5, 250.9),
       n501Instrument,
       ruleConfig
     );
     expect(result.appliedMpe).toBe(0.5);
+  });
+
+  test('fails when any of the required accuracy readings exceeds MPE', () => {
+    const result = evaluateObservation({
+      ...mpeObservation(200, 200.1),
+      readings: [
+        { reference: 200, indicated: 200.1 },
+        { reference: 200, indicated: 200.3 },
+      ],
+    }, instrument, ruleConfig);
+
+    expect(result.outcome).toBe('fail');
+    expect(result.computedErrors).toHaveLength(2);
+    expect(result.computedErrors.map(({ result: readingResult }) => readingResult)).toEqual(['pass', 'fail']);
+  });
+
+  test('rejects an accuracy observation with fewer than two complete readings', () => {
+    expect(() => evaluateObservation(
+      { evaluationMethod: 'mpe_band', referenceLoad: 200, indicatedValue: 200.15 },
+      instrument,
+      ruleConfig
+    )).toThrow(expect.objectContaining({ code: 'INCOMPLETE_TEST_READINGS' }));
   });
 
   test('session fails if any single observation fails, even if others pass', () => {

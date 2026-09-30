@@ -46,6 +46,23 @@ function generateObservationHtml(obs, idx) {
 
   if (obs.evaluationMethod !== 'structured') {
     // Legacy / Checklist fallback format
+    const readings = obs.evaluationMethod === 'mpe_band'
+      ? (obs.readings?.length ? obs.readings : [{ reference: obs.referenceLoad, indicated: obs.indicatedValue }])
+      : [null];
+    const readingRows = readings.map((reading, readingIndex) => {
+      const result = obs.computedErrors?.[readingIndex];
+      return `
+        <tr>
+          <td style="border:1px solid #cbd5e1; padding:4px;">${reading?.reference ?? '-'}</td>
+          <td style="border:1px solid #cbd5e1; padding:4px;">${reading?.indicated ?? '-'}</td>
+          <td style="border:1px solid #cbd5e1; padding:4px;">${obs.zeroCorrection ?? '-'}</td>
+          <td style="border:1px solid #cbd5e1; padding:4px;">${formatVal(result?.error ?? (readingIndex === 0 ? obs.computedError : null))}</td>
+          <td style="border:1px solid #cbd5e1; padding:4px;">${formatMpe(result?.mpe ?? (readingIndex === 0 ? obs.appliedMpe : null))}</td>
+          <td style="border:1px solid #cbd5e1; padding:4px;">${formatVal(result?.margin ?? (readingIndex === 0 ? obs.marginToMpe : null))}</td>
+          <td style="border:1px solid #cbd5e1; padding:4px; font-weight:bold; color: ${(result?.result || obs.outcome) === 'pass' ? '#16a34a' : '#dc2626'}">${formatOutcome(result?.result || obs.outcome)}</td>
+        </tr>
+      `;
+    }).join('');
     return `
       <div style="margin-bottom: 20px; border: 1px solid #cbd5e1; padding: 10px; border-radius: 4px;">
         <h4 style="margin: 0 0 10px 0;">${idx + 1}. ${escapeHtml(obs.annexRef)} - ${escapeHtml(obs.evaluationMethod)}</h4>
@@ -59,15 +76,7 @@ function generateObservationHtml(obs, idx) {
             <th style="border:1px solid #cbd5e1; padding:4px;">Margin</th>
             <th style="border:1px solid #cbd5e1; padding:4px;">Result</th>
           </tr>
-          <tr>
-            <td style="border:1px solid #cbd5e1; padding:4px;">${obs.referenceLoad ?? '-'}</td>
-            <td style="border:1px solid #cbd5e1; padding:4px;">${obs.indicatedValue ?? '-'}</td>
-            <td style="border:1px solid #cbd5e1; padding:4px;">${obs.zeroCorrection ?? '-'}</td>
-            <td style="border:1px solid #cbd5e1; padding:4px;">${formatVal(obs.computedError)}</td>
-            <td style="border:1px solid #cbd5e1; padding:4px;">${formatMpe(obs.appliedMpe)}</td>
-            <td style="border:1px solid #cbd5e1; padding:4px;">${formatVal(obs.marginToMpe)}</td>
-            <td style="border:1px solid #cbd5e1; padding:4px; font-weight:bold; color: ${obs.outcome === 'pass' ? '#16a34a' : '#dc2626'}">${formatOutcome(obs.outcome)}</td>
-          </tr>
+          ${readingRows}
         </table>
         ${ruleBasis}
       </div>
@@ -78,16 +87,19 @@ function generateObservationHtml(obs, idx) {
   let tableHtml = '';
   
   if (['A4_accuracy', 'A4_eccentricity', 'B_electronic_additional'].includes(obs.annexRef)) {
-    const readingsHtml = (obs.readings || []).map(r => `
+    const readingsHtml = (obs.readings || []).map((r, readingIndex) => {
+      const computed = obs.computedErrors?.[readingIndex];
+      return `
       <tr>
         <td style="border:1px solid #cbd5e1; padding:4px;">${r.reference ?? '-'}</td>
         <td style="border:1px solid #cbd5e1; padding:4px;">${r.indicated ?? '-'}</td>
-        <td style="border:1px solid #cbd5e1; padding:4px;">${formatVal(r.error)}</td>
-        <td style="border:1px solid #cbd5e1; padding:4px;">${formatMpe(r.mpe)}</td>
-        <td style="border:1px solid #cbd5e1; padding:4px;">${formatVal(r.margin)}</td>
-        <td style="border:1px solid #cbd5e1; padding:4px; color: ${r.result === 'pass' ? '#16a34a' : '#dc2626'}">${formatOutcome(r.result)}</td>
+        <td style="border:1px solid #cbd5e1; padding:4px;">${formatVal(computed?.error ?? r.error)}</td>
+        <td style="border:1px solid #cbd5e1; padding:4px;">${formatMpe(computed?.mpe ?? r.mpe)}</td>
+        <td style="border:1px solid #cbd5e1; padding:4px;">${formatVal(computed?.margin ?? r.margin)}</td>
+        <td style="border:1px solid #cbd5e1; padding:4px; color: ${(computed?.result || r.result) === 'pass' ? '#16a34a' : '#dc2626'}">${formatOutcome(computed?.result || r.result)}</td>
       </tr>
-    `).join('');
+      `;
+    }).join('');
 
     tableHtml = `
       <table style="width:100%; border-collapse:collapse; font-size:12px;">
@@ -316,18 +328,25 @@ function buildObservationDocxParagraphs(obs, idx) {
         makeDocxCell('Result', true),
       ]
     });
-    const row = new TableRow({
-      children: [
-        makeDocxCell(obs.referenceLoad ?? '-'),
-        makeDocxCell(obs.indicatedValue ?? '-'),
-        makeDocxCell(obs.zeroCorrection ?? '-'),
-        makeDocxCell(formatVal(obs.computedError)),
-        makeDocxCell(formatMpe(obs.appliedMpe)),
-        makeDocxCell(formatVal(obs.marginToMpe)),
-        makeDocxCell(formatOutcome(obs.outcome)),
-      ]
+    const readings = obs.evaluationMethod === 'mpe_band'
+      ? (obs.readings?.length ? obs.readings : [{ reference: obs.referenceLoad, indicated: obs.indicatedValue }])
+      : [null];
+    const rows = [headerRow];
+    readings.forEach((reading, readingIndex) => {
+      const result = obs.computedErrors?.[readingIndex];
+      rows.push(new TableRow({
+        children: [
+          makeDocxCell(reading?.reference ?? '-'),
+          makeDocxCell(reading?.indicated ?? '-'),
+          makeDocxCell(obs.zeroCorrection ?? '-'),
+          makeDocxCell(formatVal(result?.error ?? (readingIndex === 0 ? obs.computedError : null))),
+          makeDocxCell(formatMpe(result?.mpe ?? (readingIndex === 0 ? obs.appliedMpe : null))),
+          makeDocxCell(formatVal(result?.margin ?? (readingIndex === 0 ? obs.marginToMpe : null))),
+          makeDocxCell(formatOutcome(result?.result || obs.outcome)),
+        ]
+      }));
     });
-    elements.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [headerRow, row] }));
+    elements.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
   } else if (['A4_accuracy', 'A4_eccentricity', 'B_electronic_additional'].includes(obs.annexRef)) {
     const headerRow = new TableRow({
       children: [
@@ -340,15 +359,16 @@ function buildObservationDocxParagraphs(obs, idx) {
       ]
     });
     const rows = [headerRow];
-    for (const r of (obs.readings || [])) {
+    for (const [readingIndex, r] of (obs.readings || []).entries()) {
+      const computed = obs.computedErrors?.[readingIndex];
       rows.push(new TableRow({
         children: [
           makeDocxCell(r.reference ?? '-'),
           makeDocxCell(r.indicated ?? '-'),
-          makeDocxCell(formatVal(r.error)),
-          makeDocxCell(formatMpe(r.mpe)),
-          makeDocxCell(formatVal(r.margin)),
-          makeDocxCell(formatOutcome(r.result)),
+          makeDocxCell(formatVal(computed?.error ?? r.error)),
+          makeDocxCell(formatMpe(computed?.mpe ?? r.mpe)),
+          makeDocxCell(formatVal(computed?.margin ?? r.margin)),
+          makeDocxCell(formatOutcome(computed?.result || r.result)),
         ]
       }));
     }

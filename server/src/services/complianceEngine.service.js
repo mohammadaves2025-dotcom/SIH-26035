@@ -170,20 +170,23 @@ export function evaluateObservation(observation, instrumentModel, ruleConfig, ve
     throw new AppError(422, 'UNSUPPORTED_TEST_METHOD', 'Automatic MPE calculation is currently implemented only for A4 accuracy observations');
   }
 
-  if (
-    observation.referenceLoad === undefined ||
-    observation.referenceLoad === null ||
-    observation.indicatedValue === undefined ||
-    observation.indicatedValue === null
-  ) {
+  const accuracyReadings = observation.readings?.length
+    ? observation.readings
+    : [{ reference: observation.referenceLoad, indicated: observation.indicatedValue }];
+  if (accuracyReadings.length < 2) {
+    throw new AppError(422, 'INCOMPLETE_TEST_READINGS', 'A4_accuracy requires at least two complete reference/indicated reading pairs');
+  }
+  if (accuracyReadings.some((reading) =>
+    reading.reference === undefined || reading.reference === null ||
+    reading.indicated === undefined || reading.indicated === null
+  )) {
     throw new AppError(
-      400,
-      'VALIDATION_ERROR',
-      'referenceLoad and indicatedValue are required for mpe_band evaluation'
+      422,
+      'INCOMPLETE_TEST_READINGS',
+      'A4_accuracy requires at least two complete reference/indicated reading pairs'
     );
   }
-
-  if (!Number.isFinite(observation.referenceLoad) || !Number.isFinite(observation.indicatedValue)) {
+  if (accuracyReadings.some((reading) => !Number.isFinite(reading.reference) || !Number.isFinite(reading.indicated))) {
     throw new AppError(400, 'VALIDATION_ERROR', 'Observation values must be finite numbers');
   }
   if (observation.zeroCorrection != null && !Number.isFinite(observation.zeroCorrection)) {
@@ -193,34 +196,45 @@ export function evaluateObservation(observation, instrumentModel, ruleConfig, ve
       !Number.isFinite(instrumentModel.maxCapacity) || instrumentModel.maxCapacity <= 0) {
     throw new AppError(422, 'INVALID_INSTRUMENT_PARAMETERS', 'Instrument capacity and verification interval must be positive');
   }
-  const referenceLoadScaled = toScaledInteger(observation.referenceLoad, 'referenceLoad');
-  const indicatedValueScaled = toScaledInteger(observation.indicatedValue, 'indicatedValue');
   const eScaled = toScaledInteger(instrumentModel.e, 'verification interval');
   const maxCapacityScaled = toScaledInteger(instrumentModel.maxCapacity, 'maximum capacity');
-  if (referenceLoadScaled > maxCapacityScaled) {
-    throw new AppError(422, 'LOAD_OUT_OF_RANGE', 'Reference load exceeds the instrument maximum capacity');
-  }
-
   const zeroCorrectionScaled = toScaledInteger(observation.zeroCorrection || 0, 'zeroCorrection');
-
-  const factorScaled = getBandMpeScaled(referenceLoadScaled, eScaled, ruleConfig, verificationStage);
-  const errorScaled = indicatedValueScaled - referenceLoadScaled - zeroCorrectionScaled;
-  const withinMpe = (errorScaled < 0n ? -errorScaled : errorScaled) * DECIMAL_SCALE <= factorScaled * eScaled;
-  const appliedMpe = Number(factorScaled * eScaled) / (DECIMAL_SCALE_NUMBER * DECIMAL_SCALE_NUMBER);
-  const computedError = Number(errorScaled) / DECIMAL_SCALE_NUMBER;
-  const outcome = withinMpe ? 'pass' : 'fail';
-
-  const marginToMpe = appliedMpe - Math.abs(computedError);
   const eValue = Number(eScaled) / DECIMAL_SCALE_NUMBER;
-  const errorRatioE = eValue !== 0 ? computedError / eValue : null;
+  const computedErrors = accuracyReadings.map((reading) => {
+    const referenceLoadScaled = toScaledInteger(reading.reference, 'referenceLoad');
+    const indicatedValueScaled = toScaledInteger(reading.indicated, 'indicatedValue');
+    if (referenceLoadScaled > maxCapacityScaled) {
+      throw new AppError(422, 'LOAD_OUT_OF_RANGE', 'Reference load exceeds the instrument maximum capacity');
+    }
+    const factorScaled = getBandMpeScaled(referenceLoadScaled, eScaled, ruleConfig, verificationStage);
+    const errorScaled = indicatedValueScaled - referenceLoadScaled - zeroCorrectionScaled;
+    const withinMpe = (errorScaled < 0n ? -errorScaled : errorScaled) * DECIMAL_SCALE <= factorScaled * eScaled;
+    const appliedMpe = Number(factorScaled * eScaled) / (DECIMAL_SCALE_NUMBER * DECIMAL_SCALE_NUMBER);
+    const computedError = Number(errorScaled) / DECIMAL_SCALE_NUMBER;
+    const marginToMpe = appliedMpe - Math.abs(computedError);
+    return {
+      load: reading.reference,
+      error: computedError,
+      mpe: appliedMpe,
+      margin: marginToMpe,
+      result: withinMpe ? 'pass' : 'fail',
+    };
+  });
+  const worstReading = computedErrors.reduce((worst, reading) =>
+    Math.abs(reading.error) > Math.abs(worst.error) ? reading : worst
+  );
+  const marginToMpe = Math.min(...computedErrors.map((reading) => reading.margin));
+  const errorRatioE = eValue !== 0 ? worstReading.error / eValue : null;
+  const outcome = computedErrors.every((reading) => reading.result === 'pass') ? 'pass' : 'fail';
 
   return {
-    computedError,
-    appliedMpe,
+    computedError: worstReading.error,
+    appliedMpe: worstReading.mpe,
     marginToMpe,
     errorRatioE,
     outcome,
     ruleConfigId: ruleConfig._id,
+    computedErrors,
   };
 }
 

@@ -41,12 +41,14 @@
 }
 
 .header-emblem {
-  height: 36px;
-  width: 46px;
+  height: 52px;
+  width: 82px;
   object-fit: contain;
-  background: #fff;
-  border-radius: 3px;
-  padding: 2px;
+  background: #f7f7f7;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  padding: 3px;
+  flex: 0 0 auto;
 }
 
 .header-titles {
@@ -249,7 +251,8 @@
     font-size: 14px;
   }
   .header-emblem {
-    height: 28px;
+    width: 66px;
+    height: 44px;
   }
   .header-user-role,
   .header-lab-tag,
@@ -313,7 +316,8 @@
     white-space: normal;
   }
   .header-emblem {
-    height: 24px;
+    width: 58px;
+    height: 40px;
   }
   .mobile-menu-btn {
     padding: 2px;
@@ -347,7 +351,8 @@
 
 @media (max-width: 360px) {
   .header-emblem {
-    width: 36px;
+    width: 48px;
+    height: 34px;
   }
 
   .header-demo-toggle span {

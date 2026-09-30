@@ -9,12 +9,12 @@ import { getAttachments, uploadAttachment, downloadAttachment } from '../../serv
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { useTranslation } from '../../config/i18n.js';
 import apiClient from '../../services/apiClient.js';
-import { buildReadingPayload, formatMetrologyValue, getDisplayReadingFields, getMandatoryProcedureAnnexes, getMissingSelectedProcedures, getRuleFieldLabel, getSubmissionFocusAnnex, hasRequiredReadings, minimumReadingCount } from '../../utils/metrology.js';
+import { buildReadingPayload, formatMetrologyValue, getDisplayReadingFields, getMandatoryProcedureAnnexes, getMissingSelectedProcedures, getRuleFieldLabel, getSubmissionFocusAnnex, hasCompleteMeasurementPairs, hasRequiredReadings, minimumReadingCount } from '../../utils/metrology.js';
 import { buildJudgeDemoObservation } from '../../utils/judgeDemoObservation.js';
 import { ANNEX_REFS } from '../../config/constants.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import VirtualBalancePanel from '../../components/common/VirtualBalancePanel.jsx';
-import { ArrowLeft, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle2, ShieldCheck, XCircle, Trash2, Pencil, AlertTriangle, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle2, ShieldCheck, XCircle, Trash2, Pencil, AlertTriangle, Sparkles } from 'lucide-react';
 import './TestSessionDetailPage.css';
 
 const outcomeLabel = (outcome) => outcome === 'pass' ? 'pass' : outcome === 'fail' ? 'fail' : 'Not evaluated';
@@ -40,9 +40,11 @@ function createEmptyObservationForm(session, annexRef) {
     checklistPassed: null,
     reviewerNotes: '',
     zeroCorrection: '',
-    readings: criteria && evaluationMethod === 'structured'
-      ? Array.from({ length: minimumReadingCount(criteria) }, () => emptyReading(criteria.fields))
-      : [],
+    readings: evaluationMethod === 'mpe_band'
+      ? Array.from({ length: 2 }, () => ({ reference: '', indicated: '' }))
+      : criteria && evaluationMethod === 'structured'
+        ? Array.from({ length: minimumReadingCount(criteria) }, () => emptyReading(criteria.fields))
+        : [],
   };
 }
 
@@ -66,6 +68,7 @@ export default function TestSessionDetailPage() {
     checklistPassed: null,
     reviewerNotes: '',
     zeroCorrection: '',
+    readings: [{ reference: '', indicated: '' }, { reference: '', indicated: '' }],
   });
   const [showObsForm, setShowObsForm] = useState(false);
   const [showSessionEditForm, setShowSessionEditForm] = useState(false);
@@ -234,6 +237,8 @@ export default function TestSessionDetailPage() {
   const missingSelectedProcedures = getMissingSelectedProcedures(session.selectedAnnexes, observations);
   const missingMandatoryProcedures = getMissingSelectedProcedures(mandatoryProcedureAnnexes, observations);
   const missingProcedures = [...new Set([...missingSelectedProcedures, ...missingMandatoryProcedures])];
+  const requiredProcedures = [...new Set([...(session.selectedAnnexes || []), ...mandatoryProcedureAnnexes])];
+  const completedProcedureCount = requiredProcedures.length - missingProcedures.length;
   const results = session.results || session.evaluationResults || observations;
   const attachments = Array.isArray(attachmentsData) ? attachmentsData : [];
   const userRole = user?.role;
@@ -245,12 +250,12 @@ export default function TestSessionDetailPage() {
     String(session.submittedBy?._id || session.submittedBy) === String(user._id)
   );
   const currentCriterion = session.ruleConfig?.testCriteria?.find((criterion) => criterion.annexRef === obsForm.annexRef);
-  const minimumRows = minimumReadingCount(currentCriterion);
+  const minimumRows = obsForm.evaluationMethod === 'mpe_band' ? 2 : minimumReadingCount(currentCriterion);
   const checklistFieldsRequired = obsForm.evaluationMethod === 'manual_checklist' ||
     (obsForm.evaluationMethod === 'structured' && currentCriterion?.criterion?.type === 'manual');
-  const requiredFieldsComplete = obsForm.evaluationMethod !== 'structured' || (
-    hasRequiredReadings(obsForm.readings, currentCriterion?.fields, minimumRows)
-  );
+  const requiredFieldsComplete = obsForm.evaluationMethod === 'mpe_band'
+    ? hasCompleteMeasurementPairs(obsForm.readings, minimumRows)
+    : obsForm.evaluationMethod !== 'structured' || hasRequiredReadings(obsForm.readings, currentCriterion?.fields, minimumRows);
   const canSaveObservation = !!obsForm.annexRef && requiredFieldsComplete && (
     !checklistFieldsRequired || (obsForm.checklistPassed !== null && !!obsForm.reviewerNotes?.trim())
   );
@@ -274,17 +279,25 @@ export default function TestSessionDetailPage() {
       }
       payload = { annexRef: obsForm.annexRef, evaluationMethod: 'manual_checklist', checklistPassed: obsForm.checklistPassed, reviewerNotes: obsForm.reviewerNotes.trim() };
     } else {
-      if (obsForm.referenceLoad === '' || obsForm.indicatedValue === '') {
-        addToast({ type: 'error', message: 'Enter both the applied reference load and instrument indication.' });
+      if (!hasCompleteMeasurementPairs(obsForm.readings, minimumRows)) {
+        addToast({ type: 'error', message: 'Enter at least two complete reference-load and instrument-indication reading pairs.' });
         return;
       }
-      const refLoad = Number(obsForm.referenceLoad);
-      const indicatedValue = Number(obsForm.indicatedValue);
-      if (!Number.isFinite(refLoad) || !Number.isFinite(indicatedValue)) {
+      const readings = obsForm.readings.map((reading) => ({
+        reference: Number(reading.reference),
+        indicated: Number(reading.indicated),
+      }));
+      if (readings.some((reading) => !Number.isFinite(reading.reference) || !Number.isFinite(reading.indicated))) {
         addToast({ type: 'error', message: 'Observation values must be finite numbers.' });
         return;
       }
-      payload = { annexRef: obsForm.annexRef, evaluationMethod: 'mpe_band', referenceLoad: refLoad, indicatedValue };
+      payload = {
+        annexRef: obsForm.annexRef,
+        evaluationMethod: 'mpe_band',
+        referenceLoad: readings[0].reference,
+        indicatedValue: readings[0].indicated,
+        readings,
+      };
       if (obsForm.zeroCorrection !== '') payload.zeroCorrection = Number(obsForm.zeroCorrection);
     }
 
@@ -307,8 +320,11 @@ export default function TestSessionDetailPage() {
   };
 
   const addMissingProcedureObservation = (requestedAnnexRef = missingProcedures[0]) => {
+    if (!ANNEX_REFS.some((item) => item.value === requestedAnnexRef)) {
+      addToast({ type: 'error', message: 'Choose a valid test procedure before adding an observation.' });
+      return;
+    }
     const annexRef = requestedAnnexRef;
-    if (!annexRef) return;
     const selectedAnnexes = session.selectedAnnexes || [];
     if (!selectedAnnexes.includes(annexRef)) {
       editSessionMutation.mutate({
@@ -428,21 +444,57 @@ export default function TestSessionDetailPage() {
 
       {/* Action Buttons */}
       {session.status === 'draft' && missingProcedures.length > 0 && (
-        <div className="gov-card mb-16" role="status" style={{ borderLeft: '4px solid var(--gov-saffron)', background: '#fffbeb' }}>
-          <div className="gov-card-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <div>
-              <strong>Required procedures still need observations</strong>
-              <div style={{ marginTop: 4, fontSize: 13 }}>
-                Add an observation for: {missingProcedures.map((ref) => ANNEX_REFS.find((item) => item.value === ref)?.label || ref).join(', ')}.
+          <section className="procedure-coverage-alert mb-16" aria-labelledby="procedure-coverage-title" aria-live="polite">
+            <div className="procedure-coverage-header">
+              <div className="procedure-coverage-icon" aria-hidden="true"><AlertTriangle size={20} /></div>
+              <div className="procedure-coverage-copy">
+                <div className="procedure-coverage-title-row">
+                  <h3 id="procedure-coverage-title">Complete required test procedures</h3>
+                  <span className="procedure-coverage-count">
+                    {missingProcedures.length} remaining
+                  </span>
+                </div>
+                <p>Record an observation for each procedure below before submitting this session.</p>
               </div>
             </div>
-            {canEditDraft && (
-              <button type="button" className="gov-btn gov-btn-outline" onClick={addMissingProcedureObservation} disabled={editSessionMutation.isPending}>
-                <Plus size={14} /> {editSessionMutation.isPending ? 'Preparing procedure...' : 'Add missing observation'}
-              </button>
+            {requiredProcedures.length > 0 && (
+              <div className="procedure-coverage-progress" aria-label={`${completedProcedureCount} of ${requiredProcedures.length} required procedures recorded`}>
+                <span style={{ width: `${Math.round((completedProcedureCount / requiredProcedures.length) * 100)}%` }} />
+              </div>
             )}
-          </div>
-        </div>
+            <ul className="procedure-coverage-list">
+              {missingProcedures.map((annexRef) => {
+                const annex = ANNEX_REFS.find((item) => item.value === annexRef);
+                const procedureName = testTypes.find((testType) => testType.oimlAnnexRef === annexRef)?.testName;
+                const isMandatory = mandatoryProcedureAnnexes.includes(annexRef);
+                return (
+                  <li className="procedure-coverage-item" key={annexRef}>
+                    <div className="procedure-coverage-item-copy">
+                      <span className="procedure-coverage-dot" aria-hidden="true" />
+                      <div>
+                        <strong>{procedureName || annex?.label || annexRef}</strong>
+                        <span>{annex?.label || annexRef}</span>
+                      </div>
+                      {isMandatory && <span className="procedure-required-label">Mandatory</span>}
+                    </div>
+                    {canEditDraft && (
+                      <button
+                        type="button"
+                        className="procedure-coverage-action"
+                        onClick={() => addMissingProcedureObservation(annexRef)}
+                        disabled={editSessionMutation.isPending}
+                        aria-label={`Record ${procedureName || annex?.label || annexRef} observation`}
+                      >
+                        <span>{editSessionMutation.isPending ? 'Opening…' : 'Record test'}</span>
+                        <ArrowRight size={15} />
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {mandatoryTestsLoading && <div className="procedure-coverage-loading">Checking mandatory procedures…</div>}
+          </section>
       )}
       {session.status === 'draft' && !session.ruleConfig && (
         <div className="gov-card mb-16" role="alert" style={{ borderLeft: '4px solid var(--gov-red)' }}>
@@ -559,6 +611,9 @@ export default function TestSessionDetailPage() {
             </button>
           </div>
           <div className="gov-card-body">
+            <p className="observation-reading-requirement" role="note">
+              Record at least two complete readings for each measurement-based test. For checklist-only tests, record the checklist result and supporting evidence instead.
+            </p>
             {judgeDemoLoaded && (
               <p className="observation-demo-notice" role="status">
                 These are illustrative judge-demo values, not measured evidence. Replace them with actual test observations before saving.
@@ -579,7 +634,9 @@ export default function TestSessionDetailPage() {
                   }
                   
                   // Initialize readings form based on criteria
-                  const initReadings = criteriaData ? Array.from({ length: minimumReadingCount(criteriaData) }, () => emptyReading(criteriaData.fields)) : [];
+                  const initReadings = method === 'mpe_band'
+                    ? Array.from({ length: 2 }, () => ({ reference: '', indicated: '' }))
+                    : criteriaData ? Array.from({ length: minimumReadingCount(criteriaData) }, () => emptyReading(criteriaData.fields)) : [];
                   
                   setObsForm((f) => ({ 
                     ...f, 
@@ -699,19 +756,64 @@ export default function TestSessionDetailPage() {
               </>}
               
               {obsForm.evaluationMethod === 'mpe_band' && <>
-              <div className="gov-form-group">
-                <label className="gov-label">Reference load (same unit as registered model; kg)</label>
-                <input className="gov-input" type="number" step="any" value={obsForm.referenceLoad} onChange={(e) => {
-                  setJudgeDemoLoaded(false);
-                  setObsForm((f) => ({ ...f, referenceLoad: e.target.value }));
-                }} />
-              </div>
-              <div className="gov-form-group">
-                <label className="gov-label">Instrument indication (kg)</label>
-                <input className="gov-input" type="number" step="any" value={obsForm.indicatedValue} onChange={(e) => {
-                  setJudgeDemoLoaded(false);
-                  setObsForm((f) => ({ ...f, indicatedValue: e.target.value }));
-                }} />
+              <div className="mpe-reading-entry" style={{ gridColumn: '1 / -1' }}>
+                <h5>Accuracy readings (at least 2 complete pairs)</h5>
+                <p className="text-muted">Each reading needs both a reference load and instrument indication. Checklist-only tests record evidence instead of instrument readings.</p>
+                {(obsForm.readings || []).map((reading, rIdx) => (
+                  <div className="mpe-reading-row" key={rIdx}>
+                    <strong>Reading {rIdx + 1}</strong>
+                    <div className="gov-form-group">
+                      <label className="gov-label">Reference load (kg)</label>
+                      <input
+                        data-testid={`observation-field-${rIdx}-reference`}
+                        className="gov-input"
+                        type="number"
+                        step="any"
+                        value={reading.reference ?? ''}
+                        onChange={(e) => {
+                          setJudgeDemoLoaded(false);
+                          setObsForm((form) => ({ ...form, readings: form.readings.map((item, index) => index === rIdx ? { ...item, reference: e.target.value } : item) }));
+                        }}
+                      />
+                    </div>
+                    <div className="gov-form-group">
+                      <label className="gov-label">Instrument indication (kg)</label>
+                      <input
+                        data-testid={`observation-field-${rIdx}-indicated`}
+                        className="gov-input"
+                        type="number"
+                        step="any"
+                        value={reading.indicated ?? ''}
+                        onChange={(e) => {
+                          setJudgeDemoLoaded(false);
+                          setObsForm((form) => ({ ...form, readings: form.readings.map((item, index) => index === rIdx ? { ...item, indicated: e.target.value } : item) }));
+                        }}
+                      />
+                    </div>
+                    <button
+                      className="gov-btn gov-btn-outline"
+                      type="button"
+                      aria-label={`Remove reading ${rIdx + 1}`}
+                      disabled={(obsForm.readings || []).length <= minimumRows}
+                      onClick={() => {
+                        setJudgeDemoLoaded(false);
+                        setObsForm((form) => ({ ...form, readings: form.readings.filter((_, index) => index !== rIdx) }));
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  className="gov-btn gov-btn-outline"
+                  type="button"
+                  onClick={() => {
+                    setJudgeDemoLoaded(false);
+                    setObsForm((form) => ({ ...form, readings: [...form.readings, { reference: '', indicated: '' }] }));
+                  }}
+                >
+                  <Plus size={14} /> Add Reading
+                </button>
               </div>
               <div className="gov-form-group">
                 <label className="gov-label">Zero correction (optional offset to indication; kg)</label>
@@ -737,7 +839,12 @@ export default function TestSessionDetailPage() {
                     scaleInterval={session.scaleInterval}
                     onApply={({ referenceLoad, indicatedValue }) => {
                       setJudgeDemoLoaded(false);
-                      setObsForm((form) => ({ ...form, referenceLoad: String(referenceLoad), indicatedValue: String(indicatedValue) }));
+                      setObsForm((form) => ({
+                        ...form,
+                        readings: form.readings.map((reading, index) => index === 0
+                          ? { ...reading, reference: String(referenceLoad), indicated: String(indicatedValue) }
+                          : reading),
+                      }));
                       addToast({ type: 'success', message: 'Simulated load and indication copied into the observation form. Save the observation to evaluate it.' });
                     }}
                   />
@@ -767,17 +874,25 @@ export default function TestSessionDetailPage() {
                   }
                   payload = { annexRef: obsForm.annexRef, evaluationMethod: 'manual_checklist', checklistPassed: obsForm.checklistPassed, reviewerNotes: obsForm.reviewerNotes.trim() };
                 } else {
-                  if (obsForm.referenceLoad === '' || obsForm.indicatedValue === '') {
-                    addToast({ type: 'error', message: 'Enter both the applied reference load and instrument indication.' });
+                  if (!hasCompleteMeasurementPairs(obsForm.readings, minimumRows)) {
+                    addToast({ type: 'error', message: 'Enter at least two complete reference-load and instrument-indication reading pairs.' });
                     return;
                   }
-                  const refLoad = Number(obsForm.referenceLoad);
-                  const indicatedValue = Number(obsForm.indicatedValue);
-                  if (!Number.isFinite(refLoad) || !Number.isFinite(indicatedValue)) {
+                  const readings = obsForm.readings.map((reading) => ({
+                    reference: Number(reading.reference),
+                    indicated: Number(reading.indicated),
+                  }));
+                  if (readings.some((reading) => !Number.isFinite(reading.reference) || !Number.isFinite(reading.indicated))) {
                     addToast({ type: 'error', message: 'Observation values must be finite numbers.' });
                     return;
                   }
-                  payload = { annexRef: obsForm.annexRef, evaluationMethod: 'mpe_band', referenceLoad: refLoad, indicatedValue };
+                  payload = {
+                    annexRef: obsForm.annexRef,
+                    evaluationMethod: 'mpe_band',
+                    referenceLoad: readings[0].reference,
+                    indicatedValue: readings[0].indicated,
+                    readings,
+                  };
                   if (obsForm.zeroCorrection !== '') payload.zeroCorrection = Number(obsForm.zeroCorrection);
                 }
             
@@ -874,12 +989,7 @@ export default function TestSessionDetailPage() {
                           {procedureObservations[0].observation.evaluationMethod === 'mpe_band' ? (
                             <tr>
                               <th scope="col">#</th>
-                              <th scope="col">Reference load</th>
-                              <th scope="col">Indication</th>
-                              <th scope="col">Zero correction</th>
-                              <th scope="col">Computed error</th>
-                              <th scope="col">Applied MPE</th>
-                              <th scope="col">Margin</th>
+                              <th scope="col">Accuracy readings and evaluation</th>
                               <th scope="col">Outcome</th>
                               {session.status === 'draft' && canEditDraft && <th scope="col">Actions</th>}
                             </tr>
@@ -910,12 +1020,45 @@ export default function TestSessionDetailPage() {
                                   <td>{index + 1}</td>
                                   {obs.evaluationMethod === 'mpe_band' ? (
                                     <>
-                                      <td className="text-mono">{formatMetrologyValue(obs.referenceLoad)}</td>
-                                      <td className="text-mono">{formatMetrologyValue(obs.indicatedValue)}</td>
-                                      <td className="text-mono">{formatMetrologyValue(obs.zeroCorrection)}</td>
-                                      <td className="text-mono">{formatMetrologyValue(obs.computedError, true)}</td>
-                                      <td className="text-mono">{obs.appliedMpe != null ? `±${formatMetrologyValue(obs.appliedMpe)}` : '—'}</td>
-                                      <td className="text-mono">{formatMetrologyValue(obs.marginToMpe, true)}</td>
+                                      <td>
+                                        <div className="gov-table-wrapper">
+                                          <table className="gov-table procedure-readings-table">
+                                            <thead>
+                                              <tr>
+                                                <th scope="col">Reading</th>
+                                                <th scope="col">Reference load</th>
+                                                <th scope="col">Indication</th>
+                                                <th scope="col">Computed error</th>
+                                                <th scope="col">Applied MPE</th>
+                                                <th scope="col">Margin</th>
+                                                <th scope="col">Result</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {(obs.readings?.length ? obs.readings : [{
+                                                reference: obs.referenceLoad,
+                                                indicated: obs.indicatedValue,
+                                              }]).map((reading, readingIndex) => {
+                                                const result = obs.computedErrors?.[readingIndex];
+                                                return (
+                                                  <tr key={readingIndex}>
+                                                    <td>{readingIndex + 1}</td>
+                                                    <td className="text-mono">{formatMetrologyValue(reading.reference)}</td>
+                                                    <td className="text-mono">{formatMetrologyValue(reading.indicated)}</td>
+                                                    <td className="text-mono">{formatMetrologyValue(result?.error, true)}</td>
+                                                    <td className="text-mono">{result?.mpe != null ? `±${formatMetrologyValue(result.mpe)}` : '—'}</td>
+                                                    <td className="text-mono">{formatMetrologyValue(result?.margin, true)}</td>
+                                                    <td>{result?.result ? <StatusBadge status={outcomeLabel(result.result)} /> : '—'}</td>
+                                                  </tr>
+                                                );
+                                              })}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                        {obs.zeroCorrection != null && obs.zeroCorrection !== 0 && (
+                                          <div className="text-muted">Zero correction: {formatMetrologyValue(obs.zeroCorrection)}</div>
+                                        )}
+                                      </td>
                                       <td><StatusBadge status={outcomeLabel(obs.outcome)} /></td>
                                     </>
                                   ) : obs.evaluationMethod === 'manual_checklist' ? (
@@ -1005,7 +1148,12 @@ export default function TestSessionDetailPage() {
                                             checklistPassed: obs.checklistPassed ?? null,
                                             reviewerNotes: obs.reviewerNotes || '',
                                             zeroCorrection: obs.zeroCorrection ?? '',
-                                            readings: obs.readings || [],
+                                            readings: obs.evaluationMethod === 'mpe_band'
+                                              ? Array.from({ length: Math.max(2, obs.readings?.length || 0) }, (_, readingIndex) =>
+                                                obs.readings?.[readingIndex] || (readingIndex === 0 && obs.referenceLoad != null && obs.indicatedValue != null
+                                                  ? { reference: obs.referenceLoad, indicated: obs.indicatedValue }
+                                                  : { reference: '', indicated: '' }))
+                                              : obs.readings || [],
                                           });
                                           setShowObsForm(true);
                                         }}

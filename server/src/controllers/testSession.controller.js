@@ -201,13 +201,41 @@ export const submitTestSession = asyncHandler(async (req, res) => {
 
   await checkMandatoryTests(session, observations, accuracyClass);
 
+  const ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
+  const incompleteReadingAnnexes = new Set();
+  for (const observation of observations) {
+    const criterion = ruleConfig.testCriteria?.find((item) => item.annexRef === observation.annexRef);
+    if (observation.evaluationMethod === 'manual_checklist' || criterion?.criterion?.type === 'manual') continue;
+
+    if (observation.evaluationMethod === 'mpe_band') {
+      const completeCount = (observation.readings || []).filter((reading) =>
+        reading.reference != null && reading.indicated != null
+      ).length;
+      if (completeCount < 2) incompleteReadingAnnexes.add(observation.annexRef);
+      continue;
+    }
+
+    if (observation.evaluationMethod === 'structured') {
+      const requiredFields = (criterion?.fields || []).filter((field) => field.required);
+      const completeCount = (observation.readings || []).filter((reading) =>
+        requiredFields.every((field) =>
+          reading[field.name] !== undefined &&
+          reading[field.name] !== null &&
+          (typeof reading[field.name] !== 'string' || reading[field.name].trim() !== '')
+        )
+      ).length;
+      if (completeCount < 2) incompleteReadingAnnexes.add(observation.annexRef);
+    }
+  }
+  if (incompleteReadingAnnexes.size) {
+    throw new AppError(422, 'INCOMPLETE_TEST_READINGS', `At least two complete readings are required for: ${[...incompleteReadingAnnexes].join(', ')}`);
+  }
+
   const instrumentModel = {
     accuracyClass,
     maxCapacity,
     e: scaleInterval,
   };
-  const ruleConfig = await resolveRuleConfig(accuracyClass, session.testDate);
-
   const bulkOps = [];
   const auditLogsToAppend = [];
   for (const obs of observations) {
@@ -221,6 +249,7 @@ export const submitTestSession = asyncHandler(async (req, res) => {
       updateObj.marginToMpe = evalResult.marginToMpe;
       updateObj.errorRatioE = evalResult.errorRatioE;
       updateObj.ruleConfigId = evalResult.ruleConfigId;
+      updateObj.computedErrors = evalResult.computedErrors;
     } else if (obs.evaluationMethod === 'structured') {
       updateObj.computedErrors = evalResult.computedErrors;
       updateObj.worstMargin = evalResult.worstMargin;

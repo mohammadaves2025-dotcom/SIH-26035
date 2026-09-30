@@ -33,14 +33,19 @@ export function createSingleObservationValidator(ruleConfig) {
       }
       const fields = criteriaData.fields || [];
       const readings = data.readings || [];
-      if (readings.length === 0) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${data.annexRef} requires readings`, path: ['readings'] });
+      const measurementCriterion = criteriaData.criterion?.type !== 'manual';
+      if (measurementCriterion && readings.length < 2) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${data.annexRef} requires at least two readings`, path: ['readings'] });
       }
       // Check required fields based on criteria
       for (let i = 0; i < readings.length; i++) {
          const r = readings[i];
          for (const f of fields) {
-            if (f.required && r[f.name] === undefined) {
+            if (f.required && (
+              r[f.name] === undefined ||
+              r[f.name] === null ||
+              (typeof r[f.name] === 'string' && r[f.name].trim() === '')
+            )) {
                ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Field ${f.name} is required in readings for ${data.annexRef}`, path: ['readings', i, f.name] });
             }
          }
@@ -57,12 +62,18 @@ export function createSingleObservationValidator(ruleConfig) {
     }
 
     if (data.evaluationMethod === 'mpe_band') {
-      if (data.referenceLoad === undefined || data.referenceLoad === null) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'referenceLoad is required for mpe_band evaluation', path: ['referenceLoad'] });
+      const readings = data.readings || [];
+      if (readings.length < 2) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'A4_accuracy requires at least two readings', path: ['readings'] });
       }
-      if (data.indicatedValue === undefined || data.indicatedValue === null) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'indicatedValue is required for mpe_band evaluation', path: ['indicatedValue'] });
-      }
+      readings.forEach((reading, index) => {
+        if (reading.reference === undefined || reading.reference === null) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Reference load is required in reading ${index + 1}`, path: ['readings', index, 'reference'] });
+        }
+        if (reading.indicated === undefined || reading.indicated === null) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Instrument indication is required in reading ${index + 1}`, path: ['readings', index, 'indicated'] });
+        }
+      });
       if (data.checklistPassed !== undefined) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'checklistPassed should not be provided for mpe_band evaluation', path: ['checklistPassed'] });
       }

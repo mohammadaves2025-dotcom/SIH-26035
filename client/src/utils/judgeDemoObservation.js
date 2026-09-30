@@ -47,12 +47,14 @@ export function buildJudgeDemoObservation({
   }
 
   const referenceLoad = getDemoLoad(maxCapacity, minCapacity, scaleInterval);
+  const reading = { reference: String(referenceLoad), indicated: String(referenceLoad), deltaL: '0' };
   return {
     annexRef,
     evaluationMethod: 'mpe_band',
     referenceLoad: String(referenceLoad),
     indicatedValue: String(referenceLoad),
     zeroCorrection: '0',
+    readings: [reading, { ...reading }],
   };
 }
 

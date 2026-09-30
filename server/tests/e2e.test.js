@@ -120,12 +120,20 @@ describe('End-to-End Metrology System Lifecycle', () => {
             evaluationMethod: 'mpe_band',
             referenceLoad: 200,
             indicatedValue: 200.15,
+            readings: [
+              { reference: 200, indicated: 200.15 },
+              { reference: 200, indicated: 200.1 },
+            ],
           },
           {
             annexRef: 'A4_accuracy',
             evaluationMethod: 'mpe_band',
             referenceLoad: 500,
             indicatedValue: 500.2,
+            readings: [
+              { reference: 500, indicated: 500.2 },
+              { reference: 500, indicated: 500.1 },
+            ],
           },
         ],
       });

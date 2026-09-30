@@ -15,7 +15,24 @@ describe('buildJudgeDemoObservation', () => {
       referenceLoad: '750',
       indicatedValue: '750',
       zeroCorrection: '0',
+      readings: [
+        { reference: '750', indicated: '750', deltaL: '0' },
+        { reference: '750', indicated: '750', deltaL: '0' },
+      ],
     });
+  });
+
+  it('fills two readings with the judge demo values for any measurement test', () => {
+    const observation = buildJudgeDemoObservation({
+      annexRef: 'A4_accuracy',
+      evaluationMethod: 'mpe_band',
+      maxCapacity: 1500,
+      minCapacity: 10,
+      scaleInterval: 0.5,
+    });
+
+    expect(observation.readings).toHaveLength(2);
+    expect(observation.readings[0]).toEqual(observation.readings[1]);
   });
 
   it('creates the minimum number of complete structured sample readings', () => {

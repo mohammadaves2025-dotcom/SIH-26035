@@ -96,4 +96,43 @@ describe('Report Builders', () => {
     expect(textNodes).toContain('A4_accuracy');
     expect(textNodes).toContain('+0.0200'); // error
   });
+
+  it('includes each accuracy reading and its individual result in both report formats', () => {
+    const observations = [{
+      annexRef: 'A4_accuracy',
+      evaluationMethod: 'mpe_band',
+      referenceLoad: 10,
+      indicatedValue: 10.01,
+      outcome: 'fail',
+      computedErrors: [
+        { error: 0.01, mpe: 0.05, margin: 0.04, result: 'pass' },
+        { error: 0.08, mpe: 0.05, margin: -0.03, result: 'fail' },
+      ],
+      readings: [
+        { reference: 10, indicated: 10.01 },
+        { reference: 20, indicated: 20.08 },
+      ],
+    }];
+    const reportInput = {
+      reportNumber: 'NAWI-TEST-002',
+      session: dummySession,
+      model: dummyModel,
+      manufacturer: dummyManufacturer,
+      observations,
+      attachments: [],
+      generatedAt: new Date(),
+    };
+
+    const html = generateHtmlTemplate(reportInput);
+    const docx = JSON.stringify(buildDocxDocument(reportInput));
+
+    expect(html).toContain('10.01');
+    expect(html).toContain('20.08');
+    expect(html).toContain('0.0100');
+    expect(html).toContain('0.0800');
+    expect(docx).toContain('10.01');
+    expect(docx).toContain('20.08');
+    expect(docx).toContain('0.0100');
+    expect(docx).toContain('0.0800');
+  });
 });

@@ -61,7 +61,8 @@ const observationSchema = new mongoose.Schema(
         load: { type: Number },
         error: { type: Number },
         mpe: { type: Number },
-        margin: { type: Number }
+        margin: { type: Number },
+        result: { type: String, enum: ['pass', 'fail'] },
       }
     ],
     range: { type: Number },

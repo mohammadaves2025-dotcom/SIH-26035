@@ -174,6 +174,10 @@ describe('WP0 Quick Defects Suite', () => {
       referenceLoad: 5,
       indicatedValue: 5.001,
       zeroCorrection: 0,
+      readings: [
+        { reference: 5, indicated: 5.001 },
+        { reference: 5, indicated: 5 },
+      ],
     });
 
     const submitRes = await request(app)
