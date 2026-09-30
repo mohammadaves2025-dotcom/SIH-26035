@@ -7,9 +7,10 @@ export default function Footer() {
   const { pathname } = useLocation();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const hasSidebar = isAuthenticated && pathname !== '/login';
+  const isLoginPage = pathname === '/login';
 
   return (
-    <footer className={`gov-footer ${hasSidebar ? '' : 'gov-footer-full'}`}>
+    <footer className={`gov-footer ${hasSidebar ? '' : 'gov-footer-full'}${isLoginPage ? ' gov-footer-login' : ''}`}>
       <p>© {new Date().getFullYear()} ASCENSION. All rights reserved.</p>
     </footer>
   );

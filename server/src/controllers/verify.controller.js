@@ -8,6 +8,70 @@ import { readStoredFile } from '../services/fileStorage.service.js';
 
 const PUBLICLY_VERIFIABLE_STATUSES = ['published', 'archived', 'revoked'];
 const MAX_SERIAL_LOOKUP_RESULTS = 25;
+const MAX_DETAILS_LOOKUP_RESULTS = 25;
+
+export const lookupPublicReportsByInstrumentDetails = asyncHandler(async (req, res) => {
+  const searchTerm = String(req.query.searchTerm || '').trim();
+  const testYear = String(req.query.testYear || '').trim();
+  if (searchTerm.length < 2 || searchTerm.length > 120) {
+    throw new AppError(400, 'INVALID_SEARCH_TERM', 'Enter at least 2 characters to search instrument details');
+  }
+  if (testYear && (!/^\d{4}$/.test(testYear) || Number(testYear) < 1900 || Number(testYear) > 2100)) {
+    throw new AppError(400, 'INVALID_TEST_YEAR', 'Enter a valid four-digit test year');
+  }
+
+  const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = {
+    $or: ['manufacturerName', 'modelName', 'laboratoryName'].map((field) => ({
+      [field]: { $regex: escapedSearchTerm, $options: 'i' },
+    })),
+  };
+  if (testYear) {
+    const yearStart = new Date(Date.UTC(Number(testYear), 0, 1));
+    const yearEnd = new Date(Date.UTC(Number(testYear) + 1, 0, 1));
+    match.testDate = { $gte: yearStart, $lt: yearEnd };
+  }
+
+  const matchingReports = await TestSession.aggregate([
+    { $match: match },
+    {
+      $lookup: {
+        from: Report.collection.name,
+        localField: '_id',
+        foreignField: 'testSessionId',
+        as: 'reports',
+      },
+    },
+    { $unwind: '$reports' },
+    { $match: { 'reports.status': { $in: PUBLICLY_VERIFIABLE_STATUSES } } },
+    { $sort: { 'reports.publishedAt': -1, testDate: -1 } },
+    { $limit: MAX_DETAILS_LOOKUP_RESULTS + 1 },
+    {
+      $project: {
+        _id: 0,
+        reportNumber: '$reports.reportNumber',
+        status: '$reports.status',
+        generatedAt: '$reports.generatedAt',
+        publishedAt: '$reports.publishedAt',
+        isSuperseded: { $ne: [{ $ifNull: ['$reports.supersededByReportId', null] }, null] },
+        manufacturerName: 1,
+        instrumentModelName: '$modelName',
+        accuracyClass: 1,
+        overallResult: 1,
+        laboratoryName: 1,
+        testDate: 1,
+      },
+    },
+  ]);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      reports: matchingReports.slice(0, MAX_DETAILS_LOOKUP_RESULTS),
+      hasMore: matchingReports.length > MAX_DETAILS_LOOKUP_RESULTS,
+    },
+  });
+});
 
 export const lookupReportsBySerialNumber = asyncHandler(async (req, res) => {
   const serialNumber = String(req.query.serialNumber || '').trim();
@@ -28,7 +92,7 @@ export const lookupReportsBySerialNumber = asyncHandler(async (req, res) => {
     .limit(MAX_SERIAL_LOOKUP_RESULTS + 1)
     .populate({
       path: 'testSessionId',
-      select: 'serialNumber overallResult instrumentModelId',
+      select: 'serialNumber overallResult instrumentModelId manufacturerName laboratoryName testDate',
       populate: { path: 'instrumentModelId', select: 'modelName accuracyClass' },
     });
 
@@ -40,9 +104,12 @@ export const lookupReportsBySerialNumber = asyncHandler(async (req, res) => {
       publishedAt: report.publishedAt,
       isSuperseded: Boolean(report.supersededByReportId),
       serialNumber: report.testSessionId.serialNumber,
+      manufacturerName: report.testSessionId.manufacturerName,
       overallResult: report.testSessionId.overallResult,
       instrumentModelName: report.testSessionId.instrumentModelId?.modelName || 'Unknown',
       accuracyClass: report.testSessionId.instrumentModelId?.accuracyClass || 'Unknown',
+      laboratoryName: report.testSessionId.laboratoryName,
+      testDate: report.testSessionId.testDate,
     }));
 
   res.status(200).json({

@@ -1,7 +1,7 @@
 .virtual-balance {
   margin-top: 14px;
   overflow: hidden;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--gov-border);
   border-radius: 10px;
   background: #fff;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
@@ -13,8 +13,8 @@
   justify-content: space-between;
   gap: 14px;
   padding: 14px 16px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border-bottom: 1px solid var(--gov-border-subtle);
+  background: var(--gov-blue-light);
 }
 
 .virtual-balance-heading {
@@ -32,7 +32,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 9px;
-  background: #eaf2fb;
+  background: #E5E7EB;
   color: var(--gov-navy-imperial);
 }
 
@@ -55,10 +55,10 @@
   align-items: center;
   gap: 5px;
   padding: 5px 9px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--gov-border);
   border-radius: 999px;
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: var(--gov-blue-light);
+  color: var(--gov-navy-imperial);
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
@@ -76,10 +76,10 @@
   align-items: flex-start;
   gap: 9px;
   padding: 11px 12px;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--gov-border-subtle);
   border-radius: 8px;
-  background: #f4f8ff;
-  color: #1e3a8a;
+  background: #F6F7F8;
+  color: var(--gov-text-body);
 }
 
 .virtual-balance-notice svg {
@@ -148,10 +148,10 @@
   align-items: center;
   gap: 6px;
   padding: 6px 9px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--gov-border);
   border-radius: 6px;
   background: #fff;
-  color: #334155;
+  color: var(--gov-text-body);
   font: inherit;
   font-size: 11px;
   cursor: pointer;
@@ -187,7 +187,7 @@
   justify-content: center;
   flex-direction: column;
   gap: 2px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--gov-border);
   border-radius: 8px;
   background: linear-gradient(155deg, #fff, #f1f5f9);
   color: #1e293b;
@@ -197,7 +197,7 @@
 
 .virtual-weight-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  border-color: #6b8bb1;
+  border-color: var(--gov-blue-accent);
   box-shadow: 0 3px 8px rgba(15, 23, 42, 0.12);
 }
 
@@ -207,8 +207,8 @@
 }
 
 .virtual-weight-option.is-selected .virtual-weight-button {
-  border-color: #2a638f;
-  background: #edf5fb;
+  border-color: var(--gov-navy-imperial);
+  background: var(--gov-blue-light);
 }
 
 .virtual-weight-block {
@@ -251,8 +251,8 @@
   justify-content: center;
   border: 0;
   border-radius: 50%;
-  background: #eef4fb;
-  color: #17456e;
+  background: var(--gov-blue-light);
+  color: var(--gov-navy-imperial);
   cursor: pointer;
 }
 

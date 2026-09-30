@@ -21,6 +21,18 @@
   min-width: 0;
 }
 
+.verify-year-filter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: min(100%, 220px);
+  gap: 4px;
+  margin-top: 14px;
+}
+
+.verify-year-filter .gov-label {
+  margin: 0;
+}
+
 .verify-message-error .gov-card-body {
   color: var(--gov-red);
 }

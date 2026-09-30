@@ -10,6 +10,25 @@ export function minimumReadingCount(criterion) {
   return ['range_le_mpe_factor', 'change_ge_factor_of_e'].includes(criterion?.criterion?.type) ? 2 : 1;
 }
 
+export function getMissingSelectedProcedures(selectedAnnexes, observations) {
+  const observedAnnexes = new Set((observations || []).map((observation) => observation.annexRef));
+  return (selectedAnnexes || []).filter((annexRef) => !observedAnnexes.has(annexRef));
+}
+
+export function getMandatoryProcedureAnnexes(testTypes, accuracyClass, verificationStage) {
+  return [...new Set((testTypes || [])
+    .filter((testType) =>
+      testType.status === 'approved' &&
+      testType.isActive === true &&
+      (testType.mandatoryFor || []).some((requirement) =>
+        requirement.accuracyClass === accuracyClass &&
+        ['all', verificationStage].includes(requirement.verificationStage)
+      )
+    )
+    .map((testType) => testType.oimlAnnexRef)
+    .filter(Boolean))];
+}
+
 export function hasRequiredReadings(readings, fields, minimumRows) {
   return (readings || []).length >= minimumRows && (readings || []).every((reading) =>
     (fields || []).filter((field) => field.required).every((field) =>

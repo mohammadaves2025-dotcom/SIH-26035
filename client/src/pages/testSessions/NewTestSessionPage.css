@@ -8,6 +8,22 @@
   min-width: 0;
 }
 
+.session-demo-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.session-demo-notice {
+  margin: -12px 0 16px;
+  padding: 10px 12px;
+  border-left: 4px solid var(--gov-saffron);
+  border-radius: var(--gov-radius);
+  background: var(--gov-orange-light, #fff4e5);
+  color: var(--gov-text-body);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .session-step-title {
   margin: 0 0 20px;
   line-height: 1.4;
@@ -58,7 +74,7 @@
   position: absolute;
   top: 50%;
   right: 11px;
-  color: #52657a;
+  color: var(--gov-text-muted);
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
@@ -117,6 +133,11 @@
 }
 
 @media (max-width: 520px) {
+  .session-demo-button {
+    width: 100%;
+    justify-content: center;
+  }
+
   .session-env-grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;

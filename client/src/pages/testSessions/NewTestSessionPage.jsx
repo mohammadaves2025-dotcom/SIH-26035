@@ -6,9 +6,10 @@ import { getManufacturers, createManufacturer } from '../../services/manufacture
 import apiClient from '../../services/apiClient.js';
 import { createTestSession } from '../../services/testSession.service.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
-import { ANNEX_REFS } from '../../config/constants.js';
+import { ANNEX_REFS, DEFAULT_MANDATORY_ANNEXES } from '../../config/constants.js';
 import { cacheInstrumentModels, cacheLaboratories, getCachedInstrumentModels, getCachedLaboratories, saveDraftSession } from '../../services/offlineSync.js';
-import { FlaskConical, ChevronRight, ChevronLeft } from 'lucide-react';
+import { buildJudgeDemoSessionForm } from '../../utils/judgeDemoScenario.js';
+import { FlaskConical, ChevronRight, ChevronLeft, Sparkles } from 'lucide-react';
 import './NewTestSessionPage.css';
 
 function RangeNumberField({ id, label, value, min, max, inputMin, inputMax, step, unit, onChange, testId }) {
@@ -63,6 +64,7 @@ export default function NewTestSessionPage() {
   const [online, setOnline] = useState(navigator.onLine);
   const [cachedModels, setCachedModels] = useState([]);
   const [cachedLabs, setCachedLabs] = useState([]);
+  const [judgeDemoLoaded, setJudgeDemoLoaded] = useState(false);
 
   const [form, setForm] = useState({
     instrumentModelId: '',
@@ -74,7 +76,7 @@ export default function NewTestSessionPage() {
     inclinationDeg: '',
     verificationStage: 'initial',
     envNotes: '',
-    selectedAnnexes: ['A1_administrative', 'A2_construction', 'A4_accuracy'],
+    selectedAnnexes: [...DEFAULT_MANDATORY_ANNEXES, 'A2_construction'],
   });
 
   const { data: modelsData } = useQuery({
@@ -97,8 +99,12 @@ export default function NewTestSessionPage() {
     const setNetworkState = () => setOnline(navigator.onLine);
     window.addEventListener('online', setNetworkState);
     window.addEventListener('offline', setNetworkState);
-    getCachedInstrumentModels().then(setCachedModels).catch(() => {});
-    getCachedLaboratories().then(setCachedLabs).catch(() => {});
+    getCachedInstrumentModels().then(setCachedModels).catch((error) => {
+      console.warn('[OfflineCache] Could not load cached instrument models:', error);
+    });
+    getCachedLaboratories().then(setCachedLabs).catch((error) => {
+      console.warn('[OfflineCache] Could not load cached laboratories:', error);
+    });
     return () => {
       window.removeEventListener('online', setNetworkState);
       window.removeEventListener('offline', setNetworkState);
@@ -107,13 +113,17 @@ export default function NewTestSessionPage() {
 
   useEffect(() => {
     if (modelsData?.length) {
-      cacheInstrumentModels(modelsData).then(() => setCachedModels(modelsData)).catch(() => {});
+      cacheInstrumentModels(modelsData).then(() => setCachedModels(modelsData)).catch((error) => {
+        console.warn('[OfflineCache] Could not refresh cached instrument models:', error);
+      });
     }
   }, [modelsData]);
 
   useEffect(() => {
     if (laboratories.length) {
-      cacheLaboratories(laboratories).then(() => setCachedLabs(laboratories)).catch(() => {});
+      cacheLaboratories(laboratories).then(() => setCachedLabs(laboratories)).catch((error) => {
+        console.warn('[OfflineCache] Could not refresh cached laboratories:', error);
+      });
     }
   }, [laboratories]);
 
@@ -138,9 +148,25 @@ export default function NewTestSessionPage() {
     },
   });
 
-  const updateField = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+  const updateField = (field, value) => {
+    setJudgeDemoLoaded(false);
+    setForm((f) => ({ ...f, [field]: value }));
+  };
+
+  const loadJudgeDemo = () => {
+    const demoModel = availableModels[0];
+    const demoLaboratory = availableLabs[0];
+    if (!demoModel || !demoLaboratory) {
+      addToast({ type: 'error', message: 'Load registered instrument models and laboratories before using the judge demo.' });
+      return;
+    }
+    setForm(buildJudgeDemoSessionForm(demoModel, demoLaboratory));
+    setJudgeDemoLoaded(true);
+    setStep(1);
+  };
 
   const toggleAnnex = (val) => {
+    setJudgeDemoLoaded(false);
     setForm((f) => ({
       ...f,
       selectedAnnexes: f.selectedAnnexes.includes(val)
@@ -217,7 +243,20 @@ export default function NewTestSessionPage() {
           <p className="page-header-subtitle">Create a new OIML R-76 evaluation session with environmental & metrological capture</p>
           {!online && <p role="status" className="text-muted">Offline mode: using the last cached instrument and laboratory lists.</p>}
         </div>
+        <button
+          type="button"
+          data-testid="load-judge-demo"
+          className="gov-btn gov-btn-outline session-demo-button"
+          onClick={loadJudgeDemo}
+        >
+          <Sparkles size={16} /> Load judge demo
+        </button>
       </div>
+      {judgeDemoLoaded && (
+        <p className="session-demo-notice" role="status">
+          Judge demo values are loaded, including a generated demo serial number. Replace them with observed instrument details for real testing.
+        </p>
+      )}
 
       {/* Step indicators */}
       <div className="flex-gap-8 mb-24" style={{ justifyContent: 'center' }}>
@@ -351,7 +390,7 @@ export default function NewTestSessionPage() {
               </p>
               <div className="flex-gap-8 mb-12">
                 <button type="button" className="gov-btn gov-btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setForm(f => ({ ...f, selectedAnnexes: ANNEX_REFS.map(a => a.value) }))}>Select All</button>
-                <button type="button" className="gov-btn gov-btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setForm(f => ({ ...f, selectedAnnexes: ['A1_administrative', 'A2_construction', 'A4_accuracy'] }))}>Select Mandatory Only</button>
+                <button type="button" className="gov-btn gov-btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setForm(f => ({ ...f, selectedAnnexes: [...DEFAULT_MANDATORY_ANNEXES] }))}>Select Mandatory Only</button>
                 <button type="button" className="gov-btn gov-btn-outline" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setForm(f => ({ ...f, selectedAnnexes: [] }))}>Clear All</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

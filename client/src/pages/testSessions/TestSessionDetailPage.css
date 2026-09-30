@@ -8,6 +8,26 @@
   background: #f8fafc;
 }
 
+.observation-form-header {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.observation-form-header h4 {
+  min-width: 0;
+}
+
+.observation-demo-notice {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-left: 4px solid var(--gov-saffron);
+  border-radius: var(--gov-radius);
+  background: var(--gov-orange-light, #fff4e5);
+  color: var(--gov-text-body);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .observation-form-card > .gov-card-body {
   padding: clamp(14px, 2.4vw, 24px);
 }
@@ -91,6 +111,16 @@
 }
 
 @media (max-width: 560px) {
+  .observation-form-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .observation-form-header > .gov-btn {
+    justify-content: center;
+    white-space: normal;
+  }
+
   .observation-form-card > .gov-card-body {
     padding: 14px 12px;
   }

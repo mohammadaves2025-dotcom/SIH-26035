@@ -20,6 +20,14 @@ export const ANNEX_REFS = [
   { value: 'B_electronic_additional',  label: 'Annex B — Electronic Additional Tests',      method: 'manual_checklist' },
 ];
 
+export const DEFAULT_MANDATORY_ANNEXES = [
+  'A1_administrative',
+  'A4_accuracy',
+  'A4_eccentricity',
+  'A4_repeatability',
+  'A4_discrimination',
+];
+
 export const CLASS_BOUNDS = {
   I:    { nMin: 50000, nMax: null   },
   II:   { nMin: 100,   nMax: 100000 },

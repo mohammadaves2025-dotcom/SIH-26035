@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReadingPayload, formatMetrologyValue, getRuleFieldLabel, hasRequiredReadings, minimumReadingCount } from './metrology.js';
+import { buildReadingPayload, formatMetrologyValue, getMandatoryProcedureAnnexes, getMissingSelectedProcedures, getRuleFieldLabel, hasRequiredReadings, minimumReadingCount } from './metrology.js';
 
 describe('metrology helpers', () => {
   it('formats values with six decimal places, trimmed zeros, and signs', () => {
@@ -16,6 +16,33 @@ describe('metrology helpers', () => {
 
   it('omits empty optional fields from reading payloads', () => {
     expect(buildReadingPayload([{ load: '1', note: '' }], [{ name: 'load', type: 'number', required: true }, { name: 'note', type: 'string' }])).toEqual([{ load: 1 }]);
+  });
+
+  it('identifies selected procedures without observations in selection order', () => {
+    expect(getMissingSelectedProcedures(
+      ['A1_administrative', 'A2_construction', 'A4_accuracy'],
+      [{ annexRef: 'A1_administrative' }, { annexRef: 'A4_accuracy' }],
+    )).toEqual(['A2_construction']);
+    expect(getMissingSelectedProcedures(
+      ['A2_construction'],
+      [{ annexRef: 'A2_construction' }],
+    )).toEqual([]);
+  });
+
+  it('finds approved active mandatory tests for the session class and stage', () => {
+    const testTypes = [
+      { oimlAnnexRef: 'A4_accuracy', status: 'approved', isActive: true, mandatoryFor: [{ accuracyClass: 'III', verificationStage: 'all' }] },
+      { oimlAnnexRef: 'A4_eccentricity', status: 'approved', isActive: true, mandatoryFor: [{ accuracyClass: 'III', verificationStage: 'initial' }] },
+      { oimlAnnexRef: 'A5_temperature', status: 'approved', isActive: true, mandatoryFor: [{ accuracyClass: 'III', verificationStage: 'subsequent' }] },
+      { oimlAnnexRef: 'A4_repeatability', status: 'draft', isActive: true, mandatoryFor: [{ accuracyClass: 'III', verificationStage: 'all' }] },
+      { oimlAnnexRef: 'A4_discrimination', status: 'approved', isActive: false, mandatoryFor: [{ accuracyClass: 'III', verificationStage: 'all' }] },
+      { oimlAnnexRef: 'A4_accuracy', status: 'approved', isActive: true, mandatoryFor: [{ accuracyClass: 'II', verificationStage: 'all' }] },
+    ];
+
+    expect(getMandatoryProcedureAnnexes(testTypes, 'III', 'initial')).toEqual([
+      'A4_accuracy',
+      'A4_eccentricity',
+    ]);
   });
 
   it('falls back to English when Hindi is unavailable', () => {

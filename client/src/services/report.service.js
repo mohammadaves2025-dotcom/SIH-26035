@@ -8,3 +8,8 @@ export const archiveReport = (id, reason) => apiClient.post(`/reports/${id}/arch
 export const verifyReport = (query) => apiClient.get(`/verify/${query}`, { skipErrorToast: true });
 export const lookupPublicReportsBySerialNumber = (serialNumber) =>
   apiClient.get('/verify/lookup', { params: { serialNumber }, skipErrorToast: true });
+export const lookupPublicReportsByInstrumentDetails = (searchTerm, testYear) =>
+  apiClient.get('/verify/lookup-details', {
+    params: { searchTerm, ...(testYear ? { testYear } : {}) },
+    skipErrorToast: true,
+  });

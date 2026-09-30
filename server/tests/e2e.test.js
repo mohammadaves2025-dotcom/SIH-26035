@@ -188,6 +188,11 @@ describe('End-to-End Metrology System Lifecycle', () => {
       .query({ serialNumber: 'test-scale-001' });
     expect(unpublishedLookup.status).toBe(200);
     expect(unpublishedLookup.body.data.reports).toHaveLength(0);
+    const unpublishedDetailsLookup = await request(app)
+      .get('/api/verify/lookup-details')
+      .query({ searchTerm: 'E1205', testYear: '2026' });
+    expect(unpublishedDetailsLookup.status).toBe(200);
+    expect(unpublishedDetailsLookup.body.data.reports).toHaveLength(0);
 
     // Only a reviewer/admin can publish, and publication checks both stored artifacts.
     const publishRes = await request(app)
@@ -214,6 +219,24 @@ describe('End-to-End Metrology System Lifecycle', () => {
       serialNumber: 'TEST-SCALE-001',
       status: 'published',
     });
+
+    const detailsLookup = await request(app)
+      .get('/api/verify/lookup-details')
+      .query({ searchTerm: 'e1205', testYear: '2026' });
+    expect(detailsLookup.status).toBe(200);
+    expect(detailsLookup.body.data.reports).toHaveLength(1);
+    expect(detailsLookup.body.data.reports[0]).toMatchObject({
+      reportNumber: report.reportNumber,
+      status: 'published',
+      instrumentModelName: 'E1205-1500',
+      laboratoryName: 'Test Metrology Laboratory',
+    });
+    expect(detailsLookup.body.data.reports[0]).not.toHaveProperty('serialNumber');
+
+    const invalidDetailsLookup = await request(app)
+      .get('/api/verify/lookup-details')
+      .query({ searchTerm: 'e' });
+    expect(invalidDetailsLookup.status).toBe(400);
 
     // Verification by SHA256 hash
     const verifyHashRes = await request(app).get(`/api/verify/${report.contentHash}`);

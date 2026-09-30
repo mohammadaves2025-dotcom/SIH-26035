@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useParams, useNavigate, Link } from 'react-router-dom';
-import { lookupPublicReportsBySerialNumber, verifyReport } from '../../services/report.service.js';
+import {
+  lookupPublicReportsByInstrumentDetails,
+  lookupPublicReportsBySerialNumber,
+  verifyReport,
+} from '../../services/report.service.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import { useTranslation } from '../../config/i18n.js';
 import { ShieldCheck, Search, AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -19,6 +23,8 @@ export default function VerifyPage() {
   const [networkError, setNetworkError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [lookupBySerial, setLookupBySerial] = useState(false);
+  const [lookupByDetails, setLookupByDetails] = useState(false);
+  const [testYear, setTestYear] = useState('');
   const [lookupReports, setLookupReports] = useState([]);
   const [lookupHasMore, setLookupHasMore] = useState(false);
   const [lookupError, setLookupError] = useState(null);
@@ -72,7 +78,38 @@ export default function VerifyPage() {
     }
   };
 
-  const handleSearch = () => (lookupBySerial ? handleSerialLookup() : handleVerify());
+  const handleDetailsLookup = async () => {
+    const searchTerm = query.trim();
+    if (searchTerm.length < 2) {
+      setLookupError(t('verify_details_invalid'));
+      setLookupAttempted(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setNetworkError(null);
+    setResult(null);
+    setLookupError(null);
+    setLookupReports([]);
+    setLookupHasMore(false);
+    setLookupAttempted(true);
+    try {
+      const response = await lookupPublicReportsByInstrumentDetails(searchTerm, testYear);
+      const data = response?.data || response;
+      setLookupReports(data?.reports || []);
+      setLookupHasMore(Boolean(data?.hasMore));
+    } catch (err) {
+      setLookupError(err.response?.status === 400
+        ? t('verify_details_invalid')
+        : err.response?.data?.error?.message || t('verify_lookup_failed'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = () => (lookupByDetails
+    ? handleDetailsLookup()
+    : lookupBySerial ? handleSerialLookup() : handleVerify());
 
   const integrityFailed = !result?.isIntegrityVerified;
   const isCurrentPublished = result?.isPublished && !result?.isSuperseded;
@@ -107,10 +144,15 @@ export default function VerifyPage() {
               aria-pressed={!lookupBySerial}
               onClick={() => {
                 setLookupBySerial(false);
+                setLookupByDetails(false);
                 setQuery('');
+                setTestYear('');
                 setLookupReports([]);
                 setLookupError(null);
                 setLookupAttempted(false);
+                setResult(null);
+                setError(null);
+                setNetworkError(null);
               }}
             >
               {t('verify_by_report_id')}
@@ -121,7 +163,9 @@ export default function VerifyPage() {
               aria-pressed={lookupBySerial}
               onClick={() => {
                 setLookupBySerial(true);
+                setLookupByDetails(false);
                 setQuery('');
+                setTestYear('');
                 setResult(null);
                 setError(null);
                 setNetworkError(null);
@@ -131,25 +175,70 @@ export default function VerifyPage() {
             >
               {t('verify_by_serial')}
             </button>
+            <button
+              type="button"
+              className={`gov-btn ${lookupByDetails ? 'gov-btn-primary' : 'gov-btn-outline'}`}
+              aria-pressed={lookupByDetails}
+              onClick={() => {
+                setLookupBySerial(false);
+                setLookupByDetails(true);
+                setQuery('');
+                setTestYear('');
+                setResult(null);
+                setError(null);
+                setNetworkError(null);
+                setLookupReports([]);
+                setLookupError(null);
+                setLookupAttempted(false);
+              }}
+            >
+              {t('verify_by_details')}
+            </button>
           </div>
           <div className="gov-form-group">
             <label className="gov-label" htmlFor="verify-query">
-              {lookupBySerial ? t('verify_serial_input') : t('verify_input')}
+              {lookupByDetails ? t('verify_details_input') : lookupBySerial ? t('verify_serial_input') : t('verify_input')}
             </label>
-            {lookupBySerial && <p className="verify-search-help">{t('verify_serial_help')}</p>}
+            {(lookupBySerial || lookupByDetails) && (
+              <p className="verify-search-help">
+                {t(lookupByDetails ? 'verify_details_help' : 'verify_serial_help')}
+              </p>
+            )}
             <div className="verify-search-row">
               <input
                 id="verify-query" className="gov-input"
                 style={{ flex: 1 }}
-                placeholder={lookupBySerial ? t('verify_serial_placeholder') : 'e.g. NAWI-2026-000001 or 7f8a9b...'}
+                placeholder={lookupByDetails
+                  ? t('verify_details_placeholder')
+                  : lookupBySerial ? t('verify_serial_placeholder') : 'e.g. NAWI-2026-000001 or 7f8a9b...'}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               />
-              <button className="gov-btn gov-btn-accent" onClick={handleSearch} disabled={loading || !query.trim()}>
-                <Search size={16} /> {loading ? t('verifying') : lookupBySerial ? t('find_reports') : t('verify_button')}
+              <button
+                className="gov-btn gov-btn-accent"
+                onClick={handleSearch}
+                disabled={loading || !query.trim() || (lookupByDetails && query.trim().length < 2)}
+              >
+                <Search size={16} /> {loading ? t('verifying') : lookupBySerial || lookupByDetails ? t('find_reports') : t('verify_button')}
               </button>
             </div>
+            {lookupByDetails && (
+              <div className="verify-year-filter">
+                <label className="gov-label" htmlFor="verify-test-year">{t('verify_test_year')}</label>
+                <input
+                  id="verify-test-year"
+                  className="gov-input"
+                  type="number"
+                  min="1900"
+                  max="2100"
+                  step="1"
+                  inputMode="numeric"
+                  value={testYear}
+                  onChange={(event) => setTestYear(event.target.value)}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -177,10 +266,17 @@ export default function VerifyPage() {
               <article className="verify-result-item" key={report.reportNumber}>
                 <div className="verify-result-main">
                   <strong className="text-mono">{report.reportNumber}</strong>
-                  <span>{report.instrumentModelName} · Class {report.accuracyClass} · {report.overallResult}</span>
+                  <span>
+                    {[report.manufacturerName, report.instrumentModelName].filter(Boolean).join(' · ')}
+                    {` · Class ${report.accuracyClass} · ${report.overallResult}`}
+                  </span>
                   <small>
                     {report.status === 'published' ? t('verify_published') : report.isSuperseded ? t('verify_superseded') : report.status}
-                    {report.publishedAt ? ` · ${new Date(report.publishedAt).toLocaleDateString()}` : ''}
+                    {report.laboratoryName ? ` · ${report.laboratoryName}` : ''}
+                    {(report.testDate || report.publishedAt)
+                      ? ` · ${new Date(report.testDate || report.publishedAt).toLocaleDateString()}`
+                      : ''}
+                    {lookupBySerial && report.serialNumber ? ` · ${report.serialNumber}` : ''}
                   </small>
                 </div>
                 <Link className="gov-btn gov-btn-outline verify-result-action" to={`/verify/${encodeURIComponent(report.reportNumber)}`}>
@@ -193,9 +289,11 @@ export default function VerifyPage() {
         </section>
       )}
 
-      {lookupAttempted && lookupReports.length === 0 && !loading && !lookupError && lookupBySerial && (
+      {lookupAttempted && lookupReports.length === 0 && !loading && !lookupError && (lookupBySerial || lookupByDetails) && (
         <div className="gov-card mb-24">
-          <div className="gov-card-body text-muted">{t('verify_no_serial_matches')}</div>
+          <div className="gov-card-body text-muted">
+            {t(lookupByDetails ? 'verify_no_details_matches' : 'verify_no_serial_matches')}
+          </div>
         </div>
       )}
 

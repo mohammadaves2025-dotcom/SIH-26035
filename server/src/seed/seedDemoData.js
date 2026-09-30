@@ -491,6 +491,63 @@ export async function seedDemoData() {
     },
   });
 
+  const expandedStatuses = [
+    'draft', 'draft', 'draft',
+    'submitted', 'submitted', 'submitted',
+    'under_review', 'under_review', 'under_review',
+    'passed', 'failed', 'passed',
+  ];
+  const ruleByClass = new Map(rules.map((rule) => [rule.accuracyClass, rule]));
+
+  for (const [index, status] of expandedStatuses.entries()) {
+    const modelIndex = index % models.length;
+    const model = models[modelIndex];
+    const labIndex = index < 3 ? 0 : index % laboratories.length;
+    const lab = laboratories[labIndex];
+    const manufacturer = manufacturers[modelIndex < 3 ? modelIndex : modelIndex - 1];
+    const month = String(4 + (index % 6)).padStart(2, '0');
+    const testSession = await TestSession.create({
+      instrumentModelId: model._id,
+      manufacturerName: manufacturer.name,
+      modelName: model.modelName,
+      selectedAnnexes: ['A4_accuracy', ...(index % 2 === 0 ? ['A4_repeatability'] : [])],
+      serialNumber: `SN-2026-DEMO-${String(index + 1).padStart(3, '0')}`,
+      accuracyClass: model.accuracyClass,
+      maxCapacity: model.maxCapacity,
+      minCapacity: model.minCapacity,
+      scaleInterval: model.e,
+      labId: lab.labId,
+      laboratoryRef: lab._id,
+      laboratoryName: lab.labName,
+      createdBy: techDelhi._id,
+      testDate: new Date(`2026-${month}-${String(3 + (index % 24)).padStart(2, '0')}`),
+      status,
+      overallResult: status === 'passed' ? 'pass' : status === 'failed' ? 'fail' : null,
+      environmentalConditions: {
+        temperatureC: 20 + (index % 7) * 0.7,
+        humidityPercent: 42 + (index % 8) * 3,
+        inclinationDeg: Number(((index % 4) * 0.05).toFixed(2)),
+        notes: `Demonstration ${status.replace('_', ' ')} session with varied laboratory conditions.`,
+      },
+    });
+
+    if (status === 'passed' || status === 'failed') {
+      const errorFactor = status === 'passed' ? 0.1 : 1.2;
+      const error = model.e * errorFactor;
+      await Observation.create({
+        testSessionId: testSession._id,
+        annexRef: 'A4_accuracy',
+        evaluationMethod: 'mpe_band',
+        referenceLoad: model.maxCapacity * 0.4,
+        indicatedValue: model.maxCapacity * 0.4 + error,
+        computedError: error,
+        appliedMpe: model.e * 0.5,
+        ruleConfigId: ruleByClass.get(model.accuracyClass)._id,
+        outcome: status === 'passed' ? 'pass' : 'fail',
+      });
+    }
+  }
+
   // 9. Audit Logs
   await appendAuditLog({
     entityType: 'TestSession',
@@ -522,7 +579,7 @@ export async function seedDemoData() {
 
   console.log('Legal Metrology demo datasets seeded successfully with 7 roles and all ERD entities!');
   return {
-    sessionsCount: 8,
+    sessionsCount: 20,
     reportsCount: 0,
     manufacturersCount: manufacturers.length,
     modelsCount: models.length,

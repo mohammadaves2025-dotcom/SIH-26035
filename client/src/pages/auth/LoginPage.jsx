@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/useAuthStore.js';
 import { useThemeStore } from '../../store/useThemeStore.js';
 import { login } from '../../services/auth.service.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
+import InPageNotice from '../../components/common/InPageNotice.jsx';
 import { useTranslation } from '../../config/i18n.js';
 import { Eye, EyeOff } from 'lucide-react';
 import './LoginPage.css';
@@ -19,7 +20,7 @@ function BalanceModel() {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(28, 1, 0.01, 100);
-    camera.position.set(0, 0.35, 3);
+    camera.position.set(0, 0, 3);
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'low-power' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -38,7 +39,19 @@ function BalanceModel() {
     scene.add(fillLight);
 
     let model = null;
+    let modelSize = null;
     let animationFrame;
+    const fitCamera = () => {
+      if (!modelSize) return;
+      const aspect = camera.aspect || 1;
+      const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+      const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * aspect);
+      const verticalDistance = (modelSize.y / 2) / Math.tan(verticalFov / 2);
+      const horizontalDistance = (modelSize.x / 2) / Math.tan(horizontalFov / 2);
+      camera.position.set(0, 0, Math.max(verticalDistance, horizontalDistance) * 1.3);
+      camera.lookAt(0, 0, 0);
+    };
+
     const loader = new GLTFLoader();
     loader.load('/tt.glb', (gltf) => {
       model = gltf.scene;
@@ -53,12 +66,12 @@ function BalanceModel() {
       const center = bounds.getCenter(new THREE.Vector3());
       const size = bounds.getSize(new THREE.Vector3());
       const maxDimension = Math.max(size.x, size.y, size.z) || 1;
-      const modelScale = 1.05 / maxDimension;
+      const modelScale = 1.35 / maxDimension;
       model.scale.setScalar(modelScale);
       model.position.copy(center).multiplyScalar(-modelScale);
+      modelSize = size.multiplyScalar(modelScale);
       scene.add(model);
-      camera.position.set(0, 0.08, 3.6);
-      camera.lookAt(0, 0, 0);
+      fitCamera();
     });
 
     const resize = () => {
@@ -66,6 +79,7 @@ function BalanceModel() {
       const height = mount.clientHeight || 1;
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      fitCamera();
       renderer.setSize(width, height, false);
     };
     const resizeObserver = new ResizeObserver(resize);
@@ -130,6 +144,7 @@ export default function LoginPage() {
         <BalanceModel />
       </div>
       <div className="login-card">
+        <InPageNotice />
         <div className="login-brand">
           <img src="/ascension-logo.png" alt="Ascension" className="login-emblem" onError={(e) => { e.target.style.display = 'none'; }} />
           <h1>{language === 'HI' ? 'NAWI डिजिटल मापविज्ञान प्रणाली' : 'NAWI Digital Metrology System'}</h1>

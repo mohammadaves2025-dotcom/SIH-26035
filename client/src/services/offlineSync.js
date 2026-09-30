@@ -221,10 +221,9 @@ async function replayOutboxNow(token) {
  * Cache instrument models for offline form population.
  */
 export async function cacheInstrumentModels(models) {
-  await db.cachedInstrumentModels.clear();
   const records = models.map((m) => ({
-    id: m._id,
-    _id: m._id,
+    id: m._id || m.id,
+    _id: m._id || m.id,
     modelName: m.modelName,
     accuracyClass: m.accuracyClass,
     maxCapacity: m.maxCapacity,
@@ -233,14 +232,19 @@ export async function cacheInstrumentModels(models) {
     n: m.n,
     manufacturerName: m.manufacturerName || m.manufacturerId?.name,
   }));
-  await db.cachedInstrumentModels.bulkAdd(records);
+  if (records.some((record) => !record.id)) {
+    throw new Error('Cannot cache an instrument model without an ID.');
+  }
+  await db.transaction('rw', db.cachedInstrumentModels, async () => {
+    await db.cachedInstrumentModels.clear();
+    await db.cachedInstrumentModels.bulkPut(records);
+  });
 }
 
 /**
  * Cache active rule config summaries for offline form population.
  */
 export async function cacheRuleConfigs(configs) {
-  await db.cachedRuleConfigs.clear();
   const records = configs.map((c) => ({
     id: c._id,
     accuracyClass: c.accuracyClass,
@@ -249,18 +253,30 @@ export async function cacheRuleConfigs(configs) {
     status: c.status,
     bands: c.bands,
   }));
-  await db.cachedRuleConfigs.bulkAdd(records);
+  if (records.some((record) => !record.id)) {
+    throw new Error('Cannot cache a rule configuration without an ID.');
+  }
+  await db.transaction('rw', db.cachedRuleConfigs, async () => {
+    await db.cachedRuleConfigs.clear();
+    await db.cachedRuleConfigs.bulkPut(records);
+  });
 }
 
 export async function cacheLaboratories(laboratories) {
-  await db.cachedLaboratories.clear();
-  await db.cachedLaboratories.bulkAdd(laboratories.map((lab) => ({
-    id: lab._id,
+  const records = laboratories.map((lab) => ({
+    id: lab._id || lab.id,
     labId: lab.labId,
     labName: lab.labName,
     location: lab.location,
     isActive: lab.isActive,
-  })));
+  }));
+  if (records.some((record) => !record.id)) {
+    throw new Error('Cannot cache a laboratory without an ID.');
+  }
+  await db.transaction('rw', db.cachedLaboratories, async () => {
+    await db.cachedLaboratories.clear();
+    await db.cachedLaboratories.bulkPut(records);
+  });
 }
 
 export async function getCachedLaboratories() {

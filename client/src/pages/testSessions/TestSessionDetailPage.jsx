@@ -7,16 +7,37 @@ import { getAttachments, uploadAttachment, downloadAttachment } from '../../serv
 import { useAuthStore } from '../../store/useAuthStore.js';
 import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { useTranslation } from '../../config/i18n.js';
-import { buildReadingPayload, formatMetrologyValue, getRuleFieldLabel, hasRequiredReadings, minimumReadingCount } from '../../utils/metrology.js';
+import apiClient from '../../services/apiClient.js';
+import { buildReadingPayload, formatMetrologyValue, getMandatoryProcedureAnnexes, getMissingSelectedProcedures, getRuleFieldLabel, hasRequiredReadings, minimumReadingCount } from '../../utils/metrology.js';
+import { buildJudgeDemoObservation } from '../../utils/judgeDemoObservation.js';
 import { ANNEX_REFS } from '../../config/constants.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
 import VirtualBalancePanel from '../../components/common/VirtualBalancePanel.jsx';
-import { ArrowLeft, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle2, ShieldCheck, XCircle, Trash2, Pencil, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle2, ShieldCheck, XCircle, Trash2, Pencil, AlertTriangle, Sparkles } from 'lucide-react';
 import './TestSessionDetailPage.css';
 
 const outcomeLabel = (outcome) => outcome === 'pass' ? 'pass' : outcome === 'fail' ? 'fail' : 'Not evaluated';
 
 const emptyReading = (fields) => Object.fromEntries((fields || []).map((field) => [field.name, '']));
+
+function createEmptyObservationForm(session, annexRef) {
+  const criteria = session.ruleConfig?.testCriteria?.find((item) => item.annexRef === annexRef);
+  const evaluationMethod = criteria
+    ? 'structured'
+    : ANNEX_REFS.find((item) => item.value === annexRef)?.method || 'manual_checklist';
+  return {
+    annexRef,
+    referenceLoad: '',
+    indicatedValue: '',
+    evaluationMethod,
+    checklistPassed: null,
+    reviewerNotes: '',
+    zeroCorrection: '',
+    readings: criteria && evaluationMethod === 'structured'
+      ? Array.from({ length: minimumReadingCount(criteria) }, () => emptyReading(criteria.fields))
+      : [],
+  };
+}
 
 export default function TestSessionDetailPage() {
   const { id } = useParams();
@@ -41,6 +62,7 @@ export default function TestSessionDetailPage() {
   const [editingObsId, setEditingObsId] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showVirtualBalance, setShowVirtualBalance] = useState(false);
+  const [judgeDemoLoaded, setJudgeDemoLoaded] = useState(false);
 
   const { data: session, isLoading, isError, error } = useQuery({
     queryKey: ['test-session', id],
@@ -53,6 +75,19 @@ export default function TestSessionDetailPage() {
     queryFn: () => getAttachments(id),
     select: (r) => r?.data || r || [],
     enabled: !!id,
+  });
+
+  const {
+    data: testTypes = [],
+    isLoading: mandatoryTestsLoading,
+    isError: mandatoryTestsError,
+  } = useQuery({
+    queryKey: ['test-types-list'],
+    queryFn: () => apiClient.get('/test-types'),
+    select: (response) => {
+      const data = response?.data?.data || response?.data || [];
+      return Array.isArray(data) ? data : [];
+    },
   });
 
   const editSessionMutation = useMutation({
@@ -79,10 +114,11 @@ export default function TestSessionDetailPage() {
       addToast({ type: 'success', message: 'Metrological observation recorded successfully' });
       setShowObsForm(false);
       setEditingObsId(null);
-      const firstAnnex = session.selectedAnnexes?.[0] || '';
-      setObsForm({ annexRef: firstAnnex, referenceLoad: '', indicatedValue: '', evaluationMethod: ANNEX_REFS.find((item) => item.value === firstAnnex)?.method || 'manual_checklist', checklistPassed: null, reviewerNotes: '', zeroCorrection: '' });
+      setJudgeDemoLoaded(false);
+      const firstAnnex = session.selectedAnnexes?.[0] || ANNEX_REFS[0].value;
+      setObsForm(createEmptyObservationForm(session, firstAnnex));
     },
-    onError: (error) => addToast({ type: 'error', message: error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Unable to save observation' }),
+    onError: (error) => addToast({ type: 'error', message: error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || 'Unable to save observation' }),
   });
 
   const updateObsMutation = useMutation({
@@ -92,10 +128,11 @@ export default function TestSessionDetailPage() {
       addToast({ type: 'success', message: 'Observation updated successfully' });
       setShowObsForm(false);
       setEditingObsId(null);
-      const firstAnnex = session.selectedAnnexes?.[0] || '';
-      setObsForm({ annexRef: firstAnnex, referenceLoad: '', indicatedValue: '', evaluationMethod: ANNEX_REFS.find((item) => item.value === firstAnnex)?.method || 'manual_checklist', checklistPassed: null, reviewerNotes: '', zeroCorrection: '' });
+      setJudgeDemoLoaded(false);
+      const firstAnnex = session.selectedAnnexes?.[0] || ANNEX_REFS[0].value;
+      setObsForm(createEmptyObservationForm(session, firstAnnex));
     },
-    onError: (error) => addToast({ type: 'error', message: error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Unable to update observation' }),
+    onError: (error) => addToast({ type: 'error', message: error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || 'Unable to update observation' }),
   });
 
   const deleteObsMutation = useMutation({
@@ -111,6 +148,9 @@ export default function TestSessionDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries(['test-session', id]);
       addToast({ type: 'success', message: 'Session submitted for metrological review' });
+    },
+    onError: (error) => {
+      addToast({ type: 'error', message: error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || 'Unable to submit test session' });
     },
   });
 
@@ -154,6 +194,14 @@ export default function TestSessionDetailPage() {
   if (!session) return <div style={{ padding: 40, textAlign: 'center' }}>Test Session not found</div>;
 
   const observations = session.observations || [];
+  const mandatoryProcedureAnnexes = getMandatoryProcedureAnnexes(
+    testTypes,
+    session.accuracyClass || session.instrumentModelId?.accuracyClass,
+    session.verificationStage || 'initial',
+  );
+  const missingSelectedProcedures = getMissingSelectedProcedures(session.selectedAnnexes, observations);
+  const missingMandatoryProcedures = getMissingSelectedProcedures(mandatoryProcedureAnnexes, observations);
+  const missingProcedures = [...new Set([...missingSelectedProcedures, ...missingMandatoryProcedures])];
   const results = session.results || session.evaluationResults || observations;
   const attachments = Array.isArray(attachmentsData) ? attachmentsData : [];
   const userRole = user?.role;
@@ -161,11 +209,13 @@ export default function TestSessionDetailPage() {
   const canEditDraft = ['admin', 'lab_technician', 'lab_admin'].includes(userRole);
   const currentCriterion = session.ruleConfig?.testCriteria?.find((criterion) => criterion.annexRef === obsForm.annexRef);
   const minimumRows = minimumReadingCount(currentCriterion);
+  const checklistFieldsRequired = obsForm.evaluationMethod === 'manual_checklist' ||
+    (obsForm.evaluationMethod === 'structured' && currentCriterion?.criterion?.type === 'manual');
   const requiredFieldsComplete = obsForm.evaluationMethod !== 'structured' || (
     hasRequiredReadings(obsForm.readings, currentCriterion?.fields, minimumRows)
   );
   const canSaveObservation = !!obsForm.annexRef && requiredFieldsComplete && (
-    obsForm.evaluationMethod !== 'manual_checklist' || (obsForm.checklistPassed !== null && !!obsForm.reviewerNotes?.trim())
+    !checklistFieldsRequired || (obsForm.checklistPassed !== null && !!obsForm.reviewerNotes?.trim())
   );
 
   const handleAttachmentDownload = async (attachment) => {
@@ -206,6 +256,58 @@ export default function TestSessionDetailPage() {
     } else {
       addObsMutation.mutate(payload);
     }
+  };
+
+  const toggleObservationForm = () => {
+    if (!showObsForm) {
+      const selectedAnnex = (session.selectedAnnexes || []).includes(obsForm.annexRef)
+        ? obsForm.annexRef
+        : session.selectedAnnexes?.[0] || ANNEX_REFS[0].value;
+      setObsForm(createEmptyObservationForm(session, selectedAnnex));
+    }
+    setJudgeDemoLoaded(false);
+    setShowObsForm((visible) => !visible);
+  };
+
+  const addMissingProcedureObservation = () => {
+    const annexRef = missingProcedures[0];
+    if (!annexRef) return;
+    const selectedAnnexes = session.selectedAnnexes || [];
+    if (!selectedAnnexes.includes(annexRef)) {
+      editSessionMutation.mutate({
+        selectedAnnexes: [...selectedAnnexes, annexRef],
+      }, {
+        onSuccess: () => {
+          setObsForm(createEmptyObservationForm(session, annexRef));
+          setEditingObsId(null);
+          setJudgeDemoLoaded(false);
+          setShowVirtualBalance(false);
+          setShowObsForm(true);
+        },
+      });
+      return;
+    }
+    setObsForm(createEmptyObservationForm(session, annexRef));
+    setEditingObsId(null);
+    setJudgeDemoLoaded(false);
+    setShowVirtualBalance(false);
+    setShowObsForm(true);
+  };
+
+  const loadJudgeDemoObservation = () => {
+    const criterion = session.ruleConfig?.testCriteria?.find((item) => item.annexRef === obsForm.annexRef);
+    const sample = buildJudgeDemoObservation({
+      annexRef: obsForm.annexRef,
+      evaluationMethod: obsForm.evaluationMethod,
+      criterionType: criterion?.criterion?.type,
+      fields: criterion?.fields || [],
+      minimumRows,
+      maxCapacity: session.maxCapacity,
+      minCapacity: session.minCapacity,
+      scaleInterval: session.scaleInterval,
+    });
+    setObsForm((form) => ({ ...form, ...sample }));
+    setJudgeDemoLoaded(true);
   };
 
   const handleFileUpload = (e) => {
@@ -280,10 +382,32 @@ export default function TestSessionDetailPage() {
       )}
 
       {/* Action Buttons */}
+      {session.status === 'draft' && missingProcedures.length > 0 && (
+        <div className="gov-card mb-16" role="status" style={{ borderLeft: '4px solid var(--gov-saffron)', background: '#fffbeb' }}>
+          <div className="gov-card-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <strong>Required procedures still need observations</strong>
+              <div style={{ marginTop: 4, fontSize: 13 }}>
+                Add an observation for: {missingProcedures.map((ref) => ANNEX_REFS.find((item) => item.value === ref)?.label || ref).join(', ')}.
+              </div>
+            </div>
+            {canEditDraft && (
+              <button type="button" className="gov-btn gov-btn-outline" onClick={addMissingProcedureObservation} disabled={editSessionMutation.isPending}>
+                <Plus size={14} /> {editSessionMutation.isPending ? 'Preparing procedure...' : 'Add missing observation'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {session.status === 'draft' && mandatoryTestsError && (
+        <div className="gov-card mb-16" role="alert" style={{ borderLeft: '4px solid var(--gov-red)' }}>
+          <div className="gov-card-body">Mandatory test requirements could not be loaded. Reload this page before submitting.</div>
+        </div>
+      )}
       <div className="flex-gap-8 mb-24" style={{ flexWrap: 'wrap' }}>
         {session.status === 'draft' && canEditDraft && (
           <>
-            <button data-testid="add-observation" className="gov-btn gov-btn-primary" onClick={() => setShowObsForm(!showObsForm)}>
+            <button data-testid="add-observation" className="gov-btn gov-btn-primary" onClick={toggleObservationForm}>
               <Plus size={14} /> Add Observation
             </button>
             <button className="gov-btn gov-btn-outline" onClick={() => {
@@ -300,7 +424,7 @@ export default function TestSessionDetailPage() {
             }}>
               <Pencil size={14} /> Edit Session Details
             </button>
-            <button data-testid="submit-session" className="gov-btn gov-btn-accent" onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending || observations.length === 0}>
+            <button data-testid="submit-session" className="gov-btn gov-btn-accent" onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending || observations.length === 0 || missingProcedures.length > 0 || mandatoryTestsLoading || mandatoryTestsError}>
               <Send size={14} /> {submitMutation.isPending ? 'Evaluating...' : 'Submit for Evaluation'}
             </button>
           </>
@@ -354,13 +478,29 @@ export default function TestSessionDetailPage() {
       {/* Observation Form Modal/Panel */}
       {showObsForm && canEditDraft && (
         <div className="gov-card mb-24 observation-form-card">
-          <div className="gov-card-header"><h4>Record Metrological Observation</h4></div>
+          <div className="gov-card-header observation-form-header">
+            <h4>Record Metrological Observation</h4>
+            <button
+              type="button"
+              className="gov-btn gov-btn-outline"
+              data-testid="load-observation-judge-demo"
+              onClick={loadJudgeDemoObservation}
+            >
+              <Sparkles size={15} /> Load judge demo values
+            </button>
+          </div>
           <div className="gov-card-body">
+            {judgeDemoLoaded && (
+              <p className="observation-demo-notice" role="status">
+                These are illustrative judge-demo values, not measured evidence. Replace them with actual test observations before saving.
+              </p>
+            )}
             <div className="observation-form-grid">
               <div className="gov-form-group">
                 <label className="gov-label">Annex Test Procedure</label>
                 <select data-testid="observation-annex" className="gov-select" value={obsForm.annexRef} onChange={(e) => {
                   const ref = e.target.value;
+                  setJudgeDemoLoaded(false);
                   const criteriaData = session.ruleConfig?.testCriteria?.find(c => c.annexRef === ref);
                   let method = 'manual_checklist';
                   if (criteriaData) {
@@ -370,7 +510,7 @@ export default function TestSessionDetailPage() {
                   }
                   
                   // Initialize readings form based on criteria
-                  const initReadings = criteriaData ? Array.from({ length: getMinimumRows(criteriaData) }, () => emptyReading(criteriaData.fields)) : [];
+                  const initReadings = criteriaData ? Array.from({ length: minimumReadingCount(criteriaData) }, () => emptyReading(criteriaData.fields)) : [];
                   
                   setObsForm((f) => ({ 
                     ...f, 
@@ -391,7 +531,7 @@ export default function TestSessionDetailPage() {
                 </p>
               </div>
               
-              {obsForm.evaluationMethod === 'structured' && session.ruleConfig?.testCriteria?.find(c => c.annexRef === obsForm.annexRef) && (
+              {obsForm.evaluationMethod === 'structured' && currentCriterion && currentCriterion.criterion?.type !== 'manual' && (
                 <div style={{ gridColumn: '1 / -1' }}>
                   <h5 style={{ marginBottom: 10 }}>Readings</h5>
                   {minimumRows > 1 && <p className="text-muted" style={{ fontSize: 12 }}>At least 2 readings are required</p>}
@@ -407,6 +547,7 @@ export default function TestSessionDetailPage() {
                                 data-testid={`observation-field-${rIdx}-${f.name}`} className="gov-input" 
                                 value={reading[f.name] || ''} 
                                 onChange={(e) => {
+                                  setJudgeDemoLoaded(false);
                                   const newReadings = [...obsForm.readings];
                                   newReadings[rIdx][f.name] = e.target.value;
                                   setObsForm(f => ({ ...f, readings: newReadings }));
@@ -415,6 +556,7 @@ export default function TestSessionDetailPage() {
                               />
                             ) : f.type === 'boolean' ? (
                               <select data-testid={`observation-field-${rIdx}-${f.name}`} className="gov-select" value={reading[f.name] ?? ''} onChange={(e) => {
+                                setJudgeDemoLoaded(false);
                                 const newReadings = [...obsForm.readings];
                                 newReadings[rIdx] = { ...newReadings[rIdx], [f.name]: e.target.value === '' ? '' : e.target.value === 'true' };
                                 setObsForm((form) => ({ ...form, readings: newReadings }));
@@ -427,6 +569,7 @@ export default function TestSessionDetailPage() {
                                 type="number" step="any"
                                 value={reading[f.name] ?? ''} 
                                 onChange={(e) => {
+                                  setJudgeDemoLoaded(false);
                                   const newReadings = [...obsForm.readings];
                                   newReadings[rIdx][f.name] = e.target.value;
                                   setObsForm(f => ({ ...f, readings: newReadings }));
@@ -441,6 +584,7 @@ export default function TestSessionDetailPage() {
                           type="button" 
                           disabled={(obsForm.readings || []).length <= minimumRows}
                           onClick={() => {
+                            setJudgeDemoLoaded(false);
                             const newReadings = obsForm.readings.filter((_, i) => i !== rIdx);
                             setObsForm(f => ({ ...f, readings: newReadings }));
                           }}
@@ -455,6 +599,7 @@ export default function TestSessionDetailPage() {
                     className="gov-btn gov-btn-outline" 
                     type="button" 
                     onClick={() => {
+                      setJudgeDemoLoaded(false);
                       const fields = session.ruleConfig.testCriteria.find(c => c.annexRef === obsForm.annexRef).fields;
                       const newReading = emptyReading(fields);
                       setObsForm(f => ({ ...f, readings: [...(f.readings || []), newReading] }));
@@ -465,31 +610,46 @@ export default function TestSessionDetailPage() {
                 </div>
               )}
               
-              {obsForm.evaluationMethod === 'manual_checklist' && <>
+              {checklistFieldsRequired && <>
                 <div className="gov-form-group">
                   <label className="gov-label">Checklist result</label>
-                  <select className="gov-select" value={obsForm.checklistPassed === null ? '' : String(obsForm.checklistPassed)} onChange={(e) => setObsForm((f) => ({ ...f, checklistPassed: e.target.value === '' ? null : e.target.value === 'true' }))}>
+                  <select className="gov-select" value={obsForm.checklistPassed === null ? '' : String(obsForm.checklistPassed)} onChange={(e) => {
+                    setJudgeDemoLoaded(false);
+                    setObsForm((f) => ({ ...f, checklistPassed: e.target.value === '' ? null : e.target.value === 'true' }));
+                  }}>
                     <option value="">Select result</option><option value="true">Pass</option><option value="false">Fail</option>
                   </select>
                 </div>
                 <div className="gov-form-group">
                   <label className="gov-label">Reviewer notes / evidence</label>
-                  <input className="gov-input" value={obsForm.reviewerNotes} onChange={(e) => setObsForm((f) => ({ ...f, reviewerNotes: e.target.value }))} />
+                  <input className="gov-input" value={obsForm.reviewerNotes} onChange={(e) => {
+                    setJudgeDemoLoaded(false);
+                    setObsForm((f) => ({ ...f, reviewerNotes: e.target.value }));
+                  }} />
                 </div>
               </>}
               
               {obsForm.evaluationMethod === 'mpe_band' && <>
               <div className="gov-form-group">
                 <label className="gov-label">Reference load (same unit as registered model; kg)</label>
-                <input className="gov-input" type="number" step="any" value={obsForm.referenceLoad} onChange={(e) => setObsForm((f) => ({ ...f, referenceLoad: e.target.value }))} />
+                <input className="gov-input" type="number" step="any" value={obsForm.referenceLoad} onChange={(e) => {
+                  setJudgeDemoLoaded(false);
+                  setObsForm((f) => ({ ...f, referenceLoad: e.target.value }));
+                }} />
               </div>
               <div className="gov-form-group">
                 <label className="gov-label">Instrument indication (kg)</label>
-                <input className="gov-input" type="number" step="any" value={obsForm.indicatedValue} onChange={(e) => setObsForm((f) => ({ ...f, indicatedValue: e.target.value }))} />
+                <input className="gov-input" type="number" step="any" value={obsForm.indicatedValue} onChange={(e) => {
+                  setJudgeDemoLoaded(false);
+                  setObsForm((f) => ({ ...f, indicatedValue: e.target.value }));
+                }} />
               </div>
               <div className="gov-form-group">
                 <label className="gov-label">Zero correction (optional offset to indication; kg)</label>
-                <input className="gov-input" type="number" step="any" value={obsForm.zeroCorrection} onChange={(e) => setObsForm((f) => ({ ...f, zeroCorrection: e.target.value }))} />
+                <input className="gov-input" type="number" step="any" value={obsForm.zeroCorrection} onChange={(e) => {
+                  setJudgeDemoLoaded(false);
+                  setObsForm((f) => ({ ...f, zeroCorrection: e.target.value }));
+                }} />
               </div>
               <div className="observation-simulator-row">
                 <button
@@ -507,6 +667,7 @@ export default function TestSessionDetailPage() {
                     maxCapacity={session.maxCapacity}
                     scaleInterval={session.scaleInterval}
                     onApply={({ referenceLoad, indicatedValue }) => {
+                      setJudgeDemoLoaded(false);
                       setObsForm((form) => ({ ...form, referenceLoad: String(referenceLoad), indicatedValue: String(indicatedValue) }));
                       addToast({ type: 'success', message: 'Simulated load and indication copied into the observation form. Save the observation to evaluate it.' });
                     }}
@@ -522,6 +683,14 @@ export default function TestSessionDetailPage() {
                   const fields = session.ruleConfig.testCriteria.find(c => c.annexRef === obsForm.annexRef).fields;
                   const parsedReadings = buildReadingPayload(obsForm.readings, fields);
                   payload = { annexRef: obsForm.annexRef, evaluationMethod: 'structured', readings: parsedReadings };
+                  if (checklistFieldsRequired) {
+                    if (obsForm.checklistPassed === null || !obsForm.reviewerNotes?.trim()) {
+                      addToast({ type: 'error', message: 'Choose the checklist result and record reviewer notes.' });
+                      return;
+                    }
+                    payload.checklistPassed = obsForm.checklistPassed;
+                    payload.reviewerNotes = obsForm.reviewerNotes.trim();
+                  }
                 } else if (obsForm.evaluationMethod === 'manual_checklist') {
                   if (obsForm.checklistPassed === null || !obsForm.reviewerNotes?.trim()) {
                     addToast({ type: 'error', message: 'Choose the checklist result and record reviewer notes.' });
@@ -551,7 +720,10 @@ export default function TestSessionDetailPage() {
               }} disabled={addObsMutation.isPending || updateObsMutation.isPending || !canSaveObservation}>
                 {addObsMutation.isPending || updateObsMutation.isPending ? 'Saving...' : 'Save Observation'}
               </button>
-              <button className="gov-btn gov-btn-outline" onClick={() => setShowObsForm(false)}>Cancel</button>
+              <button className="gov-btn gov-btn-outline" onClick={() => {
+                setShowObsForm(false);
+                setJudgeDemoLoaded(false);
+              }}>Cancel</button>
             </div>
           </div>
         </div>
@@ -584,13 +756,19 @@ export default function TestSessionDetailPage() {
                 {observations.map((obs, i) => {
                   const criterion = session.ruleConfig?.testCriteria?.find((item) => item.annexRef === obs.annexRef);
                   const criterionType = criterion?.criterion?.type;
+                  const firstReading = obs.readings?.[0] || {};
+                  const referenceValue = obs.referenceLoad ?? firstReading.reference ?? firstReading.load;
+                  const indicatedValue = obs.indicatedValue ?? firstReading.indicated ?? firstReading.indicatedValue;
+                  const readingFields = criterion?.fields?.length
+                    ? criterion.fields
+                    : Object.keys(firstReading).map((name) => ({ name, labelEn: name }));
                   return (
                     <React.Fragment key={obs._id || i}>
                     <tr>
                       <td>{i + 1}</td>
                       <td><span className="gov-badge gov-badge-info">{obs.annexRef}</span></td>
-                      <td className="text-mono">{formatMetrologyValue(obs.referenceLoad)}</td>
-                      <td className="text-mono">{formatMetrologyValue(obs.indicatedValue)}</td>
+                      <td className="text-mono">{formatMetrologyValue(referenceValue)}</td>
+                      <td className="text-mono">{formatMetrologyValue(indicatedValue)}</td>
                       <td className="text-mono">{formatMetrologyValue(obs.computedError, true)}</td>
                       <td className="text-mono">{obs.appliedMpe != null ? `±${formatMetrologyValue(obs.appliedMpe)}` : '—'}</td>
                       <td className="text-mono">{formatMetrologyValue(obs.marginToMpe, true)}</td>
@@ -671,6 +849,39 @@ export default function TestSessionDetailPage() {
                     </tr>
                     <tr>
                       <td colSpan={session.status === 'draft' && canEditDraft ? 9 : 8} style={{ background: '#f8fafc' }}>
+                        {obs.evaluationMethod === 'structured' && obs.readings?.length > 0 && (
+                          <div className="structured-readings-summary">
+                            <strong>Recorded readings{obs.outcome ? '' : ' (not evaluated yet)'}</strong>
+                            <div className="gov-table-wrapper">
+                              <table className="gov-table" style={{ marginTop: 8 }}>
+                                <thead>
+                                  <tr>
+                                    <th scope="col">#</th>
+                                    {readingFields.map((field) => (
+                                      <th scope="col" key={field.name}>
+                                        {getRuleFieldLabel(field, language)}{field.unit ? ` (${field.unit})` : ''}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {obs.readings.map((reading, readingIndex) => (
+                                    <tr key={readingIndex}>
+                                      <td>{readingIndex + 1}</td>
+                                      {readingFields.map((field) => (
+                                        <td key={field.name}>
+                                          {typeof reading[field.name] === 'boolean'
+                                            ? reading[field.name] ? 'Yes' : 'No'
+                                            : reading[field.name] ?? '—'}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
                         {obs.evaluationMethod === 'structured' && criterionType === 'max_abs_error_le_mpe_factor' && Array.isArray(obs.computedErrors) && (
                           <div>
                             <strong>Computed results</strong>

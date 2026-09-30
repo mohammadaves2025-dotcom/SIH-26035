@@ -8,7 +8,7 @@ import { useNotificationStore } from './store/useNotificationStore.js';
 import Header from './components/layout/Header.jsx';
 import Sidebar from './components/layout/Sidebar.jsx';
 import Footer from './components/layout/Footer.jsx';
-import ToastContainer from './components/common/ToastContainer.jsx';
+import InPageNotice from './components/common/InPageNotice.jsx';
 
 import LoginPage from './pages/auth/LoginPage.jsx';
 import DashboardPage from './pages/dashboard/DashboardPage.jsx';
@@ -68,6 +68,7 @@ function ProtectedLayout({ isMobileOpen, setIsMobileOpen }) {
         onCloseMobileMenu={() => setIsMobileOpen(false)}
       />
       <main id="main-content" className="app-main">
+        <InPageNotice />
         <Outlet />
       </main>
     </div>
@@ -85,6 +86,7 @@ function VerifyLayout({ isMobileOpen, setIsMobileOpen, children }) {
           onCloseMobileMenu={() => setIsMobileOpen(false)}
         />
         <main id="main-content" className="app-main">
+          <InPageNotice />
           {children}
         </main>
       </div>
@@ -120,8 +122,6 @@ export default function App() {
           isMobileOpen={isMobileOpen}
           onToggleMobileMenu={() => setIsMobileOpen((prev) => !prev)}
         />
-        <ToastContainer />
-
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route

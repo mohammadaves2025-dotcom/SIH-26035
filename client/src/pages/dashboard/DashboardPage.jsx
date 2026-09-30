@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getDashboardStats } from '../../services/admin.service.js';
@@ -15,9 +15,9 @@ import {
 import './DashboardPage.css';
 
 const STATUS_CONFIG = {
-  draft: { label: 'Draft', color: '#1E3A8A' },
+  draft: { label: 'Draft', color: '#64707C' },
   submitted: { label: 'Submitted', color: '#D97706' },
-  under_review: { label: 'Under Review', color: '#2563EB' },
+  under_review: { label: 'Under Review', color: '#374151' },
   passed: { label: 'Passed', color: '#15803D' },
   failed: { label: 'Failed', color: '#DC2626' },
   report_generated: { label: 'Report Generated', color: '#7C3AED' },
@@ -25,7 +25,7 @@ const STATUS_CONFIG = {
 };
 
 const chartTooltipStyle = {
-  border: '1px solid #CBD5E1',
+  border: '1px solid #C9CDD2',
   borderRadius: 8,
   boxShadow: '0 8px 20px rgba(15, 23, 42, 0.12)',
   backgroundColor: '#FFFFFF',
@@ -53,13 +53,10 @@ function pieSlicePath(cx, cy, rx, ry, startAngle, endAngle) {
   return `M ${cx} ${cy} L ${start.x} ${start.y} A ${rx} ${ry} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
 }
 
-function darkenColor(color, factor = 0.58) {
-  const hex = (typeof color === 'string' ? color : '#1E3A8A').replace('#', '');
-  const channels = [0, 2, 4].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
-  return `#${channels.map((channel) => Math.round(channel * factor).toString(16).padStart(2, '0')).join('')}`;
-}
-
 function StatusPieChart({ data, emptyMessage, sessionUnit, chartLabel }) {
+  const [hoveredKey, setHoveredKey] = useState(null);
+  const [selectedKey, setSelectedKey] = useState(null);
+
   if (!data.length) {
     return (
       <div className="status-chart-empty">
@@ -70,11 +67,12 @@ function StatusPieChart({ data, emptyMessage, sessionUnit, chartLabel }) {
 
   const chartData = prepareChartData(data);
   const total = chartData.reduce((sum, item) => sum + item.v, 0);
-  const cx = 250;
-  const cy = 145;
-  const rx = 218;
-  const ry = 116;
-  const depth = 34;
+  const cx = 140;
+  const cy = 135;
+  const rx = 112;
+  const ry = 112;
+  const activeKey = hoveredKey || selectedKey;
+  const activeItem = chartData.find((item) => item.key === activeKey);
   let startAngle = -Math.PI / 2;
   const slices = chartData.map((item) => {
     const endAngle = startAngle + (item.v / total) * Math.PI * 2;
@@ -82,7 +80,7 @@ function StatusPieChart({ data, emptyMessage, sessionUnit, chartLabel }) {
     const slice = {
       ...item,
       path: pieSlicePath(cx, cy, rx, ry, startAngle, endAngle),
-      labelPoint: piePoint(cx, cy, rx * 0.65, ry * 0.65, middleAngle),
+      offset: { x: 5 * Math.cos(middleAngle), y: 5 * Math.sin(middleAngle) },
     };
     startAngle = endAngle;
     return slice;
@@ -92,59 +90,81 @@ function StatusPieChart({ data, emptyMessage, sessionUnit, chartLabel }) {
     <div className="status-pie-plot" aria-label={chartLabel}>
       <svg
         className="status-pie-svg"
-        viewBox="0 0 500 325"
+        viewBox="0 0 280 270"
         role="img"
         aria-label={`${chartLabel}: ${total} ${sessionUnit}`}
       >
-        {slices.map((slice) => (
-          <g key={slice.key}>
-            {Array.from({ length: depth }, (_, layer) => (
-              <path
-                key={`${slice.key}-depth-${layer}`}
-                d={slice.path}
-                fill={darkenColor(slice.color)}
-                stroke={darkenColor(slice.color)}
-                strokeWidth="1"
-                transform={`translate(0 ${layer + 1})`}
-              />
-            ))}
-          </g>
-        ))}
         {slices.map((slice) => (
           <path
             key={`${slice.key}-top`}
             d={slice.path}
             fill={slice.color}
-            stroke="#fff"
-            strokeWidth="1.5"
+            stroke={activeKey === slice.key ? '#25292E' : '#fff'}
+            strokeWidth={activeKey === slice.key ? '3' : '1.5'}
             strokeLinejoin="round"
+            className={`status-pie-slice${activeKey && activeKey !== slice.key ? ' is-muted' : ''}${activeKey === slice.key ? ' is-active' : ''}`}
+            transform={activeKey === slice.key ? `translate(${slice.offset.x} ${slice.offset.y})` : undefined}
+            role="button"
+            tabIndex={0}
+            aria-label={`${slice.l}: ${slice.v} ${sessionUnit}, ${slice.p}%`}
+            aria-pressed={selectedKey === slice.key}
+            onPointerEnter={() => setHoveredKey(slice.key)}
+            onPointerLeave={() => setHoveredKey(null)}
+            onFocus={() => setHoveredKey(slice.key)}
+            onBlur={() => setHoveredKey(null)}
+            onClick={() => setSelectedKey((current) => current === slice.key ? null : slice.key)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setSelectedKey((current) => current === slice.key ? null : slice.key);
+              }
+            }}
           >
             <title>{`${slice.l}: ${slice.v} ${sessionUnit} (${slice.p}%)`}</title>
           </path>
         ))}
-        {slices.filter((slice) => slice.p >= 6).map((slice) => (
-          <text
-            key={`${slice.key}-label`}
-            x={slice.labelPoint.x}
-            y={slice.labelPoint.y}
-            textAnchor="middle"
-            className="status-pie-label"
-          >
-            <tspan x={slice.labelPoint.x} dy="-0.2em">{slice.l}</tspan>
-            <tspan x={slice.labelPoint.x} dy="1.35em">{slice.p}%</tspan>
-          </text>
-        ))}
       </svg>
-      <ul className="status-pie-legend" aria-label={chartLabel}>
-        {chartData.map((item) => (
-          <li key={item.key}>
-            <i style={{ backgroundColor: item.color }} aria-hidden="true" />
-            <span className="status-pie-legend-name">{item.l}</span>
-            <strong>{item.v}</strong>
-            <small>{item.p}%</small>
-          </li>
-        ))}
-      </ul>
+      <div className="status-pie-details">
+        <div className="status-pie-total">
+          {activeItem ? (
+            <>
+              <i className="status-pie-active-swatch" style={{ backgroundColor: activeItem.color }} aria-hidden="true" />
+              <strong className="status-pie-active-name">{activeItem.l}</strong>
+              <span>{activeItem.v} {sessionUnit} ({activeItem.p}%)</span>
+            </>
+          ) : (
+            <>
+              <strong>{total}</strong>
+              <span>{sessionUnit}</span>
+            </>
+          )}
+        </div>
+        <ul className="status-pie-legend" aria-label={chartLabel}>
+          {chartData.map((item) => (
+            <li
+              key={item.key}
+              className={activeKey === item.key ? 'is-active' : activeKey ? 'is-muted' : ''}
+              style={{ '--status-color': item.color }}
+            >
+              <button
+                type="button"
+                className="status-pie-legend-button"
+                aria-pressed={selectedKey === item.key}
+                onPointerEnter={() => setHoveredKey(item.key)}
+                onPointerLeave={() => setHoveredKey(null)}
+                onFocus={() => setHoveredKey(item.key)}
+                onBlur={() => setHoveredKey(null)}
+                onClick={() => setSelectedKey((current) => current === item.key ? null : item.key)}
+              >
+                <i style={{ backgroundColor: item.color }} aria-hidden="true" />
+                <span className="status-pie-legend-name">{item.l}</span>
+                <strong>{item.v}</strong>
+                <small>{item.p}%</small>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -161,20 +181,13 @@ export default function DashboardPage() {
     staleTime: 30_000,
   });
 
-  const greeting = () => {
-    const h = new Date().getHours();
-    if (h < 12) return t('greeting_morning');
-    if (h < 17) return t('greeting_afternoon');
-    return t('greeting_evening');
-  };
-
   const statusData = stats?.statusBreakdown
     ? Object.entries(stats.statusBreakdown)
         .map(([key, value]) => ({
           key,
           name: t(`status_${key}`, STATUS_CONFIG[key]?.label || key.replace(/_/g, ' ')),
           value: Number(value) || 0,
-          color: STATUS_CONFIG[key]?.color || '#003366',
+          color: STATUS_CONFIG[key]?.color || '#3F464F',
         }))
         .filter((item) => item.value > 0)
     : [];
@@ -187,14 +200,6 @@ export default function DashboardPage() {
   if (role === 'manufacturer') {
     return (
       <div className="dashboard-page">
-        <div className="page-header">
-          <div>
-            <h1>{greeting()}, {user?.name}</h1>
-            <p className="page-header-subtitle">{t('mfr_portal')}</p>
-          </div>
-          <span className="header-user-role" style={{ padding: '6px 12px', fontSize: 12 }}>Manufacturer Representative</span>
-        </div>
-
         <div className="metric-grid">
           <div className="metric-card">
             <div className="metric-card-top"><div className="metric-card-icon" style={{ background: 'var(--gov-navy-imperial)' }}><Scale size={20} color="#fff" /></div></div>
@@ -221,11 +226,11 @@ export default function DashboardPage() {
             <div className="gov-card-body" style={{ height: 300 }}>
               <ResponsiveContainer>
                 <BarChart data={monthlyData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="4 4" stroke="#DCE6F1" />
+                  <CartesianGrid vertical={false} strokeDasharray="4 4" stroke="#E1E4E8" />
                   <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#475569' }} axisLine={false} tickLine={false} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#475569' }} axisLine={false} tickLine={false} width={28} />
-                  <Tooltip cursor={{ fill: '#EFF6FF' }} contentStyle={chartTooltipStyle} formatter={(value) => [`${value} sessions`, 'Sessions']} />
-                  <Bar dataKey="count" fill="#0B4A7A" barSize={32} radius={[6, 6, 0, 0]} />
+                  <Tooltip cursor={{ fill: '#F1F3F5' }} contentStyle={chartTooltipStyle} formatter={(value) => [`${value} sessions`, 'Sessions']} />
+                  <Bar dataKey="count" fill="#3F464F" barSize={32} radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -262,14 +267,6 @@ export default function DashboardPage() {
   if (role === 'lab_technician') {
     return (
       <div className="dashboard-page">
-        <div className="page-header">
-          <div>
-            <h1>{greeting()}, {user?.name}</h1>
-            <p className="page-header-subtitle">{t('lab_portal')} — {user?.labId || 'NPL Delhi Lab'}</p>
-          </div>
-          <span className="header-user-role" style={{ padding: '6px 12px', fontSize: 12, background: 'var(--gov-green)' }}>Lab Technician</span>
-        </div>
-
         <div className="metric-grid">
           <div className="metric-card">
             <div className="metric-card-top"><div className="metric-card-icon" style={{ background: 'var(--gov-navy-imperial)' }}><FlaskConical size={20} color="#fff" /></div></div>
@@ -310,14 +307,6 @@ export default function DashboardPage() {
 
   return (
     <div className="dashboard-page">
-      <div className="page-header">
-        <div>
-          <h1>{greeting()}, {user?.name?.split(' ')[0]}</h1>
-          <p className="page-header-subtitle">{t('exec_overview')}</p>
-        </div>
-        <span className="header-user-role" style={{ padding: '6px 12px', fontSize: 12 }}>{role === 'admin' ? 'System Administrator' : 'Reviewing Officer'}</span>
-      </div>
-
       <div className="metric-grid">
         {metricCards.map((m) => {
           const Icon = m.icon;
@@ -343,11 +332,11 @@ export default function DashboardPage() {
           <div className="gov-card-body" style={{ height: 300 }}>
             <ResponsiveContainer>
               <BarChart data={monthlyData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
-                <CartesianGrid vertical={false} strokeDasharray="4 4" stroke="#DCE6F1" />
+                <CartesianGrid vertical={false} strokeDasharray="4 4" stroke="#E1E4E8" />
                 <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#475569' }} axisLine={false} tickLine={false} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: '#475569' }} axisLine={false} tickLine={false} width={28} />
-                <Tooltip cursor={{ fill: '#EFF6FF' }} contentStyle={chartTooltipStyle} formatter={(value) => [`${value} sessions`, 'Sessions']} />
-                <Bar dataKey="count" fill="#0B4A7A" barSize={32} radius={[6, 6, 0, 0]} />
+                <Tooltip cursor={{ fill: '#F1F3F5' }} contentStyle={chartTooltipStyle} formatter={(value) => [`${value} sessions`, 'Sessions']} />
+                <Bar dataKey="count" fill="#3F464F" barSize={32} radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

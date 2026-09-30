@@ -272,7 +272,7 @@ code, .mono {
 }
 
 .gov-badge-draft     { background: #E2E8F0; color: #475569; }
-.gov-badge-submitted { background: #DBEAFE; color: #1E40AF; }
+.gov-badge-submitted { background: #E5E7EB; color: #374151; }
 .gov-badge-passed,
 .gov-badge-pass,
 .gov-badge-signed    { background: var(--gov-green-light); color: var(--gov-green); border: 1px solid #BBF7D0; }
@@ -331,54 +331,45 @@ code, .mono {
   margin-top: 2px;
 }
 
-/* ──────────── Toast Container ──────────── */
-.toast-container {
-  position: fixed;
-  top: calc(var(--topbar-height) + var(--header-height) + 12px);
-  right: 16px;
-  z-index: 9000;
-  display: flex;
-  flex-direction: column;
+.in-page-notices {
+  display: grid;
   gap: 8px;
-  width: min(440px, calc(100vw - 32px));
+  margin: 0 0 16px;
 }
 
-.toast {
+.in-page-notice {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 14px 12px 14px 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--gov-border-subtle);
+  border-left: 4px solid var(--gov-blue-accent);
   border-radius: var(--gov-radius);
-  font-size: 14px;
+  background: var(--gov-bg-surface);
+  color: var(--gov-text-body);
+  font-size: 13px;
   line-height: 1.5;
-  box-shadow: var(--gov-shadow-md);
-  animation: toast-slide-in 0.2s ease-out;
 }
 
-.toast-icon {
+.in-page-notice-icon {
   flex: 0 0 auto;
   margin-top: 1px;
 }
 
-.toast-content {
+.in-page-notice-content {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
   min-width: 0;
-}
-
-.toast-code {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  opacity: 0.75;
-}
-
-.toast-message {
   overflow-wrap: anywhere;
 }
 
-.toast-dismiss {
+.in-page-notice-code {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.in-page-notice-dismiss {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -386,47 +377,20 @@ code, .mono {
   width: 28px;
   height: 28px;
   margin: -4px -4px 0 0;
-  padding: 0;
   border: 0;
   border-radius: 5px;
   background: transparent;
   color: currentColor;
-  opacity: 0.75;
 }
 
-.toast-dismiss:hover {
-  background: rgba(15, 23, 42, 0.08);
-  opacity: 1;
+.in-page-notice-dismiss:hover {
+  background: var(--gov-blue-light);
 }
 
-.toast-dismiss:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 1px;
-}
-
-.toast-success { background: var(--gov-green-light); color: #166534; border-left: 4px solid var(--gov-green); }
-.toast-error   { background: var(--gov-red-light); color: #991B1B; border-left: 4px solid var(--gov-red); }
-.toast-warning,
-.toast-warn    { background: #FFFBEB; color: #92400E; border-left: 4px solid #D97706; }
-.toast-info    { background: var(--gov-blue-light); color: var(--gov-navy-imperial); border-left: 4px solid var(--gov-navy-imperial); }
-
-@media (max-width: 480px) {
-  .toast-container {
-    top: calc(var(--topbar-height) + var(--header-height) + 8px);
-    right: 8px;
-    width: calc(100vw - 16px);
-  }
-
-  .toast {
-    padding: 12px 10px 12px 12px;
-    font-size: 13px;
-  }
-}
-
-@keyframes toast-slide-in {
-  from { opacity: 0; transform: translateX(30px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
+.in-page-notice-success { border-left-color: var(--gov-green); }
+.in-page-notice-error { border-left-color: var(--gov-red); }
+.in-page-notice-warning,
+.in-page-notice-warn { border-left-color: var(--gov-saffron); }
 
 /* ──────────── Modal ──────────── */
 .modal-overlay {

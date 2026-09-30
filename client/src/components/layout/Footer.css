@@ -13,6 +13,12 @@
   margin-left: 0;
 }
 
+.gov-footer-login {
+  color: rgba(255, 255, 255, 0.72);
+  border-top-color: rgba(255, 255, 255, 0.14);
+  background: var(--gov-navy-dark);
+}
+
 @media (max-width: 768px) {
   .gov-footer {
     margin-left: 0;
