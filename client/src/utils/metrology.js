@@ -15,6 +15,22 @@ export function getMissingSelectedProcedures(selectedAnnexes, observations) {
   return (selectedAnnexes || []).filter((annexRef) => !observedAnnexes.has(annexRef));
 }
 
+export function getSubmissionFocusAnnex(message, testTypes, preferredAnnexes = [], fallbackAnnex) {
+  const text = typeof message === 'string' ? message : '';
+  const annexMatch = text.match(/\b(?:A\d+_[a-z0-9_]+|B_[a-z0-9_]+)\b/i);
+  if (annexMatch) return annexMatch[0];
+
+  const lowerText = text.toLowerCase();
+  const matchingTestType = (testTypes || [])
+    .map((testType) => ({
+      testType,
+      index: testType.testName ? lowerText.indexOf(testType.testName.toLowerCase()) : -1,
+    }))
+    .filter(({ index }) => index >= 0)
+    .sort((left, right) => left.index - right.index)[0]?.testType;
+  return matchingTestType?.oimlAnnexRef || preferredAnnexes[0] || fallbackAnnex;
+}
+
 export function getMandatoryProcedureAnnexes(testTypes, accuracyClass, verificationStage) {
   return [...new Set((testTypes || [])
     .filter((testType) =>
@@ -27,6 +43,29 @@ export function getMandatoryProcedureAnnexes(testTypes, accuracyClass, verificat
     )
     .map((testType) => testType.oimlAnnexRef)
     .filter(Boolean))];
+}
+
+const FALLBACK_READING_FIELDS = [
+  { name: 'position', labelEn: 'Position' },
+  { name: 'load', labelEn: 'Applied load' },
+  { name: 'reference', labelEn: 'Reference load' },
+  { name: 'indicated', labelEn: 'Indicated value' },
+  { name: 'deltaL', labelEn: 'Delta L' },
+  { name: 'condition', labelEn: 'Condition' },
+  { name: 'timestamp', labelEn: 'Recorded at' },
+];
+
+export function getDisplayReadingFields(criterionFields, readings) {
+  const safeFields = (criterionFields || []).filter((field) =>
+    field.name && !['_id', 'id', '__v'].includes(field.name)
+  );
+  if (safeFields.length) return safeFields;
+
+  return FALLBACK_READING_FIELDS.filter((field) =>
+    (readings || []).some((reading) =>
+      reading[field.name] !== undefined && reading[field.name] !== null && reading[field.name] !== ''
+    )
+  );
 }
 
 export function hasRequiredReadings(readings, fields, minimumRows) {

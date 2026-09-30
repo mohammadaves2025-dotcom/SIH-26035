@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReadingPayload, formatMetrologyValue, getMandatoryProcedureAnnexes, getMissingSelectedProcedures, getRuleFieldLabel, hasRequiredReadings, minimumReadingCount } from './metrology.js';
+import { buildReadingPayload, formatMetrologyValue, getDisplayReadingFields, getMandatoryProcedureAnnexes, getMissingSelectedProcedures, getRuleFieldLabel, getSubmissionFocusAnnex, hasRequiredReadings, minimumReadingCount } from './metrology.js';
 
 describe('metrology helpers', () => {
   it('formats values with six decimal places, trimmed zeros, and signs', () => {
@@ -44,6 +44,29 @@ describe('metrology helpers', () => {
       'A4_accuracy',
       'A4_eccentricity',
     ]);
+  });
+
+  it('shows only known measurement fields when rule metadata is missing', () => {
+    expect(getDisplayReadingFields([], [{ _id: 'row-1', __v: 0 }])).toEqual([]);
+    expect(getDisplayReadingFields([], [{ _id: 'row-1', reference: 5, indicated: 5.1 }])).toEqual([
+      { name: 'reference', labelEn: 'Reference load' },
+      { name: 'indicated', labelEn: 'Indicated value' },
+    ]);
+  });
+
+  it('maps failed submission messages to the affected procedure', () => {
+    const testTypes = [
+      { testName: 'Repeatability', oimlAnnexRef: 'A4_repeatability' },
+      { testName: 'Eccentricity', oimlAnnexRef: 'A4_eccentricity' },
+    ];
+    expect(getSubmissionFocusAnnex(
+      'Missing mandatory test types: Eccentricity, Repeatability',
+      testTypes,
+    )).toBe('A4_eccentricity');
+    expect(getSubmissionFocusAnnex(
+      'No complete reading pairs for A4_accuracy',
+      testTypes,
+    )).toBe('A4_accuracy');
   });
 
   it('falls back to English when Hindi is unavailable', () => {

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { getTestSessionById, updateTestSession, addObservations, updateObservation, deleteObservation, submitSession, approveSession, rejectSession, acknowledgeFlag } from '../../services/testSession.service.js';
 import { generateReport } from '../../services/report.service.js';
 import { getAttachments, uploadAttachment, downloadAttachment } from '../../services/attachment.service.js';
 import { useAuthStore } from '../../store/useAuthStore.js';
-import { useNotificationStore } from '../../store/useNotificationStore.js';
 import { useTranslation } from '../../config/i18n.js';
 import apiClient from '../../services/apiClient.js';
-import { buildReadingPayload, formatMetrologyValue, getMandatoryProcedureAnnexes, getMissingSelectedProcedures, getRuleFieldLabel, hasRequiredReadings, minimumReadingCount } from '../../utils/metrology.js';
+import { buildReadingPayload, formatMetrologyValue, getDisplayReadingFields, getMandatoryProcedureAnnexes, getMissingSelectedProcedures, getRuleFieldLabel, getSubmissionFocusAnnex, hasRequiredReadings, minimumReadingCount } from '../../utils/metrology.js';
 import { buildJudgeDemoObservation } from '../../utils/judgeDemoObservation.js';
 import { ANNEX_REFS } from '../../config/constants.js';
 import StatusBadge from '../../components/common/StatusBadge.jsx';
@@ -17,6 +18,12 @@ import { ArrowLeft, Plus, Send, FileCheck, Scale, Paperclip, Upload, CheckCircle
 import './TestSessionDetailPage.css';
 
 const outcomeLabel = (outcome) => outcome === 'pass' ? 'pass' : outcome === 'fail' ? 'fail' : 'Not evaluated';
+
+const getApiErrorMessage = (error, fallback) =>
+  error?.response?.data?.error?.message ||
+  error?.response?.data?.message ||
+  error?.message ||
+  fallback;
 
 const emptyReading = (fields) => Object.fromEntries((fields || []).map((field) => [field.name, '']));
 
@@ -44,7 +51,11 @@ export default function TestSessionDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const addToast = useNotificationStore((s) => s.addToast);
+  const addToast = ({ type = 'info', message }) => {
+    const method = type === 'warning' ? 'warning' : type;
+    if (typeof toast[method] === 'function') toast[method](message);
+    else toast.info(message);
+  };
   const { t, language } = useTranslation();
 
   const [obsForm, setObsForm] = useState({
@@ -106,6 +117,7 @@ export default function TestSessionDetailPage() {
       queryClient.invalidateQueries(['test-session', id]);
       addToast({ type: 'success', message: 'Advisory flag acknowledged' });
     },
+    onError: (error) => addToast({ type: 'error', message: getApiErrorMessage(error, 'Unable to acknowledge this advisory') }),
   });
 
   const addObsMutation = useMutation({
@@ -142,6 +154,7 @@ export default function TestSessionDetailPage() {
       queryClient.invalidateQueries(['test-session', id]);
       addToast({ type: 'success', message: 'Observation removed successfully' });
     },
+    onError: (error) => addToast({ type: 'error', message: getApiErrorMessage(error, 'Unable to remove observation') }),
   });
 
   const submitMutation = useMutation({
@@ -151,7 +164,21 @@ export default function TestSessionDetailPage() {
       addToast({ type: 'success', message: 'Session submitted for metrological review' });
     },
     onError: (error) => {
-      addToast({ type: 'error', message: error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || 'Unable to submit test session' });
+      const apiError = error?.response?.data?.error;
+      const message = apiError?.message || error?.response?.data?.message || error?.message || 'Unable to submit test session';
+      addToast({ type: 'error', message });
+
+      const focusAnnex = getSubmissionFocusAnnex(
+        message,
+        testTypes,
+        [...missingMandatoryProcedures, ...missingSelectedProcedures],
+        observations[0]?.annexRef,
+      );
+      if (focusAnnex) {
+        window.setTimeout(() => {
+          document.getElementById(`test-procedure-${focusAnnex}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 0);
+      }
     },
   });
 
@@ -161,6 +188,7 @@ export default function TestSessionDetailPage() {
       queryClient.invalidateQueries(['test-session', id]);
       addToast({ type: 'success', message: 'Session review approved' });
     },
+    onError: (error) => addToast({ type: 'error', message: getApiErrorMessage(error, 'Unable to approve this session') }),
   });
 
   const rejectMutation = useMutation({
@@ -169,6 +197,7 @@ export default function TestSessionDetailPage() {
       queryClient.invalidateQueries(['test-session', id]);
       addToast({ type: 'warning', message: 'Session returned to draft for re-evaluation' });
     },
+    onError: (error) => addToast({ type: 'error', message: getApiErrorMessage(error, 'Unable to return this session for revision') }),
   });
 
   const reportMutation = useMutation({
@@ -178,6 +207,7 @@ export default function TestSessionDetailPage() {
       queryClient.invalidateQueries(['reports']);
       addToast({ type: 'success', message: 'Report and integrity tags generated' });
     },
+    onError: (error) => addToast({ type: 'error', message: getApiErrorMessage(error, 'Unable to generate the report') }),
   });
 
   const uploadMutation = useMutation({
@@ -187,6 +217,7 @@ export default function TestSessionDetailPage() {
       addToast({ type: 'success', message: 'Attachment uploaded successfully' });
       setSelectedFile(null);
     },
+    onError: (error) => addToast({ type: 'error', message: getApiErrorMessage(error, 'Unable to upload attachment') }),
   });
 
   if (isLoading) return <div style={{ padding: 40, textAlign: 'center' }}>Loading session data…</div>;
@@ -208,6 +239,11 @@ export default function TestSessionDetailPage() {
   const userRole = user?.role;
   const isReviewerOrAdmin = ['admin', 'reviewer'].includes(userRole);
   const canEditDraft = ['admin', 'lab_technician', 'lab_admin'].includes(userRole);
+  const isSubmittingReviewer = Boolean(
+    session.submittedBy &&
+    user?._id &&
+    String(session.submittedBy?._id || session.submittedBy) === String(user._id)
+  );
   const currentCriterion = session.ruleConfig?.testCriteria?.find((criterion) => criterion.annexRef === obsForm.annexRef);
   const minimumRows = minimumReadingCount(currentCriterion);
   const checklistFieldsRequired = obsForm.evaluationMethod === 'manual_checklist' ||
@@ -270,8 +306,8 @@ export default function TestSessionDetailPage() {
     setShowObsForm((visible) => !visible);
   };
 
-  const addMissingProcedureObservation = () => {
-    const annexRef = missingProcedures[0];
+  const addMissingProcedureObservation = (requestedAnnexRef = missingProcedures[0]) => {
+    const annexRef = requestedAnnexRef;
     if (!annexRef) return;
     const selectedAnnexes = session.selectedAnnexes || [];
     if (!selectedAnnexes.includes(annexRef)) {
@@ -322,6 +358,14 @@ export default function TestSessionDetailPage() {
 
   return (
     <div style={{ maxWidth: 960 }}>
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        newestOnTop
+        closeOnClick
+        pauseOnHover
+        theme="light"
+      />
       <button className="gov-btn gov-btn-outline mb-16" onClick={() => navigate('/test-sessions')}>
         <ArrowLeft size={14} /> Back to Test Sessions
       </button>
@@ -754,194 +798,274 @@ export default function TestSessionDetailPage() {
         </div>
       )}
 
-      {/* Observations Table */}
-      <div className="gov-card mb-24">
-        <div className="gov-card-header">
-          <h4>Test Observations ({observations.length})</h4>
+      {/* Observations grouped by procedure */}
+      <div className="procedure-groups mb-24">
+        <div className="procedure-groups-heading">
+          <h3>Observations by test procedure</h3>
+          <span>{observations.length} observation{observations.length === 1 ? '' : 's'} across {new Set(observations.map((obs) => obs.annexRef)).size} test{new Set(observations.map((obs) => obs.annexRef)).size === 1 ? '' : 's'}</span>
         </div>
-        <div className="gov-card-body gov-table-wrapper" style={{ padding: 0 }}>
-          {observations.length === 0 ? (
-            <p style={{ padding: 20, textAlign: 'center', color: 'var(--gov-text-muted)' }}>No test observations recorded yet.</p>
-          ) : (
-            <table className="gov-table">
-              <thead>
-                <tr>
-                  <th scope="col">#</th>
-                  <th scope="col">Annex Ref</th>
-                  <th scope="col">Reference load (kg)</th>
-                  <th scope="col">Indication (kg)</th>
-                  <th scope="col">Computed error</th>
-                  <th scope="col">Applied MPE</th>
-                  <th scope="col">Margin to MPE</th>
-                  <th scope="col">Outcome</th>
-                  {session.status === 'draft' && canEditDraft && <th scope="col">Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {observations.map((obs, i) => {
-                  const criterion = session.ruleConfig?.testCriteria?.find((item) => item.annexRef === obs.annexRef);
-                  const criterionType = criterion?.criterion?.type;
-                  const firstReading = obs.readings?.[0] || {};
-                  const referenceValue = obs.referenceLoad ?? firstReading.reference ?? firstReading.load;
-                  const indicatedValue = obs.indicatedValue ?? firstReading.indicated ?? firstReading.indicatedValue;
-                  const readingFields = criterion?.fields?.length
-                    ? criterion.fields
-                    : Object.keys(firstReading).map((name) => ({ name, labelEn: name }));
-                  return (
-                    <React.Fragment key={obs._id || i}>
-                    <tr>
-                      <td>{i + 1}</td>
-                      <td><span className="gov-badge gov-badge-info">{obs.annexRef}</span></td>
-                      <td className="text-mono">{formatMetrologyValue(referenceValue)}</td>
-                      <td className="text-mono">{formatMetrologyValue(indicatedValue)}</td>
-                      <td className="text-mono">{formatMetrologyValue(obs.computedError, true)}</td>
-                      <td className="text-mono">{obs.appliedMpe != null ? `±${formatMetrologyValue(obs.appliedMpe)}` : '—'}</td>
-                      <td className="text-mono">{formatMetrologyValue(obs.marginToMpe, true)}</td>
-                      <td>
-                        <StatusBadge status={outcomeLabel(obs.outcome)} />
-                        {obs.advisoryFlags && obs.advisoryFlags.length > 0 && (
-                          <div style={{ marginTop: 4 }}>
-                            {obs.advisoryFlags.map((flag, fIdx) => (
-                              <div key={flag._id || fIdx} style={{ fontSize: 11, background: flag.acknowledged ? '#f0fdf4' : '#fff7ed', border: `1px solid ${flag.acknowledged ? '#bbf7d0' : '#fed7aa'}`, padding: '4px 6px', borderRadius: 4, marginTop: 4 }}>
-                                <span style={{ color: flag.acknowledged ? 'var(--gov-green)' : 'var(--gov-orange)', fontWeight: 600 }}>
-                                  ⚠️ {flag.flagType || 'Advisory Flag'}
-                                </span>
-                                <div style={{ color: '#475569' }}>{flag.message}</div>
-                                {flag.acknowledged ? (
-                                  <div style={{ color: 'var(--gov-green)', fontStyle: 'italic', fontSize: 10 }}>Ack: {flag.comment || 'Acknowledged'}</div>
-                                ) : (
-                                  isReviewerOrAdmin && (
-                                    <button
-                                      type="button"
-                                      className="gov-btn gov-btn-outline"
-                                      style={{ padding: '1px 6px', fontSize: 10, marginTop: 4, borderColor: 'var(--gov-orange)', color: 'var(--gov-orange)' }}
-                                      onClick={() => {
-                                        const comment = window.prompt('Enter mandatory acknowledgment comment for this advisory flag:');
-                                        if (comment?.trim()) ackFlagMutation.mutate({ obsId: obs._id, flagId: flag._id, comment: comment.trim() });
-                                      }}
-                                    >
-                                      Acknowledge Flag
-                                    </button>
-                                  )
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      {session.status === 'draft' && canEditDraft && (
-                        <td>
-                          <button
-                            type="button"
-                            className="gov-btn gov-btn-outline"
-                            style={{ padding: '2px 6px', marginRight: 6 }}
-                            onClick={() => {
-                              setEditingObsId(obs._id);
-                              let initReadings = [];
-                              if (obs.evaluationMethod === 'structured') {
-                                initReadings = obs.readings || [];
-                              }
-                              setObsForm({
-                                annexRef: obs.annexRef,
-                                referenceLoad: obs.referenceLoad ?? '',
-                                indicatedValue: obs.indicatedValue ?? '',
-                                evaluationMethod: obs.evaluationMethod || 'mpe_band',
-                                checklistPassed: obs.checklistPassed ?? null,
-                                reviewerNotes: obs.reviewerNotes || '',
-                                zeroCorrection: obs.zeroCorrection ?? '',
-                                readings: initReadings
-                              });
-                              setShowObsForm(true);
-                            }}
-                            title="Edit observation"
-                            aria-label="Edit observation"
-                          >
-                            <Pencil size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            className="gov-btn gov-btn-outline"
-                            style={{ padding: '2px 6px', color: 'var(--gov-red)', borderColor: 'var(--gov-red)' }}
-                            onClick={() => deleteObsMutation.mutate(obs._id)}
-                            disabled={deleteObsMutation.isPending}
-                            title="Delete observation"
-                            aria-label="Delete observation"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </td>
+        {observations.length === 0 ? (
+          <div className="gov-card"><p className="procedure-empty">No test observations recorded yet.</p></div>
+        ) : (
+          [...new Set([
+            ...(session.selectedAnnexes || []),
+            ...mandatoryProcedureAnnexes,
+            ...observations.map((obs) => obs.annexRef),
+          ])]
+            .sort((left, right) =>
+              ANNEX_REFS.findIndex((item) => item.value === left) -
+              ANNEX_REFS.findIndex((item) => item.value === right)
+            )
+            .map((annexRef) => {
+              const annex = ANNEX_REFS.find((item) => item.value === annexRef);
+              const procedureObservations = observations
+                .map((observation, index) => ({ observation, index }))
+                .filter(({ observation }) => observation.annexRef === annexRef);
+              const criterion = session.ruleConfig?.testCriteria?.find((item) => item.annexRef === annexRef);
+              const required = mandatoryProcedureAnnexes.includes(annexRef);
+              const pending = procedureObservations.length === 0;
+              const groupOutcome = procedureObservations.every(({ observation }) => observation.outcome === 'pass')
+                ? 'pass'
+                : procedureObservations.some(({ observation }) => observation.outcome === 'fail')
+                  ? 'fail'
+                  : 'Not evaluated';
+
+              return (
+                <section
+                  className={`gov-card procedure-card${pending ? ' procedure-card-pending' : ''}`}
+                  id={`test-procedure-${annexRef}`}
+                  key={annexRef}
+                >
+                  <div className="gov-card-header procedure-card-header">
+                    <div>
+                      <h4>{annex?.label || annexRef}</h4>
+                      <div className="procedure-card-meta">
+                        <span className="text-mono">{annexRef}</span>
+                        {testTypes.filter((testType) => testType.oimlAnnexRef === annexRef).map((testType) => (
+                          <span key={testType._id}>{testType.testName}</span>
+                        ))}
+                        {required && <span className="procedure-required-label">Mandatory</span>}
+                      </div>
+                    </div>
+                    <div className="procedure-card-status">
+                      <span>{procedureObservations.length} observation{procedureObservations.length === 1 ? '' : 's'}</span>
+                      {pending
+                        ? <StatusBadge status="Not recorded" />
+                        : <StatusBadge status={groupOutcome} />}
+                    </div>
+                  </div>
+                  {pending ? (
+                    <div className="procedure-empty">
+                      <span>No readings recorded for this test.</span>
+                      {canEditDraft && (
+                        <button
+                          type="button"
+                          className="gov-btn gov-btn-outline"
+                          onClick={() => addMissingProcedureObservation(annexRef)}
+                        >
+                          <Plus size={14} /> Record this test
+                        </button>
                       )}
-                    </tr>
-                    <tr>
-                      <td colSpan={session.status === 'draft' && canEditDraft ? 9 : 8} style={{ background: '#f8fafc' }}>
-                        {obs.evaluationMethod === 'structured' && obs.readings?.length > 0 && (
-                          <div className="structured-readings-summary">
-                            <strong>Recorded readings{obs.outcome ? '' : ' (not evaluated yet)'}</strong>
-                            <div className="gov-table-wrapper">
-                              <table className="gov-table" style={{ marginTop: 8 }}>
-                                <thead>
-                                  <tr>
-                                    <th scope="col">#</th>
-                                    {readingFields.map((field) => (
-                                      <th scope="col" key={field.name}>
-                                        {getRuleFieldLabel(field, language)}{field.unit ? ` (${field.unit})` : ''}
-                                      </th>
-                                    ))}
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {obs.readings.map((reading, readingIndex) => (
-                                    <tr key={readingIndex}>
-                                      <td>{readingIndex + 1}</td>
-                                      {readingFields.map((field) => (
-                                        <td key={field.name}>
-                                          {typeof reading[field.name] === 'boolean'
-                                            ? reading[field.name] ? 'Yes' : 'No'
-                                            : reading[field.name] ?? '—'}
-                                        </td>
+                    </div>
+                  ) : (
+                    <div className="gov-table-wrapper procedure-table-wrap">
+                      <table className="gov-table procedure-table">
+                        <thead>
+                          {procedureObservations[0].observation.evaluationMethod === 'mpe_band' ? (
+                            <tr>
+                              <th scope="col">#</th>
+                              <th scope="col">Reference load</th>
+                              <th scope="col">Indication</th>
+                              <th scope="col">Zero correction</th>
+                              <th scope="col">Computed error</th>
+                              <th scope="col">Applied MPE</th>
+                              <th scope="col">Margin</th>
+                              <th scope="col">Outcome</th>
+                              {session.status === 'draft' && canEditDraft && <th scope="col">Actions</th>}
+                            </tr>
+                          ) : procedureObservations[0].observation.evaluationMethod === 'manual_checklist' ? (
+                            <tr>
+                              <th scope="col">#</th>
+                              <th scope="col">Checklist result</th>
+                              <th scope="col">Evidence / notes</th>
+                              <th scope="col">Outcome</th>
+                              {session.status === 'draft' && canEditDraft && <th scope="col">Actions</th>}
+                            </tr>
+                          ) : (
+                            <tr>
+                              <th scope="col">#</th>
+                              <th scope="col">Recorded measurements and evaluation</th>
+                              {session.status === 'draft' && canEditDraft && <th scope="col">Actions</th>}
+                            </tr>
+                          )}
+                        </thead>
+                        <tbody>
+                          {procedureObservations.map(({ observation: obs, index }) => {
+                            const criterionType = criterion?.criterion?.type;
+                            const readingFields = getDisplayReadingFields(criterion?.fields, obs.readings);
+                            const isStructuredManual = obs.evaluationMethod === 'structured' && criterionType === 'manual';
+                            return (
+                              <React.Fragment key={obs._id || index}>
+                                <tr>
+                                  <td>{index + 1}</td>
+                                  {obs.evaluationMethod === 'mpe_band' ? (
+                                    <>
+                                      <td className="text-mono">{formatMetrologyValue(obs.referenceLoad)}</td>
+                                      <td className="text-mono">{formatMetrologyValue(obs.indicatedValue)}</td>
+                                      <td className="text-mono">{formatMetrologyValue(obs.zeroCorrection)}</td>
+                                      <td className="text-mono">{formatMetrologyValue(obs.computedError, true)}</td>
+                                      <td className="text-mono">{obs.appliedMpe != null ? `±${formatMetrologyValue(obs.appliedMpe)}` : '—'}</td>
+                                      <td className="text-mono">{formatMetrologyValue(obs.marginToMpe, true)}</td>
+                                      <td><StatusBadge status={outcomeLabel(obs.outcome)} /></td>
+                                    </>
+                                  ) : obs.evaluationMethod === 'manual_checklist' ? (
+                                    <>
+                                      <td><StatusBadge status={obs.checklistPassed === true ? 'Pass' : obs.checklistPassed === false ? 'Fail' : 'Not recorded'} /></td>
+                                      <td>{obs.reviewerNotes || '—'}</td>
+                                      <td><StatusBadge status={outcomeLabel(obs.outcome)} /></td>
+                                    </>
+                                  ) : (
+                                    <td>
+                                      {isStructuredManual ? (
+                                        <div className="procedure-checklist">
+                                          <StatusBadge status={obs.checklistPassed === true ? 'Pass' : obs.checklistPassed === false ? 'Fail' : 'Not recorded'} />
+                                          {obs.reviewerNotes && <span>{obs.reviewerNotes}</span>}
+                                        </div>
+                                      ) : readingFields.length > 0 && (obs.readings || []).some((reading) =>
+                                        readingFields.some((field) => reading[field.name] !== undefined && reading[field.name] !== null && reading[field.name] !== '')
+                                      ) ? (
+                                        <div className="gov-table-wrapper">
+                                          <table className="gov-table procedure-readings-table">
+                                            <thead>
+                                              <tr>
+                                                <th scope="col">Reading</th>
+                                                {readingFields.map((field) => (
+                                                  <th scope="col" key={field.name}>
+                                                    {getRuleFieldLabel(field, language)}{field.unit ? ` (${field.unit})` : ''}
+                                                  </th>
+                                                ))}
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {(obs.readings || []).map((reading, readingIndex) => (
+                                                <tr key={readingIndex}>
+                                                  <td>{readingIndex + 1}</td>
+                                                  {readingFields.map((field) => (
+                                                    <td className="text-mono" key={field.name}>
+                                                      {typeof reading[field.name] === 'boolean'
+                                                        ? reading[field.name] ? 'Yes' : 'No'
+                                                        : field.name === 'timestamp' && reading[field.name]
+                                                          ? new Date(reading[field.name]).toLocaleString()
+                                                          : reading[field.name] ?? '—'}
+                                                    </td>
+                                                  ))}
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      ) : (
+                                        <span className="text-muted">No measurement values recorded.</span>
+                                      )}
+                                      <div className="procedure-structured-result">
+                                        <StatusBadge status={outcomeLabel(obs.outcome)} />
+                                        {obs.computedErrors?.length > 0 && (
+                                          <span>Worst margin: {formatMetrologyValue(obs.worstMargin, true)}</span>
+                                        )}
+                                        {criterionType === 'range_le_mpe_factor' && obs.range != null && (
+                                          <span>Repeatability range: {formatMetrologyValue(obs.range, true)}</span>
+                                        )}
+                                        {['change_le_factor_of_e', 'change_ge_factor_of_e'].includes(criterionType) && obs.range != null && (
+                                          <span>Observed change: {formatMetrologyValue(obs.range, true)}</span>
+                                        )}
+                                      </div>
+                                      {obs.computedErrors?.length > 0 && (
+                                        <div className="procedure-computed-results">
+                                          {obs.computedErrors.map((result, resultIndex) => (
+                                            <span key={resultIndex}>
+                                              Reading {resultIndex + 1}: error {formatMetrologyValue(result.error, true)}, MPE ±{formatMetrologyValue(result.mpe)}, margin {formatMetrologyValue(result.margin, true)}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </td>
+                                  )}
+                                  {session.status === 'draft' && canEditDraft && (
+                                    <td className="procedure-actions">
+                                      <button
+                                        type="button"
+                                        className="gov-btn gov-btn-outline"
+                                        onClick={() => {
+                                          setEditingObsId(obs._id);
+                                          setObsForm({
+                                            annexRef: obs.annexRef,
+                                            referenceLoad: obs.referenceLoad ?? '',
+                                            indicatedValue: obs.indicatedValue ?? '',
+                                            evaluationMethod: obs.evaluationMethod || 'mpe_band',
+                                            checklistPassed: obs.checklistPassed ?? null,
+                                            reviewerNotes: obs.reviewerNotes || '',
+                                            zeroCorrection: obs.zeroCorrection ?? '',
+                                            readings: obs.readings || [],
+                                          });
+                                          setShowObsForm(true);
+                                        }}
+                                        title="Edit observation"
+                                        aria-label={`Edit ${annexRef} observation ${index + 1}`}
+                                      >
+                                        <Pencil size={14} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="gov-btn gov-btn-outline procedure-delete-button"
+                                        onClick={() => deleteObsMutation.mutate(obs._id)}
+                                        disabled={deleteObsMutation.isPending}
+                                        title="Delete observation"
+                                        aria-label={`Delete ${annexRef} observation ${index + 1}`}
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </td>
+                                  )}
+                                </tr>
+                                {obs.advisoryFlags?.length > 0 && (
+                                  <tr className="procedure-advisory-row">
+                                    <td colSpan={
+                                      (obs.evaluationMethod === 'mpe_band' ? 8 : obs.evaluationMethod === 'manual_checklist' ? 4 : 2) +
+                                      (session.status === 'draft' && canEditDraft ? 1 : 0)
+                                    }>
+                                      {obs.advisoryFlags.map((flag, flagIndex) => (
+                                        <div className="procedure-advisory" key={flag._id || flagIndex}>
+                                          <div><strong>{flag.flagType || 'Advisory'}:</strong> {flag.message}</div>
+                                          {flag.acknowledged ? (
+                                            <span>Acknowledged: {flag.comment || 'Acknowledged'}</span>
+                                          ) : isReviewerOrAdmin ? (
+                                            <button
+                                              type="button"
+                                              className="gov-btn gov-btn-outline"
+                                              onClick={() => {
+                                                const comment = window.prompt('Enter mandatory acknowledgment comment for this advisory flag:');
+                                                if (comment?.trim()) ackFlagMutation.mutate({ obsId: obs._id, flagId: flag._id, comment: comment.trim() });
+                                              }}
+                                            >
+                                              Acknowledge
+                                            </button>
+                                          ) : null}
+                                        </div>
                                       ))}
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        )}
-                        {obs.evaluationMethod === 'structured' && criterionType === 'max_abs_error_le_mpe_factor' && Array.isArray(obs.computedErrors) && (
-                          <div>
-                            <strong>Computed results</strong>
-                            <table className="gov-table" style={{ marginTop: 8 }}>
-                              <thead><tr><th scope="col">Load</th><th scope="col">Indicated</th><th scope="col">Error</th><th scope="col">MPE</th><th scope="col">Margin</th><th scope="col">OK?</th></tr></thead>
-                              <tbody>{obs.computedErrors.map((result, resultIndex) => {
-                                const reading = obs.readings?.[resultIndex];
-                                const indicated = reading?.indicated ?? reading?.indicatedValue;
-                                return <tr key={resultIndex}><td>{formatMetrologyValue(result.load)}</td><td>{formatMetrologyValue(indicated)}</td><td>{formatMetrologyValue(result.error, true)}</td><td>{formatMetrologyValue(result.mpe)}</td><td>{formatMetrologyValue(result.margin, true)}</td><td>{Number(result.margin) >= 0 ? 'Yes' : 'No'}</td></tr>;
-                              })}</tbody>
-                            </table>
-                            <div style={{ color: Number(obs.worstMargin) < 0 ? 'var(--gov-red)' : 'inherit', marginTop: 6 }}>Worst margin: {formatMetrologyValue(obs.worstMargin, true)}</div>
-                          </div>
-                        )}
-                        {obs.evaluationMethod === 'structured' && criterionType === 'range_le_mpe_factor' && (
-                          <div><strong>Repeatability range:</strong> {formatMetrologyValue(obs.range, true)}{obs.readings?.length ? <div style={{ marginTop: 4 }}>Readings by load: {Object.entries(obs.readings.reduce((groups, reading) => { const load = reading.load ?? '—'; groups[load] = [...(groups[load] || []), reading.indicated ?? reading.indicatedValue ?? '—']; return groups; }, {})).map(([load, values]) => `${load}: ${values.join(', ')}`).join(' · ')}</div> : null}</div>
-                        )}
-                        {obs.evaluationMethod === 'structured' && criterionType === 'change_le_factor_of_e' && (
-                          <div><strong>Observed change:</strong> {formatMetrologyValue(obs.range, true)} (allowed ≤ {formatMetrologyValue(criterion.criterion.params?.factor)} × e = {criterion.criterion.params?.factor != null && session.scaleInterval != null ? formatMetrologyValue(Number(criterion.criterion.params.factor) * Number(session.scaleInterval)) : '—'})</div>
-                        )}
-                        {obs.evaluationMethod === 'structured' && criterionType === 'change_ge_factor_of_e' && (
-                          <div><strong>Observed change:</strong> {formatMetrologyValue(obs.range, true)} (required ≥ {formatMetrologyValue(criterion.criterion.params?.factor)} × e = {criterion.criterion.params?.factor != null && session.scaleInterval != null ? formatMetrologyValue(Number(criterion.criterion.params.factor) * Number(session.scaleInterval)) : '—'})</div>
-                        )}
-                        {obs.evaluationMethod === 'manual_checklist' && <div><strong>Checklist:</strong> <StatusBadge status={obs.checklistPassed === true ? 'pass' : obs.checklistPassed === false ? 'fail' : 'Not evaluated'} /> {obs.reviewerNotes ? ` ${obs.reviewerNotes}` : ''}</div>}
-                        {obs.evaluationMethod === 'mpe_band' && <div><strong>Computed error:</strong> {formatMetrologyValue(obs.computedError, true)} · <strong>Applied MPE:</strong> {formatMetrologyValue(obs.appliedMpe)} · <strong>Margin:</strong> {formatMetrologyValue(obs.marginToMpe, true)}</div>}
-                        {obs.advisoryFlags?.length > 0 && <div style={{ marginTop: 8, padding: 8, background: '#fffbeb', border: '1px solid #f59e0b', color: '#92400e' }}><strong>Advisory:</strong> {obs.advisoryFlags.map((flag) => flag.message).filter(Boolean).join(' · ')} <span>(does not change the result)</span></div>}
-                      </td>
-                    </tr>
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+              );
+            })
+        )}
       </div>
 
       {/* Metrological Compliance Results */}
@@ -967,7 +1091,7 @@ export default function TestSessionDetailPage() {
                   const errVal = r.computedError ?? r.error;
                   const mpeVal = r.appliedMpe ?? r.mpe;
                   const marginVal = r.marginToMpe;
-                  const verdict = (r.outcome ?? r.verdict) || 'passed';
+                  const verdict = (r.outcome ?? r.verdict) || 'Not evaluated';
                   return (
                     <tr key={i}>
                       <td><strong>{r.annexRef}</strong></td>
@@ -998,10 +1122,23 @@ export default function TestSessionDetailPage() {
             <p style={{ fontSize: 13, marginBottom: 12 }}>
               Review the recorded evaluation, then generate a test report with SHA-256 integrity verification and an HMAC tag. HMAC is not a PKI digital signature.
             </p>
+            {session.status === 'under_review' && isSubmittingReviewer && (
+              <div className="approval-separation-notice" role="status">
+                <ShieldCheck size={16} />
+                <span>
+                  Separation of duties: you submitted this session, so a different reviewer or administrator must approve it.
+                </span>
+              </div>
+            )}
             <div className="flex-gap-8" style={{ flexWrap: 'wrap' }}>
               {session.status === 'under_review' && (
                 <>
-                  <button className="gov-btn gov-btn-primary" onClick={() => approveMutation.mutate()} disabled={approveMutation.isPending}>
+                  <button
+                    className="gov-btn gov-btn-primary"
+                    onClick={() => approveMutation.mutate()}
+                    disabled={approveMutation.isPending || isSubmittingReviewer}
+                    title={isSubmittingReviewer ? 'A different reviewer must approve a session you submitted' : undefined}
+                  >
                     <CheckCircle2 size={14} /> {approveMutation.isPending ? 'Approving...' : 'Approve Evaluation'}
                   </button>
                   <button className="gov-btn gov-btn-outline" style={{ borderColor: 'var(--gov-red)', color: 'var(--gov-red)' }} onClick={() => { const reason = window.prompt('Enter the reason for rejection'); if (reason?.trim()) rejectMutation.mutate(reason.trim()); }} disabled={rejectMutation.isPending}>

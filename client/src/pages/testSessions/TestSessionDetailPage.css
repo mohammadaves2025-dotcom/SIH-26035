@@ -94,6 +94,183 @@
   border-top: 1px solid var(--gov-border-subtle);
 }
 
+.procedure-groups {
+  display: grid;
+  gap: 14px;
+  scroll-margin-top: 24px;
+}
+
+.procedure-groups-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.procedure-groups-heading h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.procedure-groups-heading > span,
+.procedure-card-status > span {
+  color: var(--gov-text-muted);
+  font-size: 13px;
+}
+
+.procedure-card {
+  min-width: 0;
+  margin: 0;
+  scroll-margin-top: 24px;
+}
+
+.procedure-card-pending {
+  border-color: #e8c98f;
+}
+
+.procedure-card-header {
+  align-items: center;
+  gap: 16px;
+}
+
+.procedure-card-header h4 {
+  margin: 0;
+}
+
+.procedure-card-meta,
+.procedure-card-status,
+.procedure-checklist,
+.procedure-structured-result {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.procedure-card-meta {
+  margin-top: 6px;
+  color: var(--gov-text-muted);
+  font-size: 12px;
+}
+
+.procedure-card-status {
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.procedure-required-label {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #fff4e5;
+  color: #8a4b00;
+  font-weight: 700;
+}
+
+.procedure-table-wrap {
+  padding: 0;
+}
+
+.procedure-table {
+  min-width: 680px;
+  margin: 0;
+}
+
+.procedure-table > tbody > tr > td {
+  vertical-align: top;
+}
+
+.procedure-table .text-mono {
+  white-space: nowrap;
+}
+
+.procedure-readings-table {
+  width: auto;
+  min-width: min(100%, 520px);
+  margin: 0;
+}
+
+.procedure-readings-table th,
+.procedure-readings-table td {
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.procedure-structured-result {
+  margin-top: 10px;
+}
+
+.procedure-computed-results {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+  color: var(--gov-text-muted);
+  font-size: 12px;
+}
+
+.procedure-actions {
+  white-space: nowrap;
+}
+
+.procedure-actions .gov-btn {
+  min-width: 34px;
+  min-height: 32px;
+  margin: 0 4px 4px 0;
+  padding: 5px;
+}
+
+.procedure-delete-button {
+  border-color: var(--gov-red) !important;
+  color: var(--gov-red) !important;
+}
+
+.procedure-advisory-row > td {
+  background: #fffaf0;
+}
+
+.procedure-advisory {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  color: #7c4a03;
+  font-size: 13px;
+}
+
+.procedure-advisory .gov-btn {
+  flex-shrink: 0;
+  padding: 4px 8px;
+}
+
+.procedure-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 16px;
+  color: var(--gov-text-muted);
+}
+
+.approval-separation-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 0 0 14px;
+  padding: 11px 13px;
+  border: 1px solid #f1d49a;
+  border-radius: var(--gov-radius);
+  background: #fff8e8;
+  color: #704b08;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.approval-separation-notice svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
 @media (max-width: 760px) {
   .observation-form-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -111,6 +288,30 @@
 }
 
 @media (max-width: 560px) {
+  .procedure-groups-heading,
+  .procedure-card-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .procedure-card-status {
+    justify-content: flex-start;
+  }
+
+  .procedure-empty {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .procedure-empty .gov-btn {
+    justify-content: center;
+  }
+
+  .procedure-advisory {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .observation-form-header {
     align-items: stretch;
     flex-direction: column;
