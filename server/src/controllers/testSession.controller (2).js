@@ -12,6 +12,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { assertSessionAccess, getManufacturerForUser, manufacturerModelIds, sessionScopeForUser } from '../utils/tenantAccess.js';
 import { createTestSessionSchema } from '../validators/testSession.schema.js';
 import { verifyGeofence } from '../utils/geofence.js';
+import { mergeEnvironmentalConditions } from '../utils/environmentalConditions.js';
 
 
 async function createSessionRecord(req, body) {
@@ -765,9 +766,18 @@ export const updateTestSession = asyncHandler(async (req, res) => {
 
   for (const field of allowedFields) {
     if (req.body[field] !== undefined) {
-      before[field] = session[field];
-      session[field] = req.body[field];
-      after[field] = req.body[field];
+      if (field === 'environmentalConditions') {
+        // Merge instead of replace so a partial edit cannot drop required stored fields such as notes.
+        const current = session.environmentalConditions?.toObject?.() ?? { ...(session.environmentalConditions || {}) };
+        const merged = mergeEnvironmentalConditions(current, req.body[field]);
+        before[field] = current;
+        session.environmentalConditions = merged;
+        after[field] = merged;
+      } else {
+        before[field] = session[field];
+        session[field] = req.body[field];
+        after[field] = req.body[field];
+      }
       modified = true;
     }
   }

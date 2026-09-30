@@ -11,6 +11,7 @@ describe('metrology helpers', () => {
   it('requires two rows for repeatability and discrimination criteria', () => {
     expect(minimumReadingCount({ criterion: { type: 'range_le_mpe_factor' } })).toBe(2);
     expect(minimumReadingCount({ criterion: { type: 'change_ge_factor_of_e' } })).toBe(2);
+    expect(minimumReadingCount({ criterion: { type: 'change_le_factor_of_e' } })).toBe(2);
     expect(hasRequiredReadings([{ load: 1 }], [{ name: 'load', required: true }], 2)).toBe(false);
   });
 

@@ -97,6 +97,7 @@ export default function TestSessionDetailPage() {
       addToast({ type: 'success', message: 'Test session parameters updated successfully' });
       setShowSessionEditForm(false);
     },
+    onError: (error) => addToast({ type: 'error', message: error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || 'Unable to update session parameters' }),
   });
 
   const ackFlagMutation = useMutation({
@@ -399,6 +400,16 @@ export default function TestSessionDetailPage() {
           </div>
         </div>
       )}
+      {session.status === 'draft' && !session.ruleConfig && (
+        <div className="gov-card mb-16" role="alert" style={{ borderLeft: '4px solid var(--gov-red)' }}>
+          <div className="gov-card-body">
+            <strong>No approved rule configuration applies to this session.</strong>
+            <div style={{ marginTop: 4, fontSize: 13 }}>
+              Observations cannot be saved or evaluated until an approved, active rule configuration exists for accuracy class {session.accuracyClass || session.instrumentModelId?.accuracyClass || '—'} that is effective on or before the test date. Ask an administrator to approve one under Rule Configurations.
+            </div>
+          </div>
+        </div>
+      )}
       {session.status === 'draft' && mandatoryTestsError && (
         <div className="gov-card mb-16" role="alert" style={{ borderLeft: '4px solid var(--gov-red)' }}>
           <div className="gov-card-body">Mandatory test requirements could not be loaded. Reload this page before submitting.</div>
@@ -418,6 +429,8 @@ export default function TestSessionDetailPage() {
                   temperatureC: session.environmentalConditions?.temperatureC ?? '',
                   humidityPercent: session.environmentalConditions?.humidityPercent ?? '',
                   inclinationDeg: session.environmentalConditions?.inclinationDeg ?? '',
+                  atmosphericPressurehPa: session.environmentalConditions?.atmosphericPressurehPa ?? '',
+                  notes: session.environmentalConditions?.notes ?? '',
                 },
               });
               setShowSessionEditForm(!showSessionEditForm);
@@ -463,6 +476,18 @@ export default function TestSessionDetailPage() {
               <div className="gov-form-group">
                 <label className="gov-label">Humidity (% RH)</label>
                 <input className="gov-input" type="number" step="any" value={sessionEditForm.environmentalConditions?.humidityPercent ?? ''} onChange={(e) => setSessionEditForm(f => ({ ...f, environmentalConditions: { ...f.environmentalConditions, humidityPercent: e.target.value === '' ? null : Number(e.target.value) } }))} />
+              </div>
+              <div className="gov-form-group">
+                <label className="gov-label">Inclination (°)</label>
+                <input className="gov-input" type="number" step="any" value={sessionEditForm.environmentalConditions?.inclinationDeg ?? ''} onChange={(e) => setSessionEditForm(f => ({ ...f, environmentalConditions: { ...f.environmentalConditions, inclinationDeg: e.target.value === '' ? '' : Number(e.target.value) } }))} />
+              </div>
+              <div className="gov-form-group">
+                <label className="gov-label">Atmospheric Pressure (hPa, optional)</label>
+                <input className="gov-input" type="number" step="any" value={sessionEditForm.environmentalConditions?.atmosphericPressurehPa ?? ''} onChange={(e) => setSessionEditForm(f => ({ ...f, environmentalConditions: { ...f.environmentalConditions, atmosphericPressurehPa: e.target.value === '' ? '' : Number(e.target.value) } }))} />
+              </div>
+              <div className="gov-form-group" style={{ gridColumn: '1 / -1' }}>
+                <label className="gov-label">Environmental Notes</label>
+                <input className="gov-input" value={sessionEditForm.environmentalConditions?.notes ?? ''} onChange={(e) => setSessionEditForm(f => ({ ...f, environmentalConditions: { ...f.environmentalConditions, notes: e.target.value } }))} />
               </div>
             </div>
             <div className="flex-gap-8 mt-16">
@@ -898,6 +923,9 @@ export default function TestSessionDetailPage() {
                         )}
                         {obs.evaluationMethod === 'structured' && criterionType === 'range_le_mpe_factor' && (
                           <div><strong>Repeatability range:</strong> {formatMetrologyValue(obs.range, true)}{obs.readings?.length ? <div style={{ marginTop: 4 }}>Readings by load: {Object.entries(obs.readings.reduce((groups, reading) => { const load = reading.load ?? '—'; groups[load] = [...(groups[load] || []), reading.indicated ?? reading.indicatedValue ?? '—']; return groups; }, {})).map(([load, values]) => `${load}: ${values.join(', ')}`).join(' · ')}</div> : null}</div>
+                        )}
+                        {obs.evaluationMethod === 'structured' && criterionType === 'change_le_factor_of_e' && (
+                          <div><strong>Observed change:</strong> {formatMetrologyValue(obs.range, true)} (allowed ≤ {formatMetrologyValue(criterion.criterion.params?.factor)} × e = {criterion.criterion.params?.factor != null && session.scaleInterval != null ? formatMetrologyValue(Number(criterion.criterion.params.factor) * Number(session.scaleInterval)) : '—'})</div>
                         )}
                         {obs.evaluationMethod === 'structured' && criterionType === 'change_ge_factor_of_e' && (
                           <div><strong>Observed change:</strong> {formatMetrologyValue(obs.range, true)} (required ≥ {formatMetrologyValue(criterion.criterion.params?.factor)} × e = {criterion.criterion.params?.factor != null && session.scaleInterval != null ? formatMetrologyValue(Number(criterion.criterion.params.factor) * Number(session.scaleInterval)) : '—'})</div>

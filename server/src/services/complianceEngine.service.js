@@ -135,18 +135,21 @@ export function evaluateAnnex(annexRef, observation, instrumentModel, ruleConfig
     
     let minInd = null;
     let maxInd = null;
+    let indicatedCount = 0;
     for (const r of readings) {
       if (r.indicated == null) continue;
+      indicatedCount += 1;
       const ind = toScaledInteger(r.indicated, 'indicated');
       if (minInd === null || ind < minInd) minInd = ind;
       if (maxInd === null || ind > maxInd) maxInd = ind;
     }
-    if (minInd === null || maxInd === null) {
-      throw new AppError(422, 'NO_EVALUABLE_READINGS', `No indicated values to evaluate for ${annexRef}`);
+    // A change needs at least two indications; a single reading would give a change of 0 and pass vacuously.
+    if (indicatedCount < 2) {
+      throw new AppError(422, 'NO_EVALUABLE_READINGS', `${annexRef} needs at least two indicated values to evaluate a change`);
     }
     const changeScaled = maxInd - minInd;
     if (changeScaled > targetScaled) isPass = false;
-    return { outcome: isPass ? 'pass' : 'fail', ruleConfigId: ruleConfig._id };
+    return { outcome: isPass ? 'pass' : 'fail', range: Number(changeScaled) / DECIMAL_SCALE_NUMBER, ruleConfigId: ruleConfig._id };
   }
 
   throw new AppError(422, 'UNSUPPORTED_CRITERION', `Unsupported test criterion type ${type}`);

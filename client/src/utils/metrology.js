@@ -7,7 +7,7 @@ export function formatMetrologyValue(value, signed = false) {
 }
 
 export function minimumReadingCount(criterion) {
-  return ['range_le_mpe_factor', 'change_ge_factor_of_e'].includes(criterion?.criterion?.type) ? 2 : 1;
+  return ['range_le_mpe_factor', 'change_le_factor_of_e', 'change_ge_factor_of_e'].includes(criterion?.criterion?.type) ? 2 : 1;
 }
 
 export function getMissingSelectedProcedures(selectedAnnexes, observations) {
