@@ -31,7 +31,7 @@ The local API listens on port 5000. Run the frontend from `client/` in a second 
 
 ## Deploy the backend to Vercel
 
-Deploy the backend as its own Vercel project with the repository's **Root Directory** set to `server`. Vercel detects the Express app exported from `src/app.js`; `server/vercel.json` allows up to 60 seconds for report generation and schedules rule activation once per hour. The selected Vercel plan must support the configured function duration. Do not run the local `npm start` command as a Vercel build command.
+Deploy the backend as its own Vercel project with the repository's **Root Directory** set to `server`. Vercel detects the Express app exported from `src/app.js`; `server/vercel.json` allows up to 60 seconds for report generation and schedules rule activation once per day at 00:00 UTC to stay within the Hobby plan's cron limit. A rule whose effective date passes just after that run may not activate until the following day's run. Do not run the local `npm start` command as a Vercel build command.
 
 Set the following in the Vercel project's environment variables (Production, and Preview too if you deploy previews):
 
